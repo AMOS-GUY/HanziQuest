@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
 import { getLessonForLearner } from "@/features/learning/lesson-data";
+import { OfflineDownload } from "@/components/offline/offline-download";
 
 export const metadata: Metadata = { title: "Lesson" };
 
@@ -51,13 +52,20 @@ export default async function LessonPage({ params }: { params: Promise<{ lessonI
           <p>Finish the previous lesson to unlock this one.</p>
         </Card>
       ) : (
-        <Button asChild size="lg" className="self-start">
-          <Link href={`/practice/lesson/${lesson.id}`}>
-            <PenLine aria-hidden />{" "}
-            {lesson.state === "COMPLETED" ? "Practise again" : "Start practice"} ·{" "}
-            {lesson._count.exercises} exercises
-          </Link>
-        </Button>
+        <div className="flex flex-col gap-3">
+          <Button asChild size="lg" className="self-start">
+            <Link href={`/practice/lesson/${lesson.id}`}>
+              <PenLine aria-hidden />{" "}
+              {lesson.state === "COMPLETED" ? "Practise again" : "Start practice"} ·{" "}
+              {lesson._count.exercises} exercises
+            </Link>
+          </Button>
+          <OfflineDownload
+            userId={user.id}
+            lessonId={lesson.id}
+            contentVersion={lesson.contentVersion}
+          />
+        </div>
       )}
 
       <section aria-labelledby="words">

@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { DomainError } from "@/features/administration/services";
 import { getLessonStatesForLevel } from "@/features/progression/lesson-states";
+import { applyLessonCompletion, lockLearner, type ProgressDelta } from "@/features/progress/record";
 
 export const MIN_ENGAGED_RATIO = 0.5;
 
@@ -37,8 +38,19 @@ export async function completeLessonSession(
   sessionId: string,
 ) {
   const session = await prisma.learningSession.findUnique({ where: { id: sessionId } });
-  if (!session || session.userId !== userId || !session.lessonId)
+  if (!session || session.userId !== userId)
     throw new DomainError("not_found", "Session not found.");
+  if (session.type === "REVIEW") {
+    if (!session.endedAt) {
+      const now = new Date();
+      await prisma.learningSession.update({
+        where: { id: sessionId },
+        data: { endedAt: now, completedAt: now },
+      });
+    }
+    return { lessonId: null, nextLessonId: null, progress: null };
+  }
+  if (!session.lessonId) throw new DomainError("not_found", "Session not found.");
   const lessonId = session.lessonId;
 
   const [exercises, attempts] = await Promise.all([
@@ -67,7 +79,8 @@ export async function completeLessonSession(
   }
 
   const now = new Date();
-  await prisma.$transaction(async (tx) => {
+  const progress: ProgressDelta | null = await prisma.$transaction(async (tx) => {
+    await lockLearner(tx, userId);
     if (!session.completedAt) {
       await tx.learningSession.update({
         where: { id: sessionId },
@@ -83,7 +96,9 @@ export async function completeLessonSession(
         create: { userId, lessonId, status: "COMPLETED", completedAt: now },
         update: { status: "COMPLETED", completedAt: progress?.completedAt ?? now },
       });
+      return applyLessonCompletion(tx, userId, lessonId, now);
     }
+    return null;
   });
 
   const lesson = await prisma.lesson.findUniqueOrThrow({
@@ -95,5 +110,72 @@ export async function completeLessonSession(
     const s = states.get(l.id);
     return s === "AVAILABLE" || s === "IN_PROGRESS";
   });
-  return { lessonId, nextLessonId: next?.id ?? null };
+  return { lessonId, nextLessonId: next?.id ?? null, progress };
+}
+
+export const REVIEW_BATCH_SIZE = 10;
+
+/**
+ * Characters whose review is due, each with the free-writing exercise used to review it.
+ * Only characters taught in a published lesson are included.
+ */
+export async function getDueReviews(
+  prisma: PrismaClient,
+  userId: string,
+  now: Date = new Date(),
+  limit = REVIEW_BATCH_SIZE,
+) {
+  const due = await prisma.reviewSchedule.findMany({
+    where: {
+      userId,
+      dueAt: { lte: now },
+      character: {
+        exercises: {
+          some: {
+            type: "FREEHAND_WRITING",
+            status: "PUBLISHED",
+            lessons: { some: { lesson: { status: "PUBLISHED" } } },
+          },
+        },
+      },
+    },
+    orderBy: { dueAt: "asc" },
+    take: limit,
+    select: {
+      dueAt: true,
+      character: {
+        select: {
+          id: true,
+          hanzi: true,
+          exercises: {
+            where: {
+              type: "FREEHAND_WRITING",
+              status: "PUBLISHED",
+              lessons: { some: { lesson: { status: "PUBLISHED" } } },
+            },
+            take: 1,
+            select: { id: true },
+          },
+        },
+      },
+    },
+  });
+  return due.map((d) => ({
+    characterId: d.character.id,
+    hanzi: d.character.hanzi,
+    dueAt: d.dueAt,
+    exerciseId: d.character.exercises[0]!.id,
+  }));
+}
+
+/** Starts a review session. Refused when nothing is due. */
+export async function startReviewSession(
+  prisma: PrismaClient,
+  userId: string,
+  now: Date = new Date(),
+) {
+  const due = await getDueReviews(prisma, userId, now);
+  if (due.length === 0) throw new DomainError("conflict", "Nothing is due for review right now.");
+  const session = await prisma.learningSession.create({ data: { userId, type: "REVIEW" } });
+  return { session, due };
 }

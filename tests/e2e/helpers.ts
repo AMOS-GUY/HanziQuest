@@ -21,7 +21,8 @@ export async function register(page: Page, name: string, email: string, password
 
 /** Completes onboarding with default answers and starts from the first lesson. */
 export async function completeOnboarding(page: Page) {
-  await expect(page).toHaveURL(/\/onboarding$/);
+  // Account creation hashes the password (bcrypt cost 12); allow for parallel test load.
+  await expect(page).toHaveURL(/\/onboarding$/, { timeout: 20_000 });
   // The first click can land before React hydrates; retry until the selection registers.
   const choose = async (role: "radio" | "checkbox", name: string | RegExp) => {
     const option = page.getByRole(role, { name });
@@ -52,91 +53,101 @@ export async function completeOnboarding(page: Page) {
  */
 export async function writeCurrentExercise(page: Page) {
   const expected = await expectedAnswer(page);
-  await page.evaluate(async (expected: string[]) => {
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    const fetchMedians = async (hanzi: string) =>
-      (
-        (await (await fetch(`/api/characters/${encodeURIComponent(hanzi)}`)).json()) as {
-          medians: number[][][];
-        }
-      ).medians;
-    const densify = (median: number[][]) => {
-      const pts: number[][] = [];
-      for (let i = 0; i < median.length - 1; i += 1)
-        for (let k = 0; k < 5; k += 1)
-          pts.push([
-            median[i]![0]! + ((median[i + 1]![0]! - median[i]![0]!) * k) / 5,
-            median[i]![1]! + ((median[i + 1]![1]! - median[i]![1]!) * k) / 5,
-          ]);
-      pts.push(median[median.length - 1]!);
-      return pts;
-    };
+  const guided = (await page.locator("[role=application]").count()) > 0;
+  const prompt = guided ? ((await page.locator(".hanzi").first().textContent())?.trim() ?? "") : "";
+  const medians = Object.fromEntries(
+    [...new Set([...expected, ...[...prompt]])].map((h) => [h, strokeMedians(h)]),
+  );
+  // Stroke data comes from the test process, so this also works while the browser is offline.
+  await page.evaluate(
+    async ({ expected, medians }) => {
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const fetchMedians = async (hanzi: string) => medians[hanzi]!;
+      const densify = (median: number[][]) => {
+        const pts: number[][] = [];
+        for (let i = 0; i < median.length - 1; i += 1)
+          for (let k = 0; k < 5; k += 1)
+            pts.push([
+              median[i]![0]! + ((median[i + 1]![0]! - median[i]![0]!) * k) / 5,
+              median[i]![1]! + ((median[i + 1]![1]! - median[i]![1]!) * k) / 5,
+            ]);
+        pts.push(median[median.length - 1]!);
+        return pts;
+      };
 
-    const guidedHost = document.querySelector("[role=application]");
-    if (guidedHost) {
-      const svg = guidedHost.querySelector("svg")!;
-      const prompt = document.querySelector(".hanzi")!.textContent!.trim();
-      const rect = svg.getBoundingClientRect();
-      const pad = Math.round(rect.width * 0.06);
-      const scale = (rect.width - 2 * pad) / 1024;
-      const at = ([x, y]: number[]) => ({
-        clientX: rect.left + pad + x! * scale,
-        clientY: rect.top + pad + (900 - y!) * scale,
-      });
-      for (const median of await fetchMedians(prompt)) {
-        const pts = densify(median);
-        svg.dispatchEvent(new MouseEvent("mousedown", { ...at(pts[0]!), bubbles: true }));
-        for (const p of pts.slice(1)) {
-          svg.dispatchEvent(new MouseEvent("mousemove", { ...at(p), bubbles: true }));
-          await sleep(5);
-        }
-        document.dispatchEvent(
-          new MouseEvent("mouseup", { ...at(pts[pts.length - 1]!), bubbles: true }),
-        );
-        svg.dispatchEvent(
-          new MouseEvent("mouseup", { ...at(pts[pts.length - 1]!), bubbles: true }),
-        );
-        await sleep(450);
-      }
-      return;
-    }
-
-    const tabs = [...document.querySelectorAll("[role=tab]")] as HTMLButtonElement[];
-    const count = Math.max(1, tabs.length);
-    if (expected.length !== count)
-      throw new Error(`expected ${count} characters, got ${expected.join("")}`);
-    for (let i = 0; i < count; i += 1) {
-      if (tabs[i]) {
-        tabs[i]!.click();
-        await sleep(100);
-      }
-      const canvas = document.querySelector("canvas")!;
-      const rect = canvas.getBoundingClientRect();
-      const at = ([x, y]: number[]) => ({
-        clientX: rect.left + (0.1 + (0.8 * x!) / 1024) * rect.width,
-        clientY: rect.top + (0.1 + (0.8 * (900 - y!)) / 1024) * rect.height,
-      });
-      for (const median of await fetchMedians(expected[i]!)) {
-        const pts = densify(median);
-        const fire = (type: string, p: number[]) =>
-          canvas.dispatchEvent(
-            new PointerEvent(type, {
-              ...at(p),
-              pointerId: 1,
-              pointerType: "pen",
-              isPrimary: true,
-              button: 0,
-              buttons: type === "pointerup" ? 0 : 1,
-              bubbles: true,
-            }),
+      const guidedHost = document.querySelector("[role=application]");
+      if (guidedHost) {
+        const svg = guidedHost.querySelector("svg")!;
+        const prompt = document.querySelector(".hanzi")!.textContent!.trim();
+        const rect = svg.getBoundingClientRect();
+        const pad = Math.round(rect.width * 0.06);
+        const scale = (rect.width - 2 * pad) / 1024;
+        const at = ([x, y]: number[]) => ({
+          clientX: rect.left + pad + x! * scale,
+          clientY: rect.top + pad + (900 - y!) * scale,
+        });
+        for (const median of await fetchMedians(prompt)) {
+          const pts = densify(median);
+          svg.dispatchEvent(new MouseEvent("mousedown", { ...at(pts[0]!), bubbles: true }));
+          for (const p of pts.slice(1)) {
+            svg.dispatchEvent(new MouseEvent("mousemove", { ...at(p), bubbles: true }));
+            await sleep(5);
+          }
+          document.dispatchEvent(
+            new MouseEvent("mouseup", { ...at(pts[pts.length - 1]!), bubbles: true }),
           );
-        fire("pointerdown", pts[0]!);
-        for (const p of pts.slice(1)) fire("pointermove", p);
-        fire("pointerup", pts[pts.length - 1]!);
-        await sleep(60);
+          svg.dispatchEvent(
+            new MouseEvent("mouseup", { ...at(pts[pts.length - 1]!), bubbles: true }),
+          );
+          await sleep(450);
+        }
+        return;
       }
-    }
-  }, expected);
+
+      const tabs = [...document.querySelectorAll("[role=tab]")] as HTMLButtonElement[];
+      const count = Math.max(1, tabs.length);
+      if (expected.length !== count)
+        throw new Error(`expected ${count} characters, got ${expected.join("")}`);
+      for (let i = 0; i < count; i += 1) {
+        if (tabs[i]) {
+          tabs[i]!.click();
+          await sleep(100);
+        }
+        const canvas = document.querySelector("canvas")!;
+        const rect = canvas.getBoundingClientRect();
+        const at = ([x, y]: number[]) => ({
+          clientX: rect.left + (0.1 + (0.8 * x!) / 1024) * rect.width,
+          clientY: rect.top + (0.1 + (0.8 * (900 - y!)) / 1024) * rect.height,
+        });
+        for (const median of await fetchMedians(expected[i]!)) {
+          const pts = densify(median);
+          const fire = (type: string, p: number[]) =>
+            canvas.dispatchEvent(
+              new PointerEvent(type, {
+                ...at(p),
+                pointerId: 1,
+                pointerType: "pen",
+                isPrimary: true,
+                button: 0,
+                buttons: type === "pointerup" ? 0 : 1,
+                bubbles: true,
+              }),
+            );
+          fire("pointerdown", pts[0]!);
+          for (const p of pts.slice(1)) fire("pointermove", p);
+          fire("pointerup", pts[pts.length - 1]!);
+          await sleep(60);
+        }
+      }
+    },
+    { expected, medians },
+  );
+}
+
+function strokeMedians(hanzi: string): number[][][] {
+  const file = path.resolve(process.cwd(), "node_modules/hanzi-writer-data", `${hanzi}.json`);
+  if (!fs.existsSync(file)) return [];
+  return (JSON.parse(fs.readFileSync(file, "utf8")) as { medians: number[][][] }).medians;
 }
 
 type Content = {

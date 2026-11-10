@@ -2,6 +2,53 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-10 — M3 progress and offline
+
+**D-025 · Offline means "downloaded lessons", not the whole app.** The service worker caches
+only the static `/offline` pages and hashed build assets. Signed-in HTML is never cached, so a
+shared device doesn't keep someone's pages. Without a connection, any navigation shows the
+offline page, which lists the lessons downloaded on this device. Queued events and packages are
+tagged with the user id, and only the owner's events are uploaded. The service worker is
+registered in production builds only, so dev never serves stale code.
+
+**D-024 · Offline answers are checked twice.** The browser grades offline handwriting with the
+same engine for instant feedback. On sync the server re-evaluates the raw strokes, and only its
+result counts for XP and mastery. A lesson finished offline is queued as a `lesson.complete`
+event. The server then attaches that run's session-less attempts to a new session and applies
+the normal completion rules, including locks and the skip ratio.
+
+**D-023 · Per-learner advisory lock for progress writes.** Every attempt and lesson completion
+runs in one transaction that first takes `pg_advisory_xact_lock(hashtext(userId))`. That
+serialises read-modify-write work (XP caps, daily totals, streaks, achievements) per learner
+without blocking anyone else. XP rows also have unique idempotency keys (`attempt:<id>`,
+`lesson:<user>:<lesson>`, `goal:<user>:<day>`, `achievement:<user>:<key>`).
+
+**D-022 · Mastery and review schedules are replayed from history.** `AttemptCharacterResult`
+stores one row per character per attempt. A word attempt therefore credits each character with
+its own band. After every attempt, that character's whole history is replayed in `occurredAt`
+order (`features/progress/mastery.ts`), so offline attempts that arrive late or out of order
+give the same result as if they had arrived on time. `npm run progress:rebuild` recomputes
+everything. The migration backfilled single-character attempts made before M3. Word attempts
+from M2 have no per-character rows.
+
+**D-021 · XP rules (server only).** Excellent 10, Good 8, Needs improvement 4, Try again 1,
+skip 0. Guided (traced or hinted) practice earns half, rounded up. Only the first 3 attempts at
+the same exercise per local day earn XP. Exercise XP is capped at 300 per day. A lesson's first
+completion earns 20, and replays earn nothing. The daily goal earns a one-off 10 bonus, and
+achievements earn their listed reward once. Days, streaks and goals use the learner's own time
+zone. Streaks are recomputed from `DailyActivity` rows, so offline days count where they
+happened.
+
+**D-020 · Spaced-repetition model.** A simplified SM-2. Only independent recall moves the
+schedule: intervals of 1 day, then 3 days, then the previous interval times the ease (1.3–3.0),
+up to 365 days. A success counts only when the review is due (up to 15 % of the interval early)
+or while the character is still new, so writing it ten times in one sitting doesn't inflate
+intervals. A failure (Needs improvement / Try again) halves the repetition count, lowers ease
+and brings the review back in 10 minutes. Guided practice never advances the schedule. A
+character first seen only in guided practice is due 4 hours later. Levels: LEARNING; FAMILIAR
+after 2 spaced successful recalls; MASTERED after 4, provided the latest independent attempt
+succeeded. These numbers are initial choices and should be tuned with real usage data.
+
 ## 2026-11-10 — M2 learning and handwriting
 
 **D-019 · A lesson completes only with real engagement.** Skip stays available (some learners

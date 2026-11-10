@@ -71,7 +71,35 @@ Route groups:
   to `/api/attempts` (with retries) and shows the server's authoritative result.
 - **Handwriting engine:** see `docs/HANDWRITING.md`.
 
+## Progress (M3)
+
+- `features/progress/mastery.ts`, `xp-rules.ts` and `calendar.ts` are pure rule modules, unit
+  tested without a database.
+- `features/progress/record.ts` applies the effects of an attempt or lesson completion inside
+  the same transaction that stores it: per-character results, mastery and review replay, XP,
+  daily activity and goal, streak, achievements. It runs under a per-learner advisory lock.
+- Screens: `/review` (due list and 7-day forecast; `/practice/review` runs a round of up to 10
+  due characters), `/progress` (XP, streak, 14-day chart, mastery grid, achievements) and the
+  Home cards.
+
+## Offline (M3)
+
+```
+lesson page ──"Download for offline"──► POST /api/lessons/:id/download ──► IndexedDB (Dexie) packages
+offline:  any navigation ──SW──► /offline (cached) ──► /offline/practice?lesson=… (PracticeRunner)
+attempt save fails on network ──► IndexedDB outbox ──(online / every 60 s)──► POST /api/sync
+```
+
+- `public/sw.js`: precaches `/offline` and `/offline/practice` and the build assets they
+  reference. `/_next/static` is cache-first; navigations are network-first with the offline
+  page as fallback; `/api/*` is never cached.
+- `features/offline/client/` holds the Dexie database (`outbox`, `packages`, `meta`) and the
+  sync client. `components/offline/sync-manager.tsx` registers the worker, uploads the outbox
+  and shows a status pill.
+- The practice runner treats network failures as offline: attempts and lesson completion go to
+  the outbox, and the learner sees "Saved on this device".
+
 ## Not built yet
 
-Mastery, spaced repetition, XP, streaks, the Review and Progress screens, offline storage and
-sync, and the service worker are planned for M3. Their tables exist; see `docs/PROGRESS.md`.
+Admin curriculum editing and import UI, analytics, moderation, a shared rate-limit store,
+nonce-based CSP and Sentry are planned for M4. See `docs/PROGRESS.md`.

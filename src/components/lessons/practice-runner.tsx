@@ -15,10 +15,20 @@ import { evaluateWord } from "@/features/handwriting/evaluate";
 import { fromMakeMeAHanzi } from "@/features/handwriting/reference";
 import type { EvaluationBand, InkStroke, WordEvaluation } from "@/features/handwriting/types";
 import type { ExerciseDTO, PracticePayload } from "@/features/exercises/dto";
-import { ApiRequestError, learningApi, withRetry } from "@/features/exercises/client-api";
+import {
+  ApiRequestError,
+  isNetworkFailure,
+  learningApi,
+  withRetry,
+  type ProgressDelta,
+} from "@/features/exercises/client-api";
+import { enqueue } from "@/features/offline/client/sync";
 import { cn } from "@/lib/utilities/cn";
 
-type SaveState = "saving" | "saved" | "failed";
+type SaveState = "saving" | "saved" | "queued" | "failed";
+
+export type PracticeMode =
+  { kind: "lesson"; lessonId: string } | { kind: "review" } | { kind: "free" };
 type Outcome =
   | { kind: "writing"; band: EvaluationBand; evaluation: WordEvaluation; eventId: string }
   | { kind: "guided"; band: EvaluationBand; mistakes: number; eventId: string };
@@ -71,14 +81,18 @@ function Prompt({ exercise }: { exercise: ExerciseDTO }) {
 
 export function PracticeRunner({
   payload,
-  lessonId,
+  mode = { kind: "free" },
+  userId,
   exitHref,
 }: {
   payload: PracticePayload;
-  lessonId?: string;
+  mode?: PracticeMode;
+  /** Owner of anything queued offline. */
+  userId: string;
   exitHref: string;
 }) {
   const { exercises, strokeData, candidates } = payload;
+  const lessonId = mode.kind === "lesson" ? mode.lessonId : undefined;
   const reduceMotion = useReducedMotion();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string>();
@@ -92,7 +106,12 @@ export function PracticeRunner({
   const [outcome, setOutcome] = useState<Outcome>();
   const [saves, setSaves] = useState<Record<string, SaveState>>({});
   const [results, setResults] = useState<Record<string, EvaluationBand | "SKIPPED">>({});
-  const [completion, setCompletion] = useState<{ nextLessonId: string | null }>();
+  const [completion, setCompletion] = useState<{
+    nextLessonId: string | null;
+    queued: boolean;
+  }>();
+  const [xpByEvent, setXpByEvent] = useState<Record<string, number>>({});
+  const [celebrations, setCelebrations] = useState<string[]>([]);
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState<string>();
   const [quizKey, setQuizKey] = useState(0);
@@ -102,21 +121,30 @@ export function PracticeRunner({
 
   const exercise = exercises[index];
 
+  const sessionKind = mode.kind;
   useEffect(() => {
-    if (!lessonId) return;
+    if (sessionKind === "free") return;
     let cancelled = false;
-    learningApi
-      .startSession(lessonId)
+    (lessonId ? learningApi.startSession(lessonId) : learningApi.startReview())
       .then((r) => !cancelled && setSessionId(r.sessionId))
-      .catch(
-        (e: unknown) =>
-          !cancelled &&
-          setSessionError(e instanceof ApiRequestError ? e.message : "Could not start the lesson."),
-      );
+      .catch((e: unknown) => {
+        // Offline: practise without a session; the attempts and completion are queued.
+        if (cancelled || isNetworkFailure(e)) return;
+        setSessionError(e instanceof ApiRequestError ? e.message : "Could not start practice.");
+      });
     return () => {
       cancelled = true;
     };
-  }, [lessonId]);
+  }, [lessonId, sessionKind]);
+
+  const celebrate = useCallback((progress: ProgressDelta | null | undefined) => {
+    if (!progress) return;
+    const notes = [
+      ...(progress.dailyGoalReached ? ["Daily goal reached!"] : []),
+      ...progress.achievements.map((a) => `Achievement unlocked: ${a.name}`),
+    ];
+    if (notes.length) setCelebrations((c) => [...c, ...notes]);
+  }, []);
 
   const references = useMemo(() => {
     const byHanzi = new Map(candidates.map((c) => [c.hanzi, c]));
@@ -134,28 +162,37 @@ export function PracticeRunner({
     setPhase("answer");
   };
 
-  const save = useCallback(async (eventId: string, exerciseId: string) => {
-    const body = payloads.current.get(eventId);
-    if (!body) return;
-    setSaves((s) => ({ ...s, [eventId]: "saving" }));
-    try {
-      const response = await withRetry(() => learningApi.submitAttempt(body));
-      setSaves((s) => ({ ...s, [eventId]: "saved" }));
-      savedExercises.current.add(exerciseId);
-      // The server re-evaluates handwriting; its result is authoritative.
-      const ev = response.evaluation as WordEvaluation | undefined;
-      if (ev && Array.isArray(ev.characters)) {
-        setOutcome((o) =>
-          o && o.eventId === eventId && o.kind === "writing"
-            ? { ...o, band: ev.band, evaluation: ev }
-            : o,
-        );
-        setResults((r) => ({ ...r, [exerciseId]: ev.band }));
+  const save = useCallback(
+    async (eventId: string, exerciseId: string) => {
+      const body = payloads.current.get(eventId);
+      if (!body) return;
+      setSaves((s) => ({ ...s, [eventId]: "saving" }));
+      try {
+        const response = await withRetry(() => learningApi.submitAttempt(body), 2);
+        setSaves((s) => ({ ...s, [eventId]: "saved" }));
+        setXpByEvent((x) => ({ ...x, [eventId]: response.xpAwarded }));
+        celebrate(response.progress);
+        savedExercises.current.add(exerciseId);
+        // The server re-evaluates handwriting; its result is authoritative.
+        const ev = response.evaluation as WordEvaluation | undefined;
+        if (ev && Array.isArray(ev.characters)) {
+          setOutcome((o) =>
+            o && o.eventId === eventId && o.kind === "writing"
+              ? { ...o, band: ev.band, evaluation: ev }
+              : o,
+          );
+          setResults((r) => ({ ...r, [exerciseId]: ev.band }));
+        }
+      } catch (error) {
+        const queued =
+          isNetworkFailure(error) &&
+          (await enqueue(userId, { id: eventId, type: "attempt", payload: body }));
+        setSaves((s) => ({ ...s, [eventId]: queued ? "queued" : "failed" }));
+        if (queued) savedExercises.current.add(exerciseId);
       }
-    } catch {
-      setSaves((s) => ({ ...s, [eventId]: "failed" }));
-    }
-  }, []);
+    },
+    [celebrate, userId],
+  );
 
   const submit = (body: Record<string, unknown>) => {
     if (!exercise) return "";
@@ -204,12 +241,30 @@ export function PracticeRunner({
   const finish = async () => {
     setFinishing(true);
     setFinishError(undefined);
+    const queueCompletion = async () => {
+      if (!lessonId) return false;
+      return enqueue(userId, {
+        id: crypto.randomUUID(),
+        type: "lesson.complete",
+        payload: { lessonId, sessionId, attemptIds: [...payloads.current.keys()] },
+      });
+    };
+    const anyQueued = Object.values(saves).some((v) => v === "queued");
     try {
-      if (lessonId && sessionId) {
-        const r = await withRetry(() => learningApi.completeSession(sessionId));
-        setCompletion({ nextLessonId: r.nextLessonId });
+      if (sessionId && !anyQueued) {
+        try {
+          const r = await withRetry(() => learningApi.completeSession(sessionId), 2);
+          celebrate(r.progress);
+          setCompletion({ nextLessonId: r.nextLessonId, queued: false });
+        } catch (e) {
+          if (!isNetworkFailure(e) || !(await queueCompletion())) throw e;
+          setCompletion({ nextLessonId: null, queued: true });
+        }
+      } else if (lessonId) {
+        if (!(await queueCompletion())) throw new Error("offline storage unavailable");
+        setCompletion({ nextLessonId: null, queued: true });
       } else {
-        setCompletion({ nextLessonId: null });
+        setCompletion({ nextLessonId: null, queued: anyQueued });
       }
       setPhase("done");
     } catch (e) {
@@ -269,11 +324,35 @@ export function PracticeRunner({
   if (phase === "done") {
     const values = Object.values(results);
     const count = (b: string) => values.filter((v) => v === b).length;
+    const xpEarned = Object.values(xpByEvent).reduce((t, v) => t + v, 0);
     return (
       <div className="mx-auto flex max-w-md flex-col gap-5 py-10 text-center">
         <h1 className="text-3xl font-black">
-          {lessonId ? "Lesson complete!" : "Practice complete!"}
+          {lessonId
+            ? "Lesson complete!"
+            : mode.kind === "review"
+              ? "Review done!"
+              : "Practice complete!"}
         </h1>
+        {xpEarned > 0 ? <p className="text-primary text-xl font-black">+{xpEarned} XP</p> : null}
+        {celebrations.length ? (
+          <ul className="flex flex-col gap-1" aria-label="Rewards">
+            {celebrations.map((c) => (
+              <li
+                key={c}
+                className="bg-accent text-accent-foreground rounded-xl px-3 py-2 font-bold"
+              >
+                {c}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {completion?.queued ? (
+          <Alert>
+            Your practice is saved on this device and will sync when you&apos;re back online.
+            {lessonId ? " The lesson is marked complete once it syncs." : ""}
+          </Alert>
+        ) : null}
         <Card className="grid grid-cols-2 gap-3 text-left">
           {(["EXCELLENT", "GOOD", "NEEDS_IMPROVEMENT", "TRY_AGAIN", "SKIPPED"] as const).map(
             (b) => (
@@ -292,8 +371,8 @@ export function PracticeRunner({
           </Button>
         ) : null}
         <Button asChild size="lg" variant={completion?.nextLessonId ? "secondary" : "primary"}>
-          <Link href={lessonId ? "/learn" : exitHref}>
-            {lessonId ? "Back to learning path" : "Done"}
+          <Link href={lessonId && !completion?.queued ? "/learn" : exitHref}>
+            {lessonId && !completion?.queued ? "Back to learning path" : "Done"}
           </Link>
         </Button>
       </div>
@@ -503,10 +582,14 @@ export function PracticeRunner({
               {currentSave === "saving"
                 ? "Saving…"
                 : currentSave === "saved"
-                  ? "Saved"
-                  : currentSave === "failed"
-                    ? "Not saved yet."
-                    : ""}
+                  ? outcome && xpByEvent[outcome.eventId]
+                    ? `Saved · +${xpByEvent[outcome.eventId]} XP`
+                    : "Saved"
+                  : currentSave === "queued"
+                    ? "Saved on this device. It will sync when you're online."
+                    : currentSave === "failed"
+                      ? "Not saved yet."
+                      : ""}
               {currentSave === "failed" ? (
                 <button
                   type="button"
