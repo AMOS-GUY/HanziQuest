@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+/*
+ * HanziQuest design tokens. Brand palette is defined in docs/BRANDING.md.
+ * Semantic tokens (background, surface, primary, ...) switch for dark mode;
+ * components use semantic tokens, never raw brand values.
+ */
+:root {
+  --brand-emerald: #087f70;
+  --brand-mint: #55cdb5;
+  --brand-forest: #075b4d;
+  --brand-ivory: #fff8e9;
+  --brand-coral: #f04438;
+  --brand-charcoal: #18332f;
+
+  --background: var(--brand-ivory);
+  --surface: #ffffff;
+  --surface-muted: #f4efe2;
+  --foreground: var(--brand-charcoal);
+  --muted-foreground: #4f6662;
+  --border: #e4dccb;
+  --primary: var(--brand-emerald);
+  --primary-hover: var(--brand-forest);
+  --primary-foreground: #ffffff;
+  --accent: #dff5ef;
+  --accent-foreground: var(--brand-forest);
+  --danger: #c4281d;
+  --danger-surface: #fdecea;
+  --ring: var(--brand-mint);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0d1f1c;
+    --surface: #142b27;
+    --surface-muted: #1b3631;
+    --foreground: #eef6f3;
+    --muted-foreground: #a7bdb8;
+    --border: #2a4741;
+    --primary: var(--brand-mint);
+    --primary-hover: #7ddcc8;
+    --primary-foreground: #0d1f1c;
+    --accent: #1d3d36;
+    --accent-foreground: #b8eee2;
+    --danger: #ff8a80;
+    --danger-surface: #3a1a18;
+    --ring: var(--brand-mint);
+  }
+}
+
+@theme inline {
+  --color-emerald-brand: var(--brand-emerald);
+  --color-mint: var(--brand-mint);
+  --color-forest: var(--brand-forest);
+  --color-ivory: var(--brand-ivory);
+  --color-coral: var(--brand-coral);
+  --color-charcoal: var(--brand-charcoal);
+
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-hanzi:
+    var(--font-noto-sc), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    sans-serif;
+
+  --radius-card: 1.25rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "kern";
+  }
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+  /* Chinese text must render with a CJK-capable font stack. */
+  :lang(zh),
+  .hanzi {
+    font-family: var(--font-hanzi);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

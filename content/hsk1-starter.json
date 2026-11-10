@@ -1,0 +1,604 @@
+{
+  "$comment": "HanziQuest HSK 1 starter curriculum. Word selection follows the HSK 2.0 Level 1 vocabulary list (a public list of 150 words). Pinyin, English glosses, grouping into units/lessons and all exercises are authored by HanziQuest and are PROVISIONAL until reviewed by a qualified Chinese teacher. Stroke data comes from hanzi-writer-data (Make Me a Hanzi, Arphic Public License). This is not official HSK course material.",
+  "curriculum": {
+    "slug": "hsk-2-0-starter-v1",
+    "name": "HSK 1 Starter",
+    "framework": "HSK_2_0",
+    "version": "starter-1",
+    "description": "A first path through HSK 1 vocabulary and the characters inside it.",
+    "source": "Word selection: HSK 2.0 Level 1 vocabulary list. Glosses, pinyin and structure: HanziQuest (provisional).",
+    "licenseStatus": "ORIGINAL",
+    "verification": "PROVISIONAL"
+  },
+  "level": {
+    "level": 1,
+    "name": "HSK 1",
+    "description": "Absolute beginner: everyday greetings, people, numbers, food and time."
+  },
+  "characters": {
+    "你": { "pinyin": "nǐ", "meaning": "you" },
+    "好": { "pinyin": "hǎo", "meaning": "good; well" },
+    "我": { "pinyin": "wǒ", "meaning": "I; me" },
+    "是": { "pinyin": "shì", "meaning": "to be" },
+    "谢": { "pinyin": "xiè", "meaning": "to thank" },
+    "不": { "pinyin": "bù", "meaning": "not; no" },
+    "客": { "pinyin": "kè", "meaning": "guest" },
+    "气": { "pinyin": "qì", "meaning": "air; spirit" },
+    "再": { "pinyin": "zài", "meaning": "again" },
+    "见": { "pinyin": "jiàn", "meaning": "to see; to meet" },
+    "对": { "pinyin": "duì", "meaning": "correct; towards" },
+    "起": { "pinyin": "qǐ", "meaning": "to rise; to get up" },
+    "没": { "pinyin": "méi", "meaning": "not (have)" },
+    "关": { "pinyin": "guān", "meaning": "to close; relation" },
+    "系": { "pinyin": "xì", "meaning": "to relate; system" },
+    "有": { "pinyin": "yǒu", "meaning": "to have; there is" },
+    "请": { "pinyin": "qǐng", "meaning": "please; to invite" },
+    "他": { "pinyin": "tā", "meaning": "he; him" },
+    "她": { "pinyin": "tā", "meaning": "she; her" },
+    "们": { "pinyin": "men", "meaning": "plural suffix for people" },
+    "人": { "pinyin": "rén", "meaning": "person" },
+    "谁": { "pinyin": "shéi", "meaning": "who", "alternatives": ["shuí"] },
+    "爸": { "pinyin": "bà", "meaning": "dad" },
+    "妈": { "pinyin": "mā", "meaning": "mum" },
+    "儿": { "pinyin": "ér", "meaning": "child; son" },
+    "子": { "pinyin": "zǐ", "meaning": "child; noun suffix", "alternatives": ["zi"] },
+    "女": { "pinyin": "nǚ", "meaning": "woman; female" },
+    "家": { "pinyin": "jiā", "meaning": "home; family" },
+    "叫": { "pinyin": "jiào", "meaning": "to be called; to call" },
+    "名": { "pinyin": "míng", "meaning": "name" },
+    "字": { "pinyin": "zì", "meaning": "character; word" },
+    "什": { "pinyin": "shén", "meaning": "what (in 什么)" },
+    "么": { "pinyin": "me", "meaning": "question suffix (in 什么)" },
+    "认": { "pinyin": "rèn", "meaning": "to recognise" },
+    "识": { "pinyin": "shí", "meaning": "to know" },
+    "高": { "pinyin": "gāo", "meaning": "tall; high" },
+    "兴": { "pinyin": "xìng", "meaning": "interest; mood", "alternatives": ["xīng"] },
+    "一": { "pinyin": "yī", "meaning": "one" },
+    "二": { "pinyin": "èr", "meaning": "two" },
+    "三": { "pinyin": "sān", "meaning": "three" },
+    "四": { "pinyin": "sì", "meaning": "four" },
+    "五": { "pinyin": "wǔ", "meaning": "five" },
+    "六": { "pinyin": "liù", "meaning": "six" },
+    "七": { "pinyin": "qī", "meaning": "seven" },
+    "八": { "pinyin": "bā", "meaning": "eight" },
+    "九": { "pinyin": "jiǔ", "meaning": "nine" },
+    "十": { "pinyin": "shí", "meaning": "ten" },
+    "几": { "pinyin": "jǐ", "meaning": "how many; a few" },
+    "多": { "pinyin": "duō", "meaning": "many; much" },
+    "少": { "pinyin": "shǎo", "meaning": "few; little" },
+    "个": { "pinyin": "gè", "meaning": "general measure word" },
+    "岁": { "pinyin": "suì", "meaning": "years (of age)" },
+    "钱": { "pinyin": "qián", "meaning": "money" },
+    "块": { "pinyin": "kuài", "meaning": "piece; yuan (informal)" },
+    "老": { "pinyin": "lǎo", "meaning": "old" },
+    "师": { "pinyin": "shī", "meaning": "teacher; master" },
+    "学": { "pinyin": "xué", "meaning": "to study; to learn" },
+    "生": { "pinyin": "shēng", "meaning": "to be born; life" },
+    "同": { "pinyin": "tóng", "meaning": "same; together" },
+    "朋": { "pinyin": "péng", "meaning": "friend" },
+    "友": { "pinyin": "yǒu", "meaning": "friend" },
+    "校": { "pinyin": "xiào", "meaning": "school" },
+    "习": { "pinyin": "xí", "meaning": "to practise" },
+    "汉": { "pinyin": "hàn", "meaning": "Han (Chinese)" },
+    "语": { "pinyin": "yǔ", "meaning": "language" },
+    "写": { "pinyin": "xiě", "meaning": "to write" },
+    "读": { "pinyin": "dú", "meaning": "to read" },
+    "说": { "pinyin": "shuō", "meaning": "to speak; to say" },
+    "中": { "pinyin": "zhōng", "meaning": "middle; China" },
+    "国": { "pinyin": "guó", "meaning": "country" },
+    "北": { "pinyin": "běi", "meaning": "north" },
+    "京": { "pinyin": "jīng", "meaning": "capital city" },
+    "医": { "pinyin": "yī", "meaning": "medicine; doctor" },
+    "工": { "pinyin": "gōng", "meaning": "work; labour" },
+    "作": { "pinyin": "zuò", "meaning": "to do; to make" },
+    "吃": { "pinyin": "chī", "meaning": "to eat" },
+    "喝": { "pinyin": "hē", "meaning": "to drink" },
+    "水": { "pinyin": "shuǐ", "meaning": "water" },
+    "茶": { "pinyin": "chá", "meaning": "tea" },
+    "米": { "pinyin": "mǐ", "meaning": "rice (uncooked); metre" },
+    "饭": { "pinyin": "fàn", "meaning": "cooked rice; meal" },
+    "菜": { "pinyin": "cài", "meaning": "dish; vegetable" },
+    "苹": { "pinyin": "píng", "meaning": "apple (in 苹果)" },
+    "果": { "pinyin": "guǒ", "meaning": "fruit" },
+    "喜": { "pinyin": "xǐ", "meaning": "happy; to like" },
+    "欢": { "pinyin": "huān", "meaning": "joyful" },
+    "想": { "pinyin": "xiǎng", "meaning": "to want; to think" },
+    "今": { "pinyin": "jīn", "meaning": "now; today" },
+    "天": { "pinyin": "tiān", "meaning": "day; sky" },
+    "明": { "pinyin": "míng", "meaning": "bright; next" },
+    "昨": { "pinyin": "zuó", "meaning": "yesterday" },
+    "年": { "pinyin": "nián", "meaning": "year" },
+    "月": { "pinyin": "yuè", "meaning": "month; moon" },
+    "号": { "pinyin": "hào", "meaning": "number; day of the month" },
+    "星": { "pinyin": "xīng", "meaning": "star" },
+    "期": { "pinyin": "qī", "meaning": "period of time" },
+    "现": { "pinyin": "xiàn", "meaning": "present; to appear" },
+    "在": { "pinyin": "zài", "meaning": "at; in; to exist" },
+    "点": { "pinyin": "diǎn", "meaning": "dot; o'clock" },
+    "上": { "pinyin": "shàng", "meaning": "up; above" },
+    "午": { "pinyin": "wǔ", "meaning": "noon" },
+    "下": { "pinyin": "xià", "meaning": "down; below" }
+  },
+  "units": [
+    {
+      "slug": "greetings",
+      "title": "Greetings",
+      "description": "Say hello, thank people, apologise and say goodbye.",
+      "lessons": [
+        {
+          "slug": "saying-hello",
+          "title": "Saying hello",
+          "words": [
+            { "simplified": "你", "pinyin": "nǐ", "meaning": "you", "partOfSpeech": "pronoun" },
+            {
+              "simplified": "好",
+              "pinyin": "hǎo",
+              "meaning": "good; well",
+              "partOfSpeech": "adjective"
+            },
+            {
+              "simplified": "你好",
+              "pinyin": "nǐ hǎo",
+              "meaning": "hello",
+              "partOfSpeech": "phrase",
+              "source": "HanziQuest (common greeting; not a separate HSK list entry)"
+            },
+            { "simplified": "我", "pinyin": "wǒ", "meaning": "I; me", "partOfSpeech": "pronoun" },
+            { "simplified": "是", "pinyin": "shì", "meaning": "to be", "partOfSpeech": "verb" }
+          ]
+        },
+        {
+          "slug": "thanks-and-goodbye",
+          "title": "Thanks and goodbye",
+          "words": [
+            {
+              "simplified": "谢谢",
+              "pinyin": "xièxie",
+              "meaning": "thank you",
+              "partOfSpeech": "verb"
+            },
+            { "simplified": "不", "pinyin": "bù", "meaning": "not; no", "partOfSpeech": "adverb" },
+            {
+              "simplified": "不客气",
+              "pinyin": "bú kèqi",
+              "meaning": "you're welcome",
+              "partOfSpeech": "phrase"
+            },
+            {
+              "simplified": "再见",
+              "pinyin": "zàijiàn",
+              "meaning": "goodbye",
+              "partOfSpeech": "verb"
+            }
+          ]
+        },
+        {
+          "slug": "sorry-and-please",
+          "title": "Sorry and please",
+          "words": [
+            {
+              "simplified": "对不起",
+              "pinyin": "duìbuqǐ",
+              "meaning": "sorry",
+              "partOfSpeech": "verb"
+            },
+            {
+              "simplified": "没关系",
+              "pinyin": "méi guānxi",
+              "meaning": "it doesn't matter",
+              "partOfSpeech": "phrase"
+            },
+            {
+              "simplified": "没有",
+              "pinyin": "méiyǒu",
+              "meaning": "not have; there is not",
+              "partOfSpeech": "verb"
+            },
+            {
+              "simplified": "请",
+              "pinyin": "qǐng",
+              "meaning": "please; to invite",
+              "partOfSpeech": "verb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "people",
+      "title": "People",
+      "description": "Talk about yourself, your family and the people around you.",
+      "lessons": [
+        {
+          "slug": "who-is-who",
+          "title": "Who is who",
+          "words": [
+            { "simplified": "他", "pinyin": "tā", "meaning": "he; him", "partOfSpeech": "pronoun" },
+            {
+              "simplified": "她",
+              "pinyin": "tā",
+              "meaning": "she; her",
+              "partOfSpeech": "pronoun"
+            },
+            {
+              "simplified": "我们",
+              "pinyin": "wǒmen",
+              "meaning": "we; us",
+              "partOfSpeech": "pronoun"
+            },
+            {
+              "simplified": "人",
+              "pinyin": "rén",
+              "meaning": "person; people",
+              "partOfSpeech": "noun"
+            },
+            { "simplified": "谁", "pinyin": "shéi", "meaning": "who", "partOfSpeech": "pronoun" }
+          ]
+        },
+        {
+          "slug": "family",
+          "title": "Family",
+          "words": [
+            {
+              "simplified": "爸爸",
+              "pinyin": "bàba",
+              "meaning": "dad; father",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "妈妈",
+              "pinyin": "māma",
+              "meaning": "mum; mother",
+              "partOfSpeech": "noun"
+            },
+            { "simplified": "儿子", "pinyin": "érzi", "meaning": "son", "partOfSpeech": "noun" },
+            {
+              "simplified": "女儿",
+              "pinyin": "nǚ'ér",
+              "meaning": "daughter",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "家",
+              "pinyin": "jiā",
+              "meaning": "home; family",
+              "partOfSpeech": "noun"
+            }
+          ]
+        },
+        {
+          "slug": "introductions",
+          "title": "Introductions",
+          "words": [
+            {
+              "simplified": "叫",
+              "pinyin": "jiào",
+              "meaning": "to be called",
+              "partOfSpeech": "verb"
+            },
+            { "simplified": "名字", "pinyin": "míngzi", "meaning": "name", "partOfSpeech": "noun" },
+            {
+              "simplified": "什么",
+              "pinyin": "shénme",
+              "meaning": "what",
+              "partOfSpeech": "pronoun"
+            },
+            {
+              "simplified": "认识",
+              "pinyin": "rènshi",
+              "meaning": "to know (someone)",
+              "partOfSpeech": "verb"
+            },
+            {
+              "simplified": "高兴",
+              "pinyin": "gāoxìng",
+              "meaning": "happy; glad",
+              "partOfSpeech": "adjective"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "numbers",
+      "title": "Numbers",
+      "description": "Count from one to ten, ask how many and talk about age and money.",
+      "lessons": [
+        {
+          "slug": "one-to-five",
+          "title": "One to five",
+          "words": [
+            { "simplified": "一", "pinyin": "yī", "meaning": "one", "partOfSpeech": "numeral" },
+            { "simplified": "二", "pinyin": "èr", "meaning": "two", "partOfSpeech": "numeral" },
+            { "simplified": "三", "pinyin": "sān", "meaning": "three", "partOfSpeech": "numeral" },
+            { "simplified": "四", "pinyin": "sì", "meaning": "four", "partOfSpeech": "numeral" },
+            { "simplified": "五", "pinyin": "wǔ", "meaning": "five", "partOfSpeech": "numeral" }
+          ]
+        },
+        {
+          "slug": "six-to-ten",
+          "title": "Six to ten",
+          "words": [
+            { "simplified": "六", "pinyin": "liù", "meaning": "six", "partOfSpeech": "numeral" },
+            { "simplified": "七", "pinyin": "qī", "meaning": "seven", "partOfSpeech": "numeral" },
+            { "simplified": "八", "pinyin": "bā", "meaning": "eight", "partOfSpeech": "numeral" },
+            { "simplified": "九", "pinyin": "jiǔ", "meaning": "nine", "partOfSpeech": "numeral" },
+            { "simplified": "十", "pinyin": "shí", "meaning": "ten", "partOfSpeech": "numeral" }
+          ]
+        },
+        {
+          "slug": "how-many",
+          "title": "How many?",
+          "words": [
+            {
+              "simplified": "几",
+              "pinyin": "jǐ",
+              "meaning": "how many (small numbers)",
+              "partOfSpeech": "pronoun"
+            },
+            {
+              "simplified": "多少",
+              "pinyin": "duōshao",
+              "meaning": "how many; how much",
+              "partOfSpeech": "pronoun"
+            },
+            {
+              "simplified": "个",
+              "pinyin": "gè",
+              "meaning": "general measure word",
+              "partOfSpeech": "measure word"
+            },
+            {
+              "simplified": "岁",
+              "pinyin": "suì",
+              "meaning": "years old",
+              "partOfSpeech": "measure word"
+            },
+            { "simplified": "钱", "pinyin": "qián", "meaning": "money", "partOfSpeech": "noun" },
+            {
+              "simplified": "块",
+              "pinyin": "kuài",
+              "meaning": "yuan (informal); piece",
+              "partOfSpeech": "measure word"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "school-and-work",
+      "title": "School and work",
+      "description": "Teachers, classmates, studying Chinese and jobs.",
+      "lessons": [
+        {
+          "slug": "at-school",
+          "title": "At school",
+          "words": [
+            {
+              "simplified": "老师",
+              "pinyin": "lǎoshī",
+              "meaning": "teacher",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "学生",
+              "pinyin": "xuésheng",
+              "meaning": "student",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "同学",
+              "pinyin": "tóngxué",
+              "meaning": "classmate",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "朋友",
+              "pinyin": "péngyou",
+              "meaning": "friend",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "学校",
+              "pinyin": "xuéxiào",
+              "meaning": "school",
+              "partOfSpeech": "noun"
+            }
+          ]
+        },
+        {
+          "slug": "learning-chinese",
+          "title": "Learning Chinese",
+          "words": [
+            {
+              "simplified": "学习",
+              "pinyin": "xuéxí",
+              "meaning": "to study; to learn",
+              "partOfSpeech": "verb"
+            },
+            {
+              "simplified": "汉语",
+              "pinyin": "Hànyǔ",
+              "meaning": "Chinese (language)",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "字",
+              "pinyin": "zì",
+              "meaning": "character; written word",
+              "partOfSpeech": "noun"
+            },
+            { "simplified": "写", "pinyin": "xiě", "meaning": "to write", "partOfSpeech": "verb" },
+            { "simplified": "读", "pinyin": "dú", "meaning": "to read", "partOfSpeech": "verb" },
+            {
+              "simplified": "说",
+              "pinyin": "shuō",
+              "meaning": "to speak; to say",
+              "partOfSpeech": "verb"
+            }
+          ]
+        },
+        {
+          "slug": "places-and-jobs",
+          "title": "Places and jobs",
+          "words": [
+            {
+              "simplified": "中国",
+              "pinyin": "Zhōngguó",
+              "meaning": "China",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "北京",
+              "pinyin": "Běijīng",
+              "meaning": "Beijing",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "医生",
+              "pinyin": "yīshēng",
+              "meaning": "doctor",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "工作",
+              "pinyin": "gōngzuò",
+              "meaning": "to work; job",
+              "partOfSpeech": "verb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "food-and-drink",
+      "title": "Food and drink",
+      "description": "Eating, drinking and saying what you like.",
+      "lessons": [
+        {
+          "slug": "eat-and-drink",
+          "title": "Eat and drink",
+          "words": [
+            { "simplified": "吃", "pinyin": "chī", "meaning": "to eat", "partOfSpeech": "verb" },
+            { "simplified": "喝", "pinyin": "hē", "meaning": "to drink", "partOfSpeech": "verb" },
+            { "simplified": "水", "pinyin": "shuǐ", "meaning": "water", "partOfSpeech": "noun" },
+            { "simplified": "茶", "pinyin": "chá", "meaning": "tea", "partOfSpeech": "noun" },
+            {
+              "simplified": "米饭",
+              "pinyin": "mǐfàn",
+              "meaning": "cooked rice",
+              "partOfSpeech": "noun"
+            }
+          ]
+        },
+        {
+          "slug": "what-i-like",
+          "title": "What I like",
+          "words": [
+            {
+              "simplified": "菜",
+              "pinyin": "cài",
+              "meaning": "dish; vegetable",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "苹果",
+              "pinyin": "píngguǒ",
+              "meaning": "apple",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "水果",
+              "pinyin": "shuǐguǒ",
+              "meaning": "fruit",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "喜欢",
+              "pinyin": "xǐhuan",
+              "meaning": "to like",
+              "partOfSpeech": "verb"
+            },
+            {
+              "simplified": "想",
+              "pinyin": "xiǎng",
+              "meaning": "to want; to think",
+              "partOfSpeech": "verb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "time",
+      "title": "Time",
+      "description": "Days, dates and times of day.",
+      "lessons": [
+        {
+          "slug": "days-and-dates",
+          "title": "Days and dates",
+          "words": [
+            {
+              "simplified": "今天",
+              "pinyin": "jīntiān",
+              "meaning": "today",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "明天",
+              "pinyin": "míngtiān",
+              "meaning": "tomorrow",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "昨天",
+              "pinyin": "zuótiān",
+              "meaning": "yesterday",
+              "partOfSpeech": "noun"
+            },
+            { "simplified": "年", "pinyin": "nián", "meaning": "year", "partOfSpeech": "noun" },
+            { "simplified": "月", "pinyin": "yuè", "meaning": "month", "partOfSpeech": "noun" },
+            {
+              "simplified": "号",
+              "pinyin": "hào",
+              "meaning": "day of the month",
+              "partOfSpeech": "noun"
+            },
+            { "simplified": "星期", "pinyin": "xīngqī", "meaning": "week", "partOfSpeech": "noun" }
+          ]
+        },
+        {
+          "slug": "times-of-day",
+          "title": "Times of day",
+          "words": [
+            { "simplified": "现在", "pinyin": "xiànzài", "meaning": "now", "partOfSpeech": "noun" },
+            {
+              "simplified": "点",
+              "pinyin": "diǎn",
+              "meaning": "o'clock",
+              "partOfSpeech": "measure word"
+            },
+            {
+              "simplified": "上午",
+              "pinyin": "shàngwǔ",
+              "meaning": "morning (before noon)",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "中午",
+              "pinyin": "zhōngwǔ",
+              "meaning": "noon",
+              "partOfSpeech": "noun"
+            },
+            {
+              "simplified": "下午",
+              "pinyin": "xiàwǔ",
+              "meaning": "afternoon",
+              "partOfSpeech": "noun"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

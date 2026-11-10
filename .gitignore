@@ -12,3 +12,9 @@ Thumbs.db
 .vercel/
 playwright-report/
 test-results/
+# local embedded postgres data
+.local/
+# generated prisma client
+src/generated/
+next-env.d.ts
+*.tsbuildinfo
