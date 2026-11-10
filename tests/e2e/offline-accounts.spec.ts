@@ -70,7 +70,14 @@ test("offline data is isolated per account across sign-out and account switching
   page,
   context,
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "Runs once (desktop)");
+  test.skip(!!testInfo.project.use.isMobile, "Runs on desktop projects");
+  // The scenario blocks /api/sync with context.route(); only Chromium routes requests from
+  // service-worker-controlled pages. In WebKit the sync gets through (verified: the result
+  // synced to its owner, nothing was lost), so the "unsynced at sign-out" state can't be set up.
+  test.skip(
+    testInfo.project.use.defaultBrowserType !== "chromium",
+    "Needs Chromium request routing for service-worker pages",
+  );
   const a = { email: uniqueEmail("acct-a"), password: throwawayPassword() };
   const b = { email: uniqueEmail("acct-b"), password: throwawayPassword() };
 

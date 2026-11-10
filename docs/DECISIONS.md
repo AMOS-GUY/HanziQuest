@@ -2,6 +2,29 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-10 — M5 release integration
+
+**D-036 · Logical backup tool in addition to provider PITR.** `db:backup`, `db:restore` and
+`db:verify` use `pg` from Node (no `pg_dump`), stream gzip NDJSON, restore into an empty
+migrated database in foreign-key order with constraints enforced, and verify by per-table
+content checksums, explicit foreign-key re-checks and app-level reads. Dates are copied as
+raw text (node-postgres would otherwise shift timestamps without time zone into local time).
+CI runs the drill on every push.
+
+**D-035 · Beta terms are required at sign-up, enforced on the server.** The action rejects
+sign-ups without acceptance. Existing accounts see an in-app prompt. Acceptance stores
+`termsVersion` and is audited. The documents are drafts pending legal review (LEGAL_REVIEW.md).
+
+**D-034 · Feedback stores the browser family, not the user agent; contact is opt-in.** This
+minimises personal data. Staff see a reporter's email only if they opted in. Query strings are
+stripped from page paths.
+
+**D-033 · Recall and technique are separate.** See HANDWRITING.md "Mastery policy". A wrong
+character never advances anything. Order or direction faults still count as remembering
+(the learner did recall the character), but earn capped XP (5), shorten the next interval and
+block MASTERED until two consecutive clean recalls. This replaces the M4 behaviour where a
+GOOD with a technique fault counted fully. No engine thresholds changed.
+
 ## 2026-11-10 — M4 beta readiness
 
 **D-032 · Admin gate in `proxy.ts`.** Next 16 runs `proxy.ts` on Node.js, so it can check the

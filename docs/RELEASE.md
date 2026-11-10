@@ -1,5 +1,27 @@
 # Beta release package
 
+## Status (2026-11-10, M5)
+
+- `main` contains M1–M4 through merged PRs #1–#4, with full commit history.
+- M5 is on `feature/m5-launch`. Open a PR into `main`
+  (https://github.com/AMOS-GUY/HanziQuest/compare/main...feature/m5-launch?expand=1) and merge
+  with a merge commit once CI is green.
+- **CI status on GitHub couldn't be checked from here:** the repository is private and no
+  GitHub CLI or token is available to this session. Check the Actions tab for PRs #1–#4 and
+  the M5 PR.
+- **Not deployed.** Hosting, database and secrets need the owner (see HOSTING.md and
+  DEPLOYMENT.md).
+
+## Launch checklist (owner)
+
+1. Merge the M5 PR after CI passes.
+2. Fill in the legal placeholders and get the documents reviewed (LEGAL_REVIEW.md).
+3. Create Neon (Launch) and Render (Starter) accounts or an alternative; set the env vars;
+   `npm run db:deploy`; `npm run db:seed`; deploy; `npm run smoke -- <url>`.
+4. Run the recovery drill against production (DEPLOYMENT.md) and record the result.
+5. Run the five-tester handwriting pilot (HANDWRITING_PILOT.md) and record the report.
+6. Invite testers with the beta guide link; triage feedback daily (BUG_REPORTING.md).
+
 ## Branches and merge order
 
 None of these branches is merged into `main`. The GitHub CLI isn't installed on the development
@@ -80,3 +102,14 @@ Each PR body should end with:
   writing.
 - No email yet: no password-reset email, no reminders.
 - Review rounds need a connection; offline practice covers downloaded lessons.
+
+## Release notes: M5 additions (draft)
+
+- **Fairer progress:** remembering a character and writing it with correct technique are now
+  tracked separately. If you remember a character but draw a stroke backwards or in the wrong
+  order, you get some XP and it counts as remembered, but it won't be marked mastered until you
+  write it correctly twice in a row. Writing a different character never counts.
+- **Feedback:** a Feedback page in the menu, and "Grading looks wrong? Tell us" after each
+  writing exercise.
+- **Beta terms and privacy notice:** you'll be asked to accept them once.
+- Public beta guide, privacy notice and terms pages (drafts pending legal review).

@@ -13,7 +13,7 @@ test.describe.configure({ timeout: 180_000 });
 test("a curriculum editor builds, previews and publishes a lesson, imports content and records a handwriting sample", async ({
   page,
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "Admin tools are desktop-first; runs once");
+  test.skip(!!testInfo.project.use.isMobile, "Admin tools are desktop-first; runs once");
   const email = uniqueEmail("editor");
   await register(page, "Editor", email, throwawayPassword());
   await completeOnboarding(page);
@@ -134,7 +134,7 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
 test("learners can't reach admin pages, and the 404 reveals nothing", async ({
   page,
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "Runs once");
+  test.skip(!!testInfo.project.use.isMobile, "Runs once");
   await register(page, "Learner", uniqueEmail("noadmin"), throwawayPassword());
   await completeOnboarding(page);
   for (const path of ["/admin", "/admin/curricula", "/admin/import", "/admin/handwriting"]) {

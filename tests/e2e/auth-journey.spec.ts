@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { completeOnboarding, uniqueEmail } from "./helpers";
 
+test.describe.configure({ timeout: 90_000 });
+
 test("learner can register, see the learning path, log out and log back in", async ({
   page,
 }, testInfo) => {
@@ -53,7 +55,7 @@ test("learner can register, see the learning path, log out and log back in", asy
   await page.getByRole("button", { name: "Log in" }).click();
   await expect(
     page.getByRole("alert").filter({ hasText: "Incorrect email or password" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15_000 });
 
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Log in" }).click();

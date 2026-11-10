@@ -66,6 +66,23 @@ evaluated separately, and the weakest character sets the overall band.
 - Guided-practice mistake counts are client-reported. They are labelled as such in the stored
   evaluation and never count as independent recall.
 
+## Mastery policy: recall vs technique (M5)
+
+Implemented in `features/handwriting/technique.ts` and `features/progress/mastery.ts` (D-033).
+
+| Outcome of an independent writing attempt                                   | Recall | Technique  | Review schedule                                       | XP              | Mastery                                                                         |
+| --------------------------------------------------------------------------- | ------ | ---------- | ----------------------------------------------------- | --------------- | ------------------------------------------------------------------------------- |
+| Right character, all strokes, correct order and direction (Excellent/Good)  | ✅     | ✅ clean   | Advances normally                                     | 10 / 8          | Counts towards FAMILIAR and MASTERED                                            |
+| Right character, all strokes, **order or direction fault** (capped at Good) | ✅     | ❌ fault   | Advances as a hard pass: smaller interval, lower ease | **capped at 5** | Counts towards FAMILIAR; **blocks MASTERED** until the last 2 recalls are clean |
+| Missing or extra strokes, poor shape (Needs improvement)                    | ❌     | not judged | Lapse; back in 10 minutes                             | 4               | No progress                                                                     |
+| **Different character** (Try again)                                         | ❌     | not judged | Lapse                                                 | 1               | **Never advances anything**                                                     |
+| Guided (traced) or hinted attempt                                           | n/a    | not judged | Never advances                                        | half            | Never counts                                                                    |
+
+The learner sees a note under the feedback when technique was faulty ("You remembered this
+character. Fix the stroke order or direction before it can count as mastered."). Progress shows
+"Check strokes" on such characters. The engine's thresholds are **unchanged**: this is a policy
+layer on top of the same evaluation. Accuracy with real handwriting is still unmeasured.
+
 ## Validation with real learners
 
 Collection procedure, metric definitions, targets and the rules for changing thresholds are in

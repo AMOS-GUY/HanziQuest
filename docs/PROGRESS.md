@@ -67,6 +67,23 @@ Target public beta: **2026-12-08**.
 - [ ] Recovery drill against a real provider backup (needs the production database)
 - [ ] Branches merged to `main` in order (owner: open PRs; see RELEASE.md)
 
+### M5 — Release integration and beta launch preparation
+
+- [x] M1–M4 integrated into `main` in order, with merge commits and full history (PRs #1–#4, merged by the owner)
+- [ ] **CI confirmed green on GitHub** (private repo; no CLI or token available to this session, so the owner must check)
+- [x] Recall vs technique mastery policy implemented, tested and documented (D-033)
+- [x] Handwriting pilot kit: five-tester plan, spoken instructions, consent script, anonymous IDs, device facts, test-sample exclusion
+- [ ] **Human pilot run and analysed** (needs five real testers; no samples collected)
+- [x] Hosting and database options researched with sources (HOSTING.md); recommendation documented
+- [ ] **Production deployment** (owner accounts and secrets)
+- [x] Portable backup/restore/verify tools; local recovery drill passed; drill added to CI
+- [ ] **Production recovery drill** (needs the production database)
+- [x] Landing page beta section, terms acceptance at sign-up and for existing users, draft privacy notice, draft terms, beta guide, in-app feedback with triage, bug-reporting process, GitHub issue templates, release notes
+- [ ] **Legal review of the drafts** (owner; see LEGAL_REVIEW.md)
+- [x] QA: Chromium desktop and Android emulation, WebKit desktop and iPhone emulation (all e2e flows)
+- [ ] Firefox (Playwright's Firefox can't start on this machine: `spawn UNKNOWN`) and **real physical devices** (owner/testers)
+- [ ] **Verification of the deployed production app** (after deployment: smoke test plus a manual pass)
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -259,3 +276,62 @@ which only has the initial commit). Two migrations: `beta_quality` (`Handwriting
 - CI has never run on GitHub; the branches aren't merged and no PRs are open (no `gh` CLI).
 - Nonce-based CSP, email (verification, reset, reminders) and 2FA are post-beta.
 - The SRS and XP numbers are initial values, to be tuned with usage data.
+
+### 2026-11-10 — Session 5 (M5: release integration and launch preparation)
+
+**Git:** you merged M1–M4 into `main` as PRs #1–#4 (merge commits, history preserved) while
+this session was preparing the same merge. My local duplicate merge was discarded unpushed,
+and nothing was force-pushed. Before that, a Docker build fix (placeholder `DATABASE_URL` for
+`prisma generate` during `npm ci`) went to `feature/m4-beta` and is included in PR #4. M5 work
+is on `feature/m5-launch`, branched from the new `main`. Migrations: `technique_mastery`
+(with backfill from stored evaluations) and `beta_launch` (feedback, terms acceptance, sample
+device info). Both are additive.
+
+**Completed:**
+
+- **Mastery policy:** technique (stroke order and direction) is judged separately from recall
+  on independent writing. Faulty technique: XP capped at 5, shorter next interval, no MASTERED
+  until two clean recalls in a row; feedback note and "Check strokes" on Progress. A wrong
+  character never advances anything; guided practice never counts. The engine is unchanged.
+  `npm run progress:rebuild` applied it to existing data.
+- **Pilot kit:** P01–P05 pilot plan (36 prompts each: 12 characters × 2 correct + 1 rotated
+  deliberate error), spoken instructions in the recorder, coarse device facts recorded
+  automatically, consent script and session procedure (HANDWRITING_PILOT.md). Automated-test
+  samples use `TEST-` codes and are excluded. The two synthetic samples earlier e2e runs had
+  recorded as "P99" in the dev database were relabelled as test samples.
+- **Launch content:** landing page beta section and footer; terms acceptance at sign-up
+  (enforced in the server action) and an in-app prompt for existing accounts; draft privacy
+  notice, terms and beta guide; feedback page, "Grading looks wrong? Tell us", admin triage
+  inbox (`feedback:manage`); BUG_REPORTING.md and GitHub issue templates; LEGAL_REVIEW.md.
+- **Recovery:** `db:backup`, `db:restore` and `db:verify`. The local drill passed (details in
+  DEPLOYMENT.md) and is now in CI. The drill found and fixed a hang in the restore tool
+  (readline created before an awaited connect lost the input).
+- **Hosting:** HOSTING.md compares Render, Railway, Fly.io and Vercel with Neon, Render
+  Postgres, Supabase and Fly MPG. Prices are marked official or third-party, with sources.
+  Recommended: Render Starter + Neon Launch, roughly $10–30/month (verify).
+
+**Tests (all passing):**
+
+- lint, typecheck, format check: clean
+- unit **114** (8 new: technique policy and verdicts)
+- integration **55** (6 new: technique fault recorded with capped XP; wrong character never
+  advances; guided excluded; terms acceptance; feedback storage and triage audit)
+- content validation, production build
+- Playwright Chromium: **18 passed**, 6 skipped (mobile copies of desktop-only flows). New:
+  public pages and draft notices; learner feedback → staff triage, with contact hidden; terms
+  required at sign-up.
+- Playwright WebKit (desktop Safari and iPhone 14 emulation): **18 passed**, 6 skipped, including
+  the full lesson, offline practice with the service worker and sync, and admin. The
+  account-isolation test is Chromium-only: it needs request routing for service-worker pages.
+  In WebKit the block didn't apply and the result synced to its owner (checked in the
+  database; nothing lost).
+- Firefox: **not run**. The downloaded browser can't start on this machine.
+- Smoke test 8/8 against the production build running on the restored database.
+
+**Not done (needs people, accounts or authorisation):**
+
+- No real handwriting samples. **No accuracy claim can be made for real learners.**
+- Not deployed; the production recovery drill and production verification are pending.
+- GitHub CI results not visible to this session.
+- Legal drafts not reviewed; placeholders unfilled. Keep the beta invite-only until done.
+- No testing on real phones or tablets yet (emulation only).

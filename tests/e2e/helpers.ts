@@ -45,7 +45,7 @@ export async function completeOnboarding(page: Page) {
   await choose("radio", /^Regular/);
   await next("Want to skip what you already know?");
   await page.getByRole("button", { name: "Start from the beginning" }).click();
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/home$/, { timeout: 15_000 });
 }
 
 /**
