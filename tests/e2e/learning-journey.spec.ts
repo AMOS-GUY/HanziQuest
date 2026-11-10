@@ -53,16 +53,16 @@ test("learner completes the first lesson by writing every exercise; progress per
   // Progress persists across reloads.
   await page.goto("/learn");
   await page.reload();
-  await expect(page.getByRole("link", { name: "Saying hello, Completed" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Thanks and goodbye, Start" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Sorry and please, Locked" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^1\. Saying hello.*Completed/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^2\. Thanks and goodbye.*Up next/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^3\. Sorry and please.*Locked/ })).toBeVisible();
 });
 
 test("a locked lesson cannot be practised", async ({ page }, testInfo) => {
   await register(page, "Locked", uniqueEmail(testInfo.project.name), throwawayPassword());
   await completeOnboarding(page);
   await page.goto("/learn");
-  const locked = page.getByRole("link", { name: "Sorry and please, Locked" });
+  const locked = page.getByRole("link", { name: /^3\. Sorry and please.*Locked/ });
   const href = await locked.getAttribute("href");
   await page.goto(href!.replace("/learn/", "/practice/lesson/"));
   await expect(page).toHaveURL(href!);

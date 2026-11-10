@@ -105,7 +105,9 @@ export async function writeCurrentExercise(page: Page) {
         return;
       }
 
-      const tabs = [...document.querySelectorAll("[role=tab]")] as HTMLButtonElement[];
+      const tabs = [
+        ...document.querySelectorAll('[aria-label="Character to write"] button'),
+      ] as HTMLButtonElement[];
       const count = Math.max(1, tabs.length);
       if (expected.length !== count)
         throw new Error(`expected ${count} characters, got ${expected.join("")}`);

@@ -109,6 +109,16 @@ Target public beta: **2026-12-08**.
 - [x] Recall, technique and guided measures per character and in total (`skillTotals`)
 - [ ] **HSK 1 remaining 70 words, HSK 2 and 3 content, examples, audio, teacher review** (needs licensed sources and a reviewer)
 
+### M8 — Learner experience and accessibility (2026-11-11, `feature/m8-experience`)
+
+- [x] Automated accessibility audit (axe-core, WCAG A/AA) of 20 pages in light and dark, desktop and mobile; 4 violations found and fixed; now 0
+- [x] Handwriting: palm rejection, cancelled gestures discarded, canvas fits landscape phones, stroke counter, hint notice before use
+- [x] Keyboard and screen-reader focus management in the practice flow; honest semantics for the character switcher
+- [x] Progress: "How you write" (recall, technique and guided practice measured separately)
+- [x] Practice loading state; Learn heading structure
+- [x] Screenshots from the production build (`docs/screenshots/`)
+- [ ] **Physical devices and styluses, Firefox, manual screen-reader pass** (owner/testers)
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -388,3 +398,12 @@ without the fix (checked by reverting the fix for M6-01 and M6-02). See
 - Checks: format, lint, typecheck clean; unit **144**; integration **72**; content
   validation; production build.
 - Playwright Chromium: **22 passed, 8 skipped**.
+
+**M8 (experience):** see `docs/M8_UX_AND_ACCESSIBILITY.md`.
+
+- New dev dependency: `@axe-core/playwright` 4.14.0.
+- No migrations.
+- Checks: format, lint, typecheck clean; unit **144**; production build.
+- Playwright Chromium: **30 passed, 16 skipped**. The skips are mobile copies of desktop-only
+  flows, plus the 4 opt-in screenshot runs. New: 4 accessibility runs and 4 writing-experience
+  tests.

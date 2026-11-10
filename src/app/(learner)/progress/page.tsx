@@ -44,7 +44,11 @@ function weekday(day: string) {
 
 export default async function ProgressPage() {
   const user = await requireUser();
-  const { summary, recent, achievements, characters } = await getProgressDetails(prisma, user.id);
+  const { summary, recent, achievements, characters, skills } = await getProgressDetails(
+    prisma,
+    user.id,
+  );
+  const pct = (rate: number | null) => (rate === null ? "–" : `${Math.round(rate * 100)}%`);
   const maxXp = Math.max(summary.today.goal, ...recent.map((d) => d.xp));
 
   return (
@@ -183,6 +187,47 @@ export default async function ProgressPage() {
         )}
       </section>
 
+      <section aria-labelledby="skills">
+        <h2 id="skills" className="mb-1 text-xl font-extrabold">
+          How you write
+        </h2>
+        <p className="text-muted-foreground mb-3 text-sm">
+          Remembering a character, writing its strokes correctly and traced practice are measured
+          separately. Only writing from memory counts towards mastery.
+        </p>
+        <ul className="grid gap-3 sm:grid-cols-3">
+          <li>
+            <Card className="h-full p-4">
+              <p className="text-2xl font-black">{pct(skills.recallRate)}</p>
+              <p className="font-bold">Recall</p>
+              <p className="text-muted-foreground text-sm">
+                Right character from memory, in {skills.recallAttempts} independent{" "}
+                {skills.recallAttempts === 1 ? "attempt" : "attempts"}
+              </p>
+            </Card>
+          </li>
+          <li>
+            <Card className="h-full p-4">
+              <p className="text-2xl font-black">{pct(skills.techniqueRate)}</p>
+              <p className="font-bold">Stroke order and direction</p>
+              <p className="text-muted-foreground text-sm">
+                Correct in {skills.techniqueJudged} recalled{" "}
+                {skills.techniqueJudged === 1 ? "character" : "characters"}
+              </p>
+            </Card>
+          </li>
+          <li>
+            <Card className="h-full p-4">
+              <p className="text-2xl font-black">{skills.guidedAttempts}</p>
+              <p className="font-bold">Guided practice</p>
+              <p className="text-muted-foreground text-sm">
+                Traced or hinted attempts (not counted as recall)
+              </p>
+            </Card>
+          </li>
+        </ul>
+      </section>
+
       <section aria-labelledby="achievements">
         <h2 id="achievements" className="mb-3 text-xl font-extrabold">
           Achievements
@@ -192,7 +237,12 @@ export default async function ProgressPage() {
             const Icon = a.earnedAt ? (ICONS[a.icon] ?? Trophy) : Lock;
             return (
               <li key={a.key}>
-                <Card className={cn("flex items-center gap-3 p-4", !a.earnedAt && "opacity-70")}>
+                <Card
+                  className={cn(
+                    "flex items-center gap-3 p-4",
+                    !a.earnedAt && "bg-surface-muted border-dashed",
+                  )}
+                >
                   <span
                     className={cn(
                       "flex size-10 shrink-0 items-center justify-center rounded-full",

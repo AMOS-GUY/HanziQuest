@@ -53,10 +53,11 @@ function guidedBand(mistakes: number, strokeCount: number): EvaluationBand {
   return "TRY_AGAIN";
 }
 
-function Prompt({ exercise }: { exercise: ExerciseDTO }) {
+function Prompt({ exercise, ref }: { exercise: ExerciseDTO; ref?: React.Ref<HTMLDivElement> }) {
   const p = exercise.prompt;
   return (
-    <div className="text-center">
+    // Focus target when a new exercise starts (keyboard and screen-reader users).
+    <div ref={ref} tabIndex={-1} className="text-center focus:outline-none">
       <p className="text-primary text-sm font-extrabold tracking-wide uppercase">
         {PROMPT_LABEL[exercise.type]}
       </p>
@@ -106,6 +107,28 @@ export function PracticeRunner({
     () => exercises[0]?.characters.map(() => []) ?? [],
   );
   const [active, setActive] = useState(0);
+  const promptRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const firstRender = useRef(true);
+
+  // Move focus with the flow: to the result after Check, to the prompt for a new exercise.
+  // The target mounts after the exit animation, so wait for it (up to about a second).
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    const target = phase === "feedback" ? resultRef : phase === "answer" ? promptRef : null;
+    if (!target) return;
+    let frames = 0;
+    let handle = 0;
+    const tryFocus = () => {
+      if (target.current) target.current.focus({ preventScroll: false });
+      else if (frames++ < 60) handle = requestAnimationFrame(tryFocus);
+    };
+    handle = requestAnimationFrame(tryFocus);
+    return () => cancelAnimationFrame(handle);
+  }, [phase, index]);
   const [hintLevel, setHintLevel] = useState(0);
   const [outcome, setOutcome] = useState<Outcome>();
   const [saves, setSaves] = useState<Record<string, SaveState>>({});
@@ -439,7 +462,7 @@ export function PracticeRunner({
         </Alert>
       ) : null}
 
-      <Prompt exercise={exercise} />
+      <Prompt exercise={exercise} ref={promptRef} />
 
       <AnimatePresence mode="wait" initial={false}>
         {phase === "answer" ? (
@@ -456,15 +479,14 @@ export function PracticeRunner({
                 {exercise.characters.length > 1 ? (
                   <div
                     className="flex justify-center gap-2"
-                    role="tablist"
-                    aria-label="Characters to write"
+                    role="group"
+                    aria-label="Character to write"
                   >
                     {exercise.characters.map((_, i) => (
                       <button
                         key={i}
                         type="button"
-                        role="tab"
-                        aria-selected={i === active}
+                        aria-pressed={i === active}
                         onClick={() => setActive(i)}
                         className={cn(
                           "border-border rounded-full border-2 px-4 py-1 text-sm font-bold",
@@ -484,7 +506,15 @@ export function PracticeRunner({
                   onChange={(s) => setDrawings((d) => d.map((v, i) => (i === active ? s : v)))}
                   ghost={hintLevel >= (textHint ? 2 : 1) ? activeHanzi : null}
                   label={`Writing area for character ${active + 1} of ${exercise.characters.length}`}
+                  // Short screens (landscape phones): keep the controls reachable without
+                  // scrolling while writing.
+                  className="mx-auto max-w-[max(16rem,calc(100dvh-19rem))]"
                 />
+                <p className="text-muted-foreground -mt-1 text-center text-xs" aria-live="off">
+                  {drawings[active]!.length === 0
+                    ? "Write with your finger, stylus or mouse."
+                    : `${drawings[active]!.length} stroke${drawings[active]!.length === 1 ? "" : "s"}`}
+                </p>
                 {textHint && hintLevel >= 1 ? (
                   <p className="text-muted-foreground text-center text-sm font-bold">
                     Hint: {textHint}
@@ -536,11 +566,11 @@ export function PracticeRunner({
                     Check
                   </Button>
                 )}
-                {hintLevel > 0 ? (
-                  <p className="text-muted-foreground text-center text-xs">
-                    Using a hint makes this guided practice rather than recall.
-                  </p>
-                ) : null}
+                <p className="text-muted-foreground text-center text-xs">
+                  {hintLevel > 0
+                    ? "You used a hint, so this counts as guided practice rather than recall."
+                    : "A hint makes this guided practice: it won't count towards remembering."}
+                </p>
               </>
             ) : strokeData[activeHanzi] ? (
               <>
@@ -566,25 +596,33 @@ export function PracticeRunner({
             transition={{ duration: 0.2 }}
             className="flex flex-col gap-4"
           >
-            {outcome?.kind === "writing" ? (
-              <>
-                <BandBanner band={outcome.band} />
-                <WritingFeedback
-                  evaluation={outcome.evaluation}
-                  drawings={drawings}
-                  strokeData={strokeData}
+            <div
+              ref={resultRef}
+              tabIndex={-1}
+              className="flex flex-col gap-4 focus:outline-none"
+              aria-label="Result"
+              role="group"
+            >
+              {outcome?.kind === "writing" ? (
+                <>
+                  <BandBanner band={outcome.band} />
+                  <WritingFeedback
+                    evaluation={outcome.evaluation}
+                    drawings={drawings}
+                    strokeData={strokeData}
+                  />
+                </>
+              ) : outcome?.kind === "guided" ? (
+                <BandBanner
+                  band={outcome.band}
+                  detail={
+                    outcome.mistakes === 0
+                      ? "Every stroke traced in order on the first try."
+                      : `Traced with ${outcome.mistakes} mistake${outcome.mistakes === 1 ? "" : "s"}.`
+                  }
                 />
-              </>
-            ) : outcome?.kind === "guided" ? (
-              <BandBanner
-                band={outcome.band}
-                detail={
-                  outcome.mistakes === 0
-                    ? "Every stroke traced in order on the first try."
-                    : `Traced with ${outcome.mistakes} mistake${outcome.mistakes === 1 ? "" : "s"}.`
-                }
-              />
-            ) : null}
+              ) : null}
+            </div>
 
             <p
               className="text-muted-foreground text-center text-xs font-semibold"

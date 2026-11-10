@@ -48,7 +48,7 @@ export default async function ReviewPage() {
               <CardTitle>
                 {due.length} character{due.length === 1 ? "" : "s"} to review
               </CardTitle>
-              <CardDescription className="text-accent-foreground/80">
+              <CardDescription className="text-accent-foreground">
                 {due.length > REVIEW_BATCH_SIZE
                   ? `Reviews come in rounds of ${REVIEW_BATCH_SIZE}.`
                   : "One short round."}
