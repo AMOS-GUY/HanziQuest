@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveLessonStates } from "@/features/progression/lesson-states";
-import { generateQuestions } from "@/features/assessment/placement";
+import { generateQuestions, QUESTIONS_PER_UNIT } from "@/features/assessment/placement";
 import { onboardingSchema } from "@/features/onboarding/schema";
 import { attemptInputSchema } from "@/features/exercises/attempt-schema";
 
@@ -45,6 +45,7 @@ describe("placement question generation", () => {
       characters: [
         { id: "4", hanzi: "他", meaning: "he" },
         { id: "5", hanzi: "她", meaning: "she" },
+        { id: "6", hanzi: "们", meaning: "plural marker" },
       ],
     },
   ];
@@ -56,10 +57,11 @@ describe("placement question generation", () => {
     );
   });
 
-  it("asks two questions per unit with exactly one correct option", () => {
+  it("asks QUESTIONS_PER_UNIT (3) questions per unit with exactly one correct option", () => {
     const qs = generateQuestions("x", units);
-    expect(qs.filter((q) => q.unitId === "u1")).toHaveLength(2);
-    expect(qs.filter((q) => q.unitId === "u2")).toHaveLength(2);
+    expect(QUESTIONS_PER_UNIT).toBe(3);
+    expect(qs.filter((q) => q.unitId === "u1")).toHaveLength(3);
+    expect(qs.filter((q) => q.unitId === "u2")).toHaveLength(3);
     for (const q of qs) {
       const target = units.flatMap((u) => u.characters).find((c) => c.id === q.characterId)!;
       expect(q.options[q.correctIndex]).toBe(target.meaning);

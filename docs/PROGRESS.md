@@ -97,6 +97,18 @@ Target public beta: **2026-12-08**.
 - [x] Regression tests: 11 integration, 12 unit, 3 e2e (session revocation, suspension, API refusals)
 - [x] Prioritised defect register and accepted risks
 
+### M7 — Curriculum and learning intelligence (2026-11-11, `feature/m7-curriculum`)
+
+- [x] Reviewed shared content protected from less verified imports; import changes revisioned (D-038)
+- [x] Import audit written inside the import transaction
+- [x] Read-only import preview (CLI and admin Validate)
+- [x] Validator: per-syllable reading and tone checks, licence and verification consistency, duplicate glosses, lesson size, traditional forms
+- [x] Word-list coverage tool for owner-supplied lists (HSK 2/3 pathway documented)
+- [x] Content quality report (`content:report`, `/admin/content-quality`, `docs/CURRICULUM_QUALITY_REPORT.md`)
+- [x] Levels unlock in order (D-039); placement: 3 questions per unit and a 24 h retake cooldown (D-040)
+- [x] Recall, technique and guided measures per character and in total (`skillTotals`)
+- [ ] **HSK 1 remaining 70 words, HSK 2 and 3 content, examples, audio, teacher review** (needs licensed sources and a reviewer)
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -363,3 +375,16 @@ without the fix (checked by reverting the fix for M6-01 and M6-02). See
 - Playwright Chromium (desktop and Pixel 7 emulation): **22 passed, 8 skipped**. The skipped
   ones are mobile copies of desktop-only flows.
 - WebKit and Firefox were not run for M6.
+
+**M7 (curriculum):** see `docs/M7_CURRICULUM_AND_LEARNING.md`. No content was invented.
+
+- Defects found and fixed: M7-01 (a provisional import could overwrite verified glosses),
+  M7-02 (import audit outside the transaction), M7-03 (levels unlocked independently) and
+  M7-04 (placement guessable and retakeable).
+- The e2e import fixture was overwriting the starter's 人 gloss and part of speech in the dev
+  database on every run. It now matches the starter, and the dev data was restored with
+  `content:import`.
+- No migrations.
+- Checks: format, lint, typecheck clean; unit **144**; integration **72**; content
+  validation; production build.
+- Playwright Chromium: **22 passed, 8 skipped**.

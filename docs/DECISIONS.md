@@ -2,6 +2,28 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-11 — M6 and M7
+
+**D-040 · Placement: 3 questions per unit and a 24-hour retake cooldown.** This cuts the chance
+of guessing a unit from 1/16 to 1/64 and stops repeated guessing. Testing out only opens
+lessons; it never creates mastery or review history.
+
+**D-039 · Levels are sequential.** A level's first lesson unlocks when the last
+learner-visible lesson of the closest lower level is COMPLETED or TESTED_OUT. The first level
+is always open. Lessons with progress stay open.
+
+**D-038 · Reviewed shared content is protected.** Characters and words are shared between
+curricula. An import may change a record's reading or gloss only if its verification level is
+at least the record's (`curriculum/provenance.ts`). Otherwise the existing values are kept and
+reported (`protectedKept`). Every import change writes a ContentRevision with the old values.
+The import preview shows the same decisions before anything is written.
+
+**D-037 · A curriculum is the unit of release (M6).** Learners see a lesson only if both the
+lesson and its curriculum are PUBLISHED (`curriculum/visibility.ts`). This applies everywhere,
+including direct links, downloads, attempts and reviews. Admins publish, unpublish or archive
+a curriculum with a revision and an audit entry. Publishing needs at least one published
+lesson. Withdrawing a curriculum never deletes learner history.
+
 ## 2026-11-10 — M5 release integration
 
 **D-036 · Logical backup tool in addition to provider PITR.** `db:backup`, `db:restore` and

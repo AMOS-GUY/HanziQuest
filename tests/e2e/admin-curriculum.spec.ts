@@ -118,6 +118,8 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
         verification: "PROVISIONAL",
       },
       level: { level: 1, name: "L1" },
+      // Same reading and gloss as the starter curriculum: characters are shared, and a test
+      // must not rewrite real content.
       characters: { 人: { pinyin: "rén", meaning: "person" } },
       units: [
         {
@@ -127,7 +129,14 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
             {
               slug: "l1",
               title: "L1",
-              words: [{ simplified: "人", pinyin: "rén", meaning: "person" }],
+              words: [
+                {
+                  simplified: "人",
+                  pinyin: "rén",
+                  meaning: "person; people",
+                  partOfSpeech: "noun",
+                },
+              ],
             },
           ],
         },
@@ -136,10 +145,18 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
   );
   await page.getByRole("button", { name: "Validate" }).click();
   await expect(page.getByText("Validation passed.")).toBeVisible();
+  // Validation also previews what the import would change, read-only.
+  await expect(page.getByText("— Import preview —")).toBeVisible();
+  await expect(page.getByText(/^Lessons: 1 new/)).toBeVisible();
   await page.getByRole("button", { name: "Import as drafts" }).click();
   await expect(page.getByText(/Imported: 1 new lessons \(as drafts\)/)).toBeVisible({
     timeout: 30_000,
   });
+
+  // Content quality report
+  await page.goto("/admin/content-quality");
+  await expect(page.getByRole("heading", { level: 1, name: "Content quality" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "HSK 1 Starter" })).toBeVisible();
 
   // Handwriting lab: record a labelled sample with consent.
   await page.goto("/admin/handwriting");

@@ -11,6 +11,7 @@ import type { Permission } from "@/lib/permissions/permissions";
 import { recordAudit } from "@/lib/audit";
 import { loadStrokeData } from "@/features/curriculum/stroke-data";
 import { validateCurriculumContent } from "@/features/curriculum/validate-content";
+import { formatImportPreview, previewCurriculumImport } from "@/features/curriculum/import-preview";
 import { importCurriculumContent } from "@/features/curriculum/import-content";
 import { DomainError, type Actor } from "./services";
 import * as admin from "./curriculum-admin";
@@ -239,10 +240,16 @@ export async function validateImportAction(_: FormState, formData: FormData): Pr
   }
   const parsed = parseImport(formData);
   if ("error" in parsed) return { ok: false, message: parsed.error };
+  const details = describeValidation(parsed.result);
+  if (parsed.result.ok && parsed.result.content) {
+    // What importing would change, against the current database (read-only).
+    const preview = await previewCurriculumImport(prisma, parsed.result.content);
+    details.push("— Import preview —", ...formatImportPreview(preview));
+  }
   return {
     ok: parsed.result.ok,
     message: parsed.result.ok ? "Validation passed." : "Validation failed.",
-    details: describeValidation(parsed.result),
+    details,
   };
 }
 
@@ -258,21 +265,28 @@ export async function importContentAction(_: FormState, formData: FormData): Pro
   const content = parsed.result.content;
   return run("content:import", async (actor) => {
     // Imports never publish: new lessons arrive as drafts for review and preview.
+    // The audit entry is written inside the import transaction (all or nothing).
     const summary = await importCurriculumContent(prisma, content, {
       publishNewLessons: false,
       lookupStrokes: loadStrokeData,
+      authorId: actor.id,
+      onImported: (tx, s) =>
+        recordAudit(tx, {
+          actorId: actor.id,
+          action: "content.import",
+          entityType: "Curriculum",
+          entityId: s.curriculumId,
+          after: { ...s, slug: content.curriculum.slug, version: content.curriculum.version },
+          ipAddress: actor.ip,
+          userAgent: actor.userAgent,
+        }),
     });
-    await recordAudit(prisma, {
-      actorId: actor.id,
-      action: "content.import",
-      entityType: "Curriculum",
-      entityId: summary.curriculumId,
-      after: { ...summary, slug: content.curriculum.slug, version: content.curriculum.version },
-      ipAddress: actor.ip,
-      userAgent: actor.userAgent,
-    });
+    const kept =
+      summary.protectedKept.length > 0
+        ? ` Kept the reviewed reading or gloss of ${summary.protectedKept.join(", ")} (this file is less verified).`
+        : "";
     return {
-      message: `Imported: ${summary.lessonsCreated} new lessons (as drafts), ${summary.lessonsUpdated} updated, ${summary.charactersUpserted} characters, ${summary.vocabularyUpserted} words, ${summary.exercisesUpserted} exercises.`,
+      message: `Imported: ${summary.lessonsCreated} new lessons (as drafts), ${summary.lessonsUpdated} updated, ${summary.charactersUpserted} characters, ${summary.vocabularyUpserted} words, ${summary.exercisesUpserted} exercises.${kept}`,
       revalidate: ["/admin/lessons", "/admin/curricula"],
     };
   });

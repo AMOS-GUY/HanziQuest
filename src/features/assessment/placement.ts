@@ -8,8 +8,14 @@ import { DomainError } from "@/features/administration/services";
  *
  * Passing every question of a unit marks its lessons TESTED_OUT — but only for consecutive units
  * from the start, so the learning path never has gaps. Self-declared level is never used here.
+ *
+ * Guessing (M7, D-040): with 3 four-option questions per unit, guessing a unit succeeds with
+ * probability 1/64 (it was 1/16 with 2). A completed check can't be retaken for
+ * PLACEMENT_RETAKE_HOURS, so repeated guessing can't skip the path either. Testing out never
+ * creates mastery or review history: it only opens lessons, which stay practicable.
  */
-export const QUESTIONS_PER_UNIT = 2;
+export const QUESTIONS_PER_UNIT = 3;
+export const PLACEMENT_RETAKE_HOURS = 24;
 export const OPTIONS_PER_QUESTION = 4;
 const PLACEMENT_PASS_RATIO = 0.8;
 
@@ -119,8 +125,26 @@ export async function getPlacementLevel(prisma: PrismaClient) {
   });
 }
 
+/** When the learner may take the placement check again, or null if they may now. */
+export async function placementRetakeAt(
+  prisma: PrismaClient,
+  userId: string,
+  now: Date = new Date(),
+): Promise<Date | null> {
+  const last = await prisma.placementAssessment.findFirst({
+    where: { userId, status: "COMPLETED", completedAt: { not: null } },
+    orderBy: { completedAt: "desc" },
+    select: { completedAt: true },
+  });
+  if (!last?.completedAt) return null;
+  const at = new Date(last.completedAt.getTime() + PLACEMENT_RETAKE_HOURS * 3_600_000);
+  return at > now ? at : null;
+}
+
 /** Returns the learner's open placement check (reused for an hour) or starts a new one. */
 export async function startPlacement(prisma: PrismaClient, userId: string) {
+  if (await placementRetakeAt(prisma, userId))
+    throw new DomainError("conflict", "You can take the placement check again tomorrow.");
   const level = await getPlacementLevel(prisma);
   if (!level) throw new DomainError("not_found", "No published curriculum is available.");
   const recent = await prisma.placementAssessment.findFirst({

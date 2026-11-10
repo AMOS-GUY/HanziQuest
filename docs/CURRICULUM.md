@@ -52,6 +52,19 @@ Errors (import is refused):
 Warnings: characters defined but unused; characters without stroke data (their writing
 exercises are skipped).
 
+More checks were added in M7: readings and tones per syllable, licence and verification
+consistency, duplicate glosses, lesson size, and traditional forms. See
+`docs/M7_CURRICULUM_AND_LEARNING.md`.
+
+## Preview, coverage and quality report (M7)
+
+- `npm run content:preview -- [file]` shows what an import would change (read-only). The admin
+  **Validate** button shows the same.
+- `npm run content:coverage -- [file] --list words.txt` compares the content with an
+  authoritative word list you supply (one word per line, optional `<TAB>pinyin`).
+- `npm run content:report -- [file] --out report.md` writes the quality report. The admin
+  equivalent is `/admin/content-quality`.
+
 ## Import (`npm run content:import [file] [--draft]`)
 
 `src/features/curriculum/import-content.ts` runs as a single transaction and is idempotent:
@@ -62,6 +75,10 @@ exercises are skipped).
   lesson is only detached from that lesson.
 - Increments `Lesson.contentVersion` when a lesson's word list changes.
 - Publishes new lessons unless `--draft` is passed. Existing lessons keep their status.
+- **Protects reviewed content (D-038):** a less verified file never overwrites a REVIEWED or
+  VERIFIED character or word. Every change to an existing shared record gets a
+  ContentRevision.
+- Learners see a curriculum's lessons only while the **curriculum** is published (D-037).
 
 Generated exercises per lesson, in order:
 
@@ -75,8 +92,10 @@ pass on other scores alone.
 
 ## Adding HSK 2–6 or HSK 3.0
 
-Create a new content file with its own `curriculum.slug` and `version`, then validate and
-import it. Characters and words are shared across curricula automatically.
+Follow the pathway in `docs/M7_CURRICULUM_AND_LEARNING.md`. You need a licensed word list,
+`content:coverage`, a content file per level, then validate, preview, import as a draft,
+review and publish. Never generate readings or glosses and label them official. Levels of the
+same curriculum unlock in order (D-039).
 
 ## Editing in the admin (M4)
 

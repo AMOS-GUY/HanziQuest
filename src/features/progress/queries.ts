@@ -77,6 +77,11 @@ export async function getProgressDetails(
         level: true,
         strength: true,
         lastTechniqueOk: true,
+        guidedAttempts: true,
+        independentAttempts: true,
+        independentSuccesses: true,
+        techniqueAttempts: true,
+        techniqueClean: true,
         character: { select: { hanzi: true, pinyin: true, meaning: true } },
       },
     }),
@@ -108,7 +113,11 @@ export async function getProgressDetails(
       level: c.level,
       strength: c.strength,
       techniqueNeedsWork: c.lastTechniqueOk === false,
+      guidedAttempts: c.guidedAttempts,
+      recall: { attempts: c.independentAttempts, successes: c.independentSuccesses },
+      technique: { judged: c.techniqueAttempts, clean: c.techniqueClean },
     })),
+    skills: skillTotals(characters),
   };
 }
 
@@ -134,4 +143,32 @@ export async function getReviewForecast(
     const day = addDays(today, i);
     return { day, count: counts.get(day) ?? 0 };
   });
+}
+
+/**
+ * Separate measures of what the learner can do (M7): recall (independent writing of the right
+ * character), technique (stroke order and direction on those recalls) and guided practice
+ * (tracing, never counted as recall). Rates are null until there is something to measure.
+ */
+export function skillTotals(
+  rows: readonly {
+    guidedAttempts: number;
+    independentAttempts: number;
+    independentSuccesses: number;
+    techniqueAttempts: number;
+    techniqueClean: number;
+  }[],
+) {
+  const sum = (f: (r: (typeof rows)[number]) => number) => rows.reduce((t, r) => t + f(r), 0);
+  const recallAttempts = sum((r) => r.independentAttempts);
+  const recallSuccesses = sum((r) => r.independentSuccesses);
+  const techniqueJudged = sum((r) => r.techniqueAttempts);
+  const techniqueClean = sum((r) => r.techniqueClean);
+  return {
+    guidedAttempts: sum((r) => r.guidedAttempts),
+    recallAttempts,
+    recallRate: recallAttempts > 0 ? recallSuccesses / recallAttempts : null,
+    techniqueJudged,
+    techniqueRate: techniqueJudged > 0 ? techniqueClean / techniqueJudged : null,
+  };
 }

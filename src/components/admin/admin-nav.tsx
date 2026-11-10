@@ -11,6 +11,7 @@ import {
   MessageSquare,
   PenLine,
   ScrollText,
+  ShieldCheck,
   Upload,
   Users,
   type LucideIcon,
@@ -28,6 +29,7 @@ const ICONS: Record<string, LucideIcon> = {
   upload: Upload,
   "pen-line": PenLine,
   message: MessageSquare,
+  "shield-check": ShieldCheck,
 };
 
 export interface AdminNavItem {

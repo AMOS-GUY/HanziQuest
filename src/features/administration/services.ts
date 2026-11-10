@@ -19,7 +19,11 @@ export class DomainError extends Error {
   }
 }
 
-async function nextRevision(tx: Prisma.TransactionClient, entityType: string, entityId: string) {
+export async function nextRevision(
+  tx: Prisma.TransactionClient,
+  entityType: string,
+  entityId: string,
+) {
   const last = await tx.contentRevision.findFirst({
     where: { entityType, entityId },
     orderBy: { revision: "desc" },
