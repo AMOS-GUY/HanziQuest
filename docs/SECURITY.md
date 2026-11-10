@@ -75,13 +75,56 @@ idempotency (`clientEventId`, `SyncEvent.id`, `XPTransaction.idempotencyKey`). H
 samples store a pseudonymous participant code only. Prisma queries are parameterised; the only
 raw SQL uses tagged templates.
 
+## M6–M9 review (2026-11-11)
+
+**Fixed:**
+
+- M6-01: lessons of unpublished curricula were reachable by direct link, download and the API.
+- M6-02: concurrent sync uploads caused a 500.
+- M6-03: four learner actions had no rate limit.
+- M7-01: a provisional import could rewrite verified content.
+- M7-02: the import audit entry was written outside the import transaction.
+
+**Added in M9:**
+
+- **Invite-only registration** (the default in production, D-041). Only hashes of the codes
+  are stored, redemption is atomic, and a failed sign-up doesn't consume a code. Tested under
+  concurrency and end to end on an invite-only server.
+- **Headers:** `Cross-Origin-Opener-Policy: same-origin` and
+  `Cross-Origin-Resource-Policy: same-origin`, in addition to CSP, HSTS, `nosniff`,
+  frame-ancestors/`X-Frame-Options`, Referrer-Policy and Permissions-Policy.
+- **Rate limit on the public stroke-data route:** 600 per minute per IP.
+- **Structured request logs** with redaction of emails, tokens and URL credentials. Fields
+  named like credentials are dropped.
+- **CI:** `npm audit --omit=dev --audit-level=high`, and the migration safety check. Dependabot
+  sends weekly update PRs.
+- **Dependencies (2026-11-11):** 0 known vulnerabilities in production dependencies. 7
+  moderate advisories in a lint-only dependency (`minimatch` via typescript-eslint, a ReDoS on
+  glob patterns we write ourselves). Accepted until typescript-eslint releases a fix;
+  `npm audit fix` without `--force` can't resolve it.
+
+### Rate limits (abuse review)
+
+| Limit                             | Key             | Applies to                                                                 |
+| --------------------------------- | --------------- | -------------------------------------------------------------------------- |
+| 10 / 15 min and 30 / h            | email+IP, email | sign-in                                                                    |
+| 5 / h (`REGISTER_LIMIT_PER_HOUR`) | IP              | registration (and an invite in production)                                 |
+| 120 / min                         | user            | attempts, sessions, sync, downloads, onboarding, placement, profile, terms |
+| 60 / min                          | user            | admin and staff mutations                                                  |
+| 5 / h, 3 / h, 10 / h              | user, IP, user  | password change, account deletion, feedback                                |
+| 30 / 10 min, 600 / min            | IP              | client error reports, public stroke data                                   |
+
+All of them are shared across instances through PostgreSQL in production.
+
 ## Known limitations
 
 1. **The CSP allows `'unsafe-inline'` scripts**, because the App Router bootstraps with inline
    scripts. A nonce-based CSP would make every page dynamic, including the static offline pages
    the service worker caches. Mitigations: no user HTML is ever rendered
    (`dangerouslySetInnerHTML` isn't used), plus `object-src 'none'` and `base-uri 'self'`.
-   Post-beta.
+   Post-beta. Reviewed again in M9 and kept: the static, service-worker-cached offline pages
+   can't carry a per-request nonce. The added COOP and CORP headers and the strict
+   `connect-src 'self'` limit what an injected script could do.
 2. **No email verification or password reset.** Both need an email provider (an external
    account). Until then, support would reset passwords by hand, which needs a documented
    identity check. That procedure doesn't exist yet.

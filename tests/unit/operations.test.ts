@@ -93,3 +93,77 @@ describe("request body limit", () => {
     await expect(readJson(ok, 1000)).resolves.toEqual({ a: 1 });
   });
 });
+
+describe("registration mode and invite codes (D-041)", () => {
+  it("is invite-only in production unless explicitly opened", async () => {
+    const { registrationMode } = await import("@/features/invites/invites");
+    expect(registrationMode({ NODE_ENV: "production" })).toBe("invite");
+    expect(registrationMode({ NODE_ENV: "production", REGISTRATION_MODE: "open" })).toBe("open");
+    expect(registrationMode({ NODE_ENV: "production", REGISTRATION_MODE: "nonsense" })).toBe(
+      "invite",
+    );
+    expect(registrationMode({ NODE_ENV: "development" })).toBe("open");
+    expect(registrationMode({ NODE_ENV: "development", REGISTRATION_MODE: "invite" })).toBe(
+      "invite",
+    );
+  });
+
+  it("generates unambiguous codes and hashes them case- and dash-insensitively", async () => {
+    const { generateCode, hashCode } = await import("@/features/invites/invites");
+    const codes = new Set(Array.from({ length: 200 }, generateCode));
+    expect(codes.size).toBe(200);
+    for (const code of codes)
+      expect(code).toMatch(/^HQ-[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$/);
+    const code = [...codes][0]!;
+    expect(hashCode(code)).toBe(hashCode(code.toLowerCase().replace(/-/g, " ")));
+    expect(hashCode(code)).toBe(hashCode(code.slice(3)));
+    expect(hashCode(code)).not.toContain(code.slice(3, 8));
+  });
+});
+
+describe("migration safety check", () => {
+  it("flags destructive and rollout-breaking statements", async () => {
+    const { checkMigrationSql } = await import("../../scripts/check-migrations");
+    const sql = [
+      'ALTER TABLE "User" ADD COLUMN "x" TEXT;',
+      'ALTER TABLE "User" DROP COLUMN "name";',
+      'DROP TABLE "Old";',
+      'ALTER TABLE "A" ALTER COLUMN "b" SET DATA TYPE INTEGER;',
+      'ALTER TABLE "A" RENAME COLUMN "b" TO "c";',
+      'ALTER TABLE "A" ALTER COLUMN "d" SET NOT NULL;',
+      'DELETE FROM "Session";',
+      "-- DROP TABLE in a comment is fine",
+    ].join("\n");
+    expect(checkMigrationSql("m", sql).map((f) => f.rule)).toEqual([
+      "drop-column",
+      "drop-table",
+      "alter-type",
+      "rename",
+      "set-not-null",
+      "delete",
+    ]);
+  });
+
+  it("accepts additive migrations and explicitly allowed rules with a reason", async () => {
+    const { checkMigrationSql } = await import("../../scripts/check-migrations");
+    expect(
+      checkMigrationSql(
+        "m",
+        'CREATE TABLE "T" ("id" TEXT);\nCREATE INDEX "i" ON "T"("id");\nALTER TABLE "T" DROP CONSTRAINT "fk";',
+      ),
+    ).toEqual([]);
+    expect(
+      checkMigrationSql(
+        "m",
+        '-- migration-safety: allow drop-column unused since 2026-12 (D-099)\nALTER TABLE "U" DROP COLUMN "z";',
+      ),
+    ).toEqual([]);
+    // An allow comment without a reason doesn't count.
+    expect(
+      checkMigrationSql(
+        "m",
+        '-- migration-safety: allow drop-column\nALTER TABLE "U" DROP COLUMN "z";',
+      ),
+    ).toHaveLength(1);
+  });
+});

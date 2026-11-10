@@ -119,6 +119,16 @@ Target public beta: **2026-12-08**.
 - [x] Screenshots from the production build (`docs/screenshots/`)
 - [ ] **Physical devices and styluses, Firefox, manual screen-reader pass** (owner/testers)
 
+### M9 — Production and beta readiness (2026-11-11, `feature/m9-production`)
+
+- [x] Invite-only registration (production default), admin invites, atomic redemption (D-041)
+- [x] Migration safety check in CI (expand, then contract), dependency audit in CI, Dependabot (D-042)
+- [x] Health reports migration state; structured, redacted request logs (D-043); Admin → Operations
+- [x] Retention tool (`ops:prune`, dry run by default); COOP and CORP headers; public-route rate limit
+- [x] Local recovery drill repeated after the new migrations; an FK cycle caught and removed
+- [x] `docs/M9_PRODUCTION_READINESS.md`: checklist and the owner's external actions
+- [ ] **Deployment, production drill, production verification** (owner accounts and secrets)
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -410,3 +420,23 @@ without the fix (checked by reverting the fix for M6-01 and M6-02). See
 - Playwright WebKit (desktop Safari and iPhone 14 emulation, `E2E_ALL_BROWSERS=1`): **32
   passed, 14 skipped, 0 failed**.
 - Firefox: not run (it can't start on this machine).
+
+**M9 (production readiness):** see `docs/M9_PRODUCTION_READINESS.md`.
+
+- Migrations: `beta_invites` and `beta_invites_acyclic`. The second drops the creator foreign
+  key that would have created an FK cycle and broken restores. Both are additive in effect;
+  the first was already applied locally, so it was not edited.
+- Checks: format, lint, typecheck clean; unit **150**; integration **79**; migration check
+  (against `origin/main`); content validation; production build.
+- Playwright Chromium: **31 passed, 17 skipped**, with two servers (open, and invite-only).
+- Playwright WebKit (desktop Safari and iPhone 14 emulation): **34 passed, 14 skipped, 0
+  failed**. Firefox not run.
+- Smoke test **8/8** against a local production server. A production start without
+  `REGISTRATION_MODE` was confirmed to be invite-only.
+- Local backup, restore and verify drill: every table matched; 69 FKs checked, 0 orphans.
+
+**Session 6 summary:**
+
+- Four stacked branches, each pushed: `feature/m6-quality` → `feature/m7-curriculum` →
+  `feature/m8-experience` → `feature/m9-production`.
+- Nothing was deployed, purchased or published. No real users or samples are involved.

@@ -1,5 +1,15 @@
 # Beta release package
 
+## Status (2026-11-11, after M9)
+
+- `main` has M1–M5 (PRs #1–#5, merge commits). M6, M7, M8 and M9 are stacked branches, each
+  built on the previous one: `feature/m6-quality` → `feature/m7-curriculum` →
+  `feature/m8-experience` → `feature/m9-production`. Merge them **in that order** with merge
+  commits. Each PR's base is `main` after the previous one is merged. Alternatively, open each
+  PR against the previous branch and merge from the bottom up.
+- **Not deployed.** The production readiness checklist and the owner's actions are in
+  `docs/M9_PRODUCTION_READINESS.md`.
+
 ## Status (2026-11-10, M5)
 
 - `main` contains M1–M4 through merged PRs #1–#4, with full commit history.

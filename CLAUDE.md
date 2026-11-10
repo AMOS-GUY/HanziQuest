@@ -65,5 +65,13 @@ npm run content:validate
   Recall vs technique policy lives in `features/handwriting/technique.ts`; don't mix them.
 - Handwriting samples from automated tests must use participant codes starting with `TEST`.
 - Changing the privacy notice or terms materially: bump `LEGAL_VERSION`.
+- Learner-facing lesson queries use `LEARNER_VISIBLE_LESSON` (`features/curriculum/visibility.ts`):
+  both the lesson and its curriculum must be PUBLISHED.
+- Imports never overwrite reviewed/verified shared characters or words with less verified data
+  (`features/curriculum/provenance.ts`). Preview first: `npm run content:preview`.
+- Migrations: expand, then contract. `npm run db:check-migrations` must pass. Keep the FK graph
+  acyclic (the backup/restore tools depend on it).
+- Registration is invite-only in production (`REGISTRATION_MODE`). Playwright starts two
+  servers: :3100 (open) and :3101 (invite-only).
 - The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it
   when caching rules change. Test offline flows with `npm run build` + Playwright.

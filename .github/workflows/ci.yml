@@ -35,6 +35,9 @@ jobs:
       CI: "true"
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the migration check can compare with the base branch.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -43,6 +46,17 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Dependency audit (production dependencies, high and critical)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Migration safety (no destructive statements; applied migrations unchanged)
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            npm run db:check-migrations -- --base "origin/${{ github.base_ref }}"
+          else
+            npm run db:check-migrations
+          fi
 
       - name: Generate ephemeral auth secret
         run: echo "AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   BookA,
   BookOpen,
   Languages,
@@ -12,6 +13,7 @@ import {
   PenLine,
   ScrollText,
   ShieldCheck,
+  Ticket,
   Upload,
   Users,
   type LucideIcon,
@@ -30,6 +32,8 @@ const ICONS: Record<string, LucideIcon> = {
   "pen-line": PenLine,
   message: MessageSquare,
   "shield-check": ShieldCheck,
+  activity: Activity,
+  ticket: Ticket,
 };
 
 export interface AdminNavItem {

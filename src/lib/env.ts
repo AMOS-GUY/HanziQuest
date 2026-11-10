@@ -47,6 +47,13 @@ export function checkEnvironment(
         problem: "is not set; errors go to logs only",
         fatal: false,
       });
+    if (env.REGISTRATION_MODE?.trim().toLowerCase() === "open")
+      issues.push({
+        name: "REGISTRATION_MODE",
+        problem:
+          "is 'open': anyone can sign up. Keep the beta invite-only until the legal and operational prerequisites are approved",
+        fatal: false,
+      });
     if (env.RATE_LIMIT_STORE === "memory")
       issues.push({
         name: "RATE_LIMIT_STORE",

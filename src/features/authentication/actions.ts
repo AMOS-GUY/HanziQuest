@@ -4,6 +4,7 @@ import { AuthError, CredentialsSignin } from "next-auth";
 import { signIn, signOut } from "@/lib/auth/auth";
 import { prisma } from "@/lib/database/prisma";
 import { registerUser } from "@/features/authentication/register";
+import { registrationMode } from "@/features/invites/invites";
 import { registerLimiter } from "@/lib/security/rate-limit";
 import { getRequestInfo } from "@/lib/security/request-info";
 import { loginSchema, registerFormSchema } from "@/lib/validation/auth";
@@ -47,8 +48,21 @@ export async function registerAction(input: unknown): Promise<ActionState> {
   if (!terms.success)
     return { fieldErrors: { acceptTerms: ["Please accept the beta terms and privacy notice"] } };
 
-  const result = await registerUser(prisma, input, { ip, userAgent });
+  const result = await registerUser(prisma, input, {
+    ip,
+    userAgent,
+    requireInvite: registrationMode() === "invite",
+  });
   if (!result.ok) {
+    if (result.error === "invite_invalid") {
+      return {
+        fieldErrors: {
+          inviteCode: [
+            "This invite code is not valid, has expired or has been used up. Check it or ask for a new one.",
+          ],
+        },
+      };
+    }
     if (result.error === "email_taken") {
       return {
         fieldErrors: { email: ["An account with this email already exists. Try logging in."] },

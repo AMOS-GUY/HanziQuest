@@ -2,6 +2,27 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-11 — M9 production readiness
+
+**D-043 · Structured logs carry no personal data.** Route handlers log method, path (no
+query), status and duration only. Values that look like emails, tokens or URL credentials are
+masked, and fields named like credentials are dropped. Errors keep going through
+`monitoring/report.ts` (stdout plus optional Sentry/GlitchTip).
+
+**D-042 · Migrations are expand, then contract, and checked in CI.** `db:check-migrations`
+refuses destructive or rollout-breaking SQL unless the migration carries
+`-- migration-safety: allow <rule> <reason>`. It also refuses edits to migrations already on
+the base branch. The foreign-key graph stays acyclic, because the backup and restore tools
+insert tables in dependency order. This is why `BetaInvite.createdById` is a plain column
+(the follow-up migration `beta_invites_acyclic` dropped the constraint; the earlier migration
+was already applied and is not edited).
+
+**D-041 · The beta is invite-only by default.** `REGISTRATION_MODE` defaults to `invite` in
+production and `open` elsewhere. Invite codes are 50-bit random codes and only their SHA-256
+hash is stored. A code is redeemed by a guarded `UPDATE` inside the registration transaction,
+so it can't be over-used under concurrency, and a failed sign-up doesn't consume it. Only
+Super Admins (`invites:manage`) create and revoke invites, and each change is audited.
+
 ## 2026-11-11 — M6 and M7
 
 **D-040 · Placement: 3 questions per unit and a 24-hour retake cooldown.** This cuts the chance

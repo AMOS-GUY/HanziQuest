@@ -183,6 +183,8 @@ model User {
   lastLoginAt          DateTime?
   /// Sessions issued before this instant are rejected (set on password change).
   credentialsChangedAt DateTime?
+  /// The beta invite used to register (null for open registration and staff-created accounts).
+  inviteId             String?
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 
@@ -214,6 +216,7 @@ model User {
   entitlements        Entitlement[]
   handwritingSamples  HandwritingSample[]
   feedback            Feedback[]
+  invite              BetaInvite?                @relation("InviteRedemptions", fields: [inviteId], references: [id], onDelete: SetNull)
 
   @@index([status])
 }
@@ -1118,4 +1121,26 @@ model Feedback {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
+}
+
+/// Beta invitation (M9, D-041). Only a SHA-256 hash of the code is stored; the code is shown
+/// once when created. Redemption is atomic: `uses` is incremented with a guarded update inside
+/// the registration transaction.
+model BetaInvite {
+  id          String    @id @default(cuid())
+  codeHash    String    @unique
+  /// Who or what the invite is for (e.g. "Pilot school A"). Avoid personal data.
+  label       String
+  maxUses     Int       @default(1)
+  uses        Int       @default(0)
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  /// Creator's user id. Deliberately not a foreign key: User.inviteId already references this
+  /// table, and the backup/restore tools require an acyclic foreign-key graph. The audit log
+  /// records who created each invite.
+  createdById String?
+  createdAt   DateTime  @default(now())
+  users       User[]    @relation("InviteRedemptions")
+
+  @@index([createdAt])
 }

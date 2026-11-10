@@ -112,6 +112,17 @@ describe("GET /api/health", () => {
     expect(await response.json()).toMatchObject({ status: "ok", database: "ok" });
   });
 
+  it("returns 503 while a migration is unfinished or failed", async () => {
+    queryRaw.mockResolvedValueOnce([{ "?column?": 1 }]).mockResolvedValueOnce([{ count: 1n }]);
+    const response = await health();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      status: "degraded",
+      database: "ok",
+      migrations: "incomplete",
+    });
+  });
+
   it("returns 503 without details when the database is down", async () => {
     queryRaw.mockRejectedValue(new Error("password authentication failed for user hanziquest"));
     const response = await health();
@@ -119,5 +130,44 @@ describe("GET /api/health", () => {
     const text = await response.text();
     expect(JSON.parse(text)).toMatchObject({ status: "degraded", database: "unavailable" });
     expect(text).not.toContain("password");
+  });
+});
+
+describe("structured logging", () => {
+  it("masks emails, tokens and URL credentials, and drops credential fields", async () => {
+    const { logEvent, redact } = await import("@/lib/monitoring/log");
+    expect(redact("user mei@example.com failed")).toBe("user [email] failed");
+    expect(redact("postgres://hq:s3cret@db:5432/x")).toBe("postgres://[redacted]@db:5432/x");
+    expect(redact("token abcdefghijklmnopqrstuvwxyz0123456789ABCD end")).toBe(
+      "token [redacted] end",
+    );
+
+    const lines: string[] = [];
+    const spy = vi
+      .spyOn(console, "log")
+      .mockImplementation((line: string) => void lines.push(line));
+    process.env.LOG_IN_TESTS = "1";
+    try {
+      logEvent("info", "api.request", {
+        path: "/api/sync",
+        status: 200,
+        password: "hunter2",
+        authorization: "Bearer x",
+        note: "from mei@example.com",
+      });
+    } finally {
+      delete process.env.LOG_IN_TESTS;
+      spy.mockRestore();
+    }
+    const entry = JSON.parse(lines[0]!);
+    expect(entry).toMatchObject({
+      level: "info",
+      event: "api.request",
+      path: "/api/sync",
+      status: 200,
+    });
+    expect(entry).not.toHaveProperty("password");
+    expect(entry).not.toHaveProperty("authorization");
+    expect(entry.note).toBe("from [email]");
   });
 });

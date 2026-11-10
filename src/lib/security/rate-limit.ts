@@ -150,5 +150,7 @@ export const adminMutationLimiter = createLimit("admin", 60, 60 * 1000);
 export const passwordChangeLimiter = createLimit("password", 5, 60 * 60 * 1000);
 /** 10 feedback messages per hour per user. */
 export const feedbackLimiter = createLimit("feedback", 10, 60 * 60 * 1000);
+/** 600 public stroke-data reads per minute per IP (the data is cacheable, so this is generous). */
+export const publicReadLimiter = createLimit("public-read", 600, 60 * 1000);
 /** 30 client error reports per 10 minutes per IP. */
 export const clientErrorLimiter = createLimit("client-error", 30, 10 * 60 * 1000);

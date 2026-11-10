@@ -46,7 +46,14 @@ const NAV: (AdminNavItem & { permission: Permission })[] = [
     permission: "handwriting:validate",
   },
   { href: "/admin/feedback", label: "Feedback", icon: "message", permission: "feedback:manage" },
+  { href: "/admin/invites", label: "Invites", icon: "ticket", permission: "invites:manage" },
   { href: "/admin/users", label: "Users", icon: "users", permission: "users:read" },
+  {
+    href: "/admin/operations",
+    label: "Operations",
+    icon: "activity",
+    permission: "analytics:read",
+  },
   { href: "/admin/audit-logs", label: "Audit log", icon: "scroll-text", permission: "audit:read" },
 ];
 

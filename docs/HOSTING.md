@@ -58,6 +58,18 @@ a cold start of about 1 s on the first request after idle is acceptable.
 Not recommended for the beta: any free app tier that sleeps (first request takes about 1 min),
 Neon Free (no adequate restore window), Vercel Hobby (non-commercial terms).
 
+## Review (M9, 2026-11-11)
+
+The recommendation stands: Render Starter with Neon Launch. Nothing was purchased or
+provisioned. Since the original research, the app also:
+
+- reports migration state on `/api/health`, so point the platform's health check there;
+- needs `REGISTRATION_MODE` left unset (invite-only);
+- should run `npm run db:check-migrations` before `npm run db:deploy` in the release step.
+
+The Neon free tier is still unsuitable for production (a 6-hour restore window). Re-check the
+prices on the providers' own pages before signing up; the figures above date from 2026-11-10.
+
 ## Compatibility checklist
 
 - [x] Node 24 / Docker image (CI builds it)
