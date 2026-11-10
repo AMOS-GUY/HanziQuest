@@ -2,6 +2,45 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-10 — M4 beta readiness
+
+**D-032 · Admin gate in `proxy.ts`.** Next 16 runs `proxy.ts` on Node.js, so it can check the
+session and the user's roles in the database before any admin page or metadata renders.
+Non-staff get a bare 404, which closes the title leak from M1. Pages and actions still check
+their own permissions (defence in depth).
+
+**D-031 · No SDK for error reporting.** Errors are written as JSON lines and, when
+`SENTRY_DSN` is set, posted to the Sentry envelope API with `fetch`. This avoids a large
+dependency and its build integration, works with self-hosted GlitchTip, and keeps us in
+control of what is sent (no user ids; secrets redacted).
+
+**D-030 · Rate limits in PostgreSQL, not Redis.** The beta already has PostgreSQL. One atomic
+upsert per check is cheap at beta traffic and needs no new service or account. Swap the store
+if traffic grows.
+
+**D-029 · Handwriting acceptance metrics separate structural from technique errors.** The
+synthetic baseline showed that a single false-acceptance figure (42 %) mostly reflects the
+design choice that direction, order and proportion faults are capped at Good. The headline
+measures are false rejection, structural false acceptance (wrong character, missing or extra
+stroke: 0 %) and technique errors accepted (85 %, by design). Whether technique errors should
+block a recall is left to real-data evidence. **No thresholds were changed in M4.**
+
+**D-028 · Curriculum editing goes through the importer's lesson builder.** Admins edit a
+lesson's ordered word list; `buildLessonContent` (shared with `content:import`) regenerates
+characters and exercises with the same rules. Hand-written exercises (`custom:` keys) survive
+rebuilds. A word's written form and pinyin are immutable because exercises are keyed on them,
+so create a new word instead. Every edit bumps `contentVersion` where learners see the change,
+so offline downloads show "Update offline copy".
+
+**D-027 · Imports never publish.** Lessons created by the admin import arrive as drafts, to be
+previewed (`/admin/lessons/:id/preview`, nothing saved) and published separately. The CLI
+seed keeps publishing the starter curriculum.
+
+**D-026 · Offline data is bound to an account, and queued results survive sign-out.** Downloads
+are deleted at sign-out or account switch. Unsynced results stay tagged with their owner,
+because deleting them would lose real practice. They are never shown to or uploaded by
+another account. Offline at sign-out, the learner chooses keep or delete.
+
 ## 2026-11-10 — M3 progress and offline
 
 **D-025 · Offline means "downloaded lessons", not the whole app.** The service worker caches

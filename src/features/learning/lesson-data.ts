@@ -42,7 +42,11 @@ const exerciseSelect = {
   evaluationConfig: true,
 } as const;
 
-export async function getLessonForLearner(userId: string, lessonId: string) {
+export async function getLessonForLearner(
+  userId: string,
+  lessonId: string,
+  options: { preview?: boolean } = {},
+) {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
     select: {
@@ -82,26 +86,37 @@ export async function getLessonForLearner(userId: string, lessonId: string) {
           character: { select: { hanzi: true, pinyin: true, meaning: true, strokeCount: true } },
         },
       },
-      _count: { select: { exercises: true } },
+      _count: { select: { exercises: { where: { exercise: { status: "PUBLISHED" } } } } },
     },
   });
-  if (!lesson || lesson.status !== "PUBLISHED") return null;
+  if (!lesson || (lesson.status !== "PUBLISHED" && !options.preview)) return null;
   const { lessons, states } = await getLessonStatesForLevel(prisma, userId, lesson.unit.levelId);
   const state: LessonState = states.get(lesson.id) ?? "LOCKED";
   const index = lessons.findIndex((l) => l.id === lesson.id);
   return { ...lesson, state, nextLessonId: lessons[index + 1]?.id ?? null };
 }
 
-export async function getLessonPractice(lessonId: string): Promise<PracticePayload | null> {
+/**
+ * Practice payload for a lesson: its published exercises only. `preview` lets admins load a
+ * draft lesson exactly as learners will see it once published.
+ */
+export async function getLessonPractice(
+  lessonId: string,
+  options: { preview?: boolean } = {},
+): Promise<PracticePayload | null> {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
     select: {
       status: true,
       unit: { select: { levelId: true } },
-      exercises: { orderBy: { position: "asc" }, select: { exercise: { select: exerciseSelect } } },
+      exercises: {
+        where: { exercise: { status: "PUBLISHED" } },
+        orderBy: { position: "asc" },
+        select: { exercise: { select: exerciseSelect } },
+      },
     },
   });
-  if (!lesson || lesson.status !== "PUBLISHED") return null;
+  if (!lesson || (lesson.status !== "PUBLISHED" && !options.preview)) return null;
   return buildPayload(
     lesson.exercises.map((e) => e.exercise),
     lesson.unit.levelId,

@@ -13,11 +13,26 @@ export interface StrokeData {
 
 let dataDir: string | null = null;
 
+/**
+ * Locates the dataset folder. Inside a bundled server (Next.js), `require.resolve` returns a
+ * module id rather than a path, so fall back to node_modules under the working directory, or
+ * HANZI_WRITER_DATA_DIR when the app runs from a different directory.
+ */
 function resolveDataDir(): string {
-  if (!dataDir) {
-    const require = createRequire(import.meta.url);
-    dataDir = path.dirname(require.resolve("hanzi-writer-data/package.json"));
+  if (dataDir) return dataDir;
+  const candidates: string[] = [];
+  if (process.env.HANZI_WRITER_DATA_DIR) candidates.push(process.env.HANZI_WRITER_DATA_DIR);
+  try {
+    const resolved: unknown = createRequire(import.meta.url).resolve(
+      "hanzi-writer-data/package.json",
+    );
+    if (typeof resolved === "string") candidates.push(path.dirname(resolved));
+  } catch {
+    // not resolvable in this runtime
   }
+  candidates.push(path.join(process.cwd(), "node_modules", "hanzi-writer-data"));
+  dataDir =
+    candidates.find((dir) => fs.existsSync(path.join(dir, "package.json"))) ?? candidates.at(-1)!;
   return dataDir;
 }
 

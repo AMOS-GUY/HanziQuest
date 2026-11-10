@@ -178,3 +178,67 @@ async function expectedAnswer(page: Page): Promise<string[]> {
   if (!answer) throw new Error(`Could not resolve prompt: ${label} / ${big}`);
   return [...answer];
 }
+
+/** Grants a role to an account directly in the e2e database (test setup only). */
+export async function grantRole(email: string, role: string) {
+  const { Client } = await import("pg");
+  await import("dotenv/config");
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(
+      `INSERT INTO "UserRole" ("userId", "roleId")
+       SELECT u.id, r.id FROM "User" u, "Role" r WHERE u.email = $1 AND r.key = $2::"RoleKey"
+       ON CONFLICT DO NOTHING`,
+      [email, role],
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+/** Draws a character's reference strokes on the first writing canvas. */
+export async function writeOnCanvas(page: Page, hanzi: string) {
+  const medians = strokeMediansFor(hanzi);
+  await page.locator("canvas").first().waitFor();
+  await page.evaluate(async (medians: number[][][]) => {
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const canvas = document.querySelector("canvas")!;
+    const rect = canvas.getBoundingClientRect();
+    const at = ([x, y]: number[]) => ({
+      clientX: rect.left + (0.1 + (0.8 * x!) / 1024) * rect.width,
+      clientY: rect.top + (0.1 + (0.8 * (900 - y!)) / 1024) * rect.height,
+    });
+    for (const median of medians) {
+      const pts: number[][] = [];
+      for (let i = 0; i < median.length - 1; i += 1)
+        for (let k = 0; k < 5; k += 1)
+          pts.push([
+            median[i]![0]! + ((median[i + 1]![0]! - median[i]![0]!) * k) / 5,
+            median[i]![1]! + ((median[i + 1]![1]! - median[i]![1]!) * k) / 5,
+          ]);
+      pts.push(median[median.length - 1]!);
+      const fire = (type: string, p: number[]) =>
+        canvas.dispatchEvent(
+          new PointerEvent(type, {
+            ...at(p),
+            pointerId: 1,
+            pointerType: "pen",
+            isPrimary: true,
+            button: 0,
+            buttons: type === "pointerup" ? 0 : 1,
+            bubbles: true,
+          }),
+        );
+      fire("pointerdown", pts[0]!);
+      for (const p of pts.slice(1)) fire("pointermove", p);
+      fire("pointerup", pts[pts.length - 1]!);
+      await sleep(60);
+    }
+  }, medians);
+}
+
+function strokeMediansFor(hanzi: string): number[][][] {
+  const file = path.resolve(process.cwd(), "node_modules/hanzi-writer-data", `${hanzi}.json`);
+  return (JSON.parse(fs.readFileSync(file, "utf8")) as { medians: number[][][] }).medians;
+}

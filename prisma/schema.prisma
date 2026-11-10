@@ -134,6 +134,17 @@ enum SyncEventStatus {
   REJECTED
 }
 
+/// What a handwriting validation sample deliberately contains (ground truth label).
+enum HandwritingSampleCategory {
+  CORRECT
+  WRONG_CHARACTER
+  MISSING_STROKE
+  EXTRA_STROKE
+  WRONG_DIRECTION
+  WRONG_ORDER
+  POOR_SHAPE
+}
+
 enum BillingInterval {
   MONTH
   YEAR
@@ -170,6 +181,8 @@ model User {
   passwordHash  String?
   status        UserStatus @default(ACTIVE)
   lastLoginAt   DateTime?
+  /// Sessions issued before this instant are rejected (set on password change).
+  credentialsChangedAt DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -199,6 +212,7 @@ model User {
   paymentCustomers    PaymentCustomer[]
   paymentTransactions PaymentTransaction[]
   entitlements        Entitlement[]
+  handwritingSamples  HandwritingSample[]
 
   @@index([status])
 }
@@ -407,6 +421,7 @@ model Character {
   masteries       CharacterMastery[]
   reviewSchedules ReviewSchedule[]
   assessmentItems AssessmentResult[]
+  samples         HandwritingSample[]
 }
 
 /// Reference stroke geometry (from hanzi-writer-data / Make Me a Hanzi).
@@ -1006,4 +1021,50 @@ model Entitlement {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, key])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quality and operations
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Labelled real handwriting collected from consenting testers to validate the evaluation
+/// engine (docs/HANDWRITING_VALIDATION.md). Participants are identified only by a code.
+model HandwritingSample {
+  id               String                    @id @default(cuid())
+  collectorId      String?
+  /// Pseudonymous participant code chosen by the collector (e.g. "P07"). Never a name or email.
+  participantCode  String
+  characterId      String
+  category         HandwritingSampleCategory
+  /// Ground truth: should the engine accept this (EXCELLENT or GOOD)? True only for CORRECT.
+  shouldAccept     Boolean
+  /// For WRONG_CHARACTER samples: the character actually written.
+  writtenHanzi     String?
+  style            String?
+  inputDevice      String?
+  canvasSizePx     Int?
+  strokes          Json
+  /// Engine result at collection time. Metrics are recomputed with the current engine.
+  engineVersion    String
+  band             String
+  score            Float
+  identityVerified Boolean
+  notes            String?
+  consentConfirmed Boolean
+  createdAt        DateTime                  @default(now())
+
+  collector User?     @relation(fields: [collectorId], references: [id], onDelete: SetNull)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Restrict)
+
+  @@index([category])
+  @@index([participantCode])
+}
+
+/// Fixed-window counters for the shared rate limiter (multi-instance safe).
+model RateLimitBucket {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
 }

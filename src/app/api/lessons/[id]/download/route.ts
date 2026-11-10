@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/database/prisma";
-import { apiError, handleApi } from "@/lib/api/respond";
+import { apiError, handleApi, readJson } from "@/lib/api/respond";
 import { rateLimitWrite, requireApiUser } from "@/lib/api/learner";
 import { getLessonPractice } from "@/features/learning/lesson-data";
 import { getLessonState } from "@/features/progression/lesson-states";
@@ -15,10 +15,10 @@ const bodySchema = z.object({ deviceId: z.uuid() });
 export const POST = handleApi(
   async (request: Request, context: { params: Promise<{ id: string }> }) => {
     const user = await requireApiUser();
-    const limited = rateLimitWrite(user.id);
+    const limited = await rateLimitWrite(user.id);
     if (limited) return limited;
     const { id } = await context.params;
-    const { deviceId } = bodySchema.parse(await request.json());
+    const { deviceId } = bodySchema.parse(await readJson(request, 4_000));
 
     const state = await getLessonState(prisma, user.id, id);
     if (!state) return apiError(404, "not_found", "Lesson not found.");

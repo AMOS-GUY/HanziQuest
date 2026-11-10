@@ -228,114 +228,165 @@ async function doImport(
         });
       }
 
-      // Characters taught in this lesson, in order of first appearance.
-      const lessonChars: { hanzi: string; isNew: boolean }[] = [];
-      for (const word of lesson.words) {
-        for (const ch of word.simplified) {
-          if (lessonChars.some((lc) => lc.hanzi === ch)) continue;
-          lessonChars.push({ hanzi: ch, isNew: !introduced.has(ch) });
-          introduced.add(ch);
-        }
-      }
-      await tx.lessonCharacter.deleteMany({ where: { lessonId: lessonRecord.id } });
-      await tx.lessonCharacter.createMany({
-        data: lessonChars.map((lc, i) => ({
-          lessonId: lessonRecord.id,
-          characterId: characterIds.get(lc.hanzi)!,
-          position: i + 1,
-          isNew: lc.isNew,
-        })),
-      });
-
-      // Exercises: guided stroke practice for new characters, recall for every word,
-      // then independent freehand writing of the new characters.
-      const exerciseIds: string[] = [];
-      const newChars = lessonChars.filter((lc) => lc.isNew && strokeAvailable.has(lc.hanzi));
-      for (const { hanzi } of newChars) {
-        exerciseIds.push(
-          await upsertExercise(tx, curriculum.id, {
-            key: `char:${hanzi}:guided-stroke`,
-            type: "GUIDED_STROKE",
-            prompt: {
-              hanzi,
+      const built = await buildLessonContent(tx, {
+        curriculumId: curriculum.id,
+        lessonId: lessonRecord.id,
+        words: lesson.words.map((w, i) => ({ ...w, vocabularyId: vocabularyIds[i]! })),
+        introducedBefore: introduced,
+        characters: new Map(
+          [...characterIds].map(([hanzi, id]) => [
+            hanzi,
+            {
+              id,
               pinyin: content.characters[hanzi]!.pinyin,
               meaning: content.characters[hanzi]!.meaning,
+              hasStrokes: strokeAvailable.has(hanzi),
             },
-            expectedAnswer: hanzi,
-            characterId: characterIds.get(hanzi)!,
-            difficulty: 1,
-            hint: null,
-            evaluationConfig: buildEvaluationConfig("GUIDED", [hanzi]),
-          }),
-        );
-      }
-      for (let i = 0; i < lesson.words.length; i += 1) {
-        const word = lesson.words[i]!;
-        const vocabularyId = vocabularyIds[i]!;
-        const chars = [...word.simplified];
-        const writable = chars.every((ch) => strokeAvailable.has(ch));
-        if (!writable) continue;
-        const wordKey = `word:${word.simplified}:${word.pinyin}`;
-        const singleCharId = chars.length === 1 ? characterIds.get(chars[0]!)! : null;
-        exerciseIds.push(
-          await upsertExercise(tx, curriculum.id, {
-            key: `${wordKey}:meaning-to-hanzi`,
-            type: "MEANING_TO_HANZI",
-            prompt: { meaning: word.meaning },
-            expectedAnswer: word.simplified,
-            vocabularyId,
-            characterId: singleCharId,
-            difficulty: Math.min(5, chars.length + 1),
-            hint: word.pinyin,
-            evaluationConfig: buildEvaluationConfig("INDEPENDENT", chars),
-          }),
-        );
-        exerciseIds.push(
-          await upsertExercise(tx, curriculum.id, {
-            key: `${wordKey}:pinyin-to-hanzi`,
-            type: "PINYIN_TO_HANZI",
-            prompt: { pinyin: word.pinyin },
-            expectedAnswer: word.simplified,
-            vocabularyId,
-            characterId: singleCharId,
-            difficulty: Math.min(5, chars.length + 1),
-            hint: word.meaning,
-            evaluationConfig: buildEvaluationConfig("INDEPENDENT", chars),
-          }),
-        );
-      }
-      for (const { hanzi } of newChars) {
-        exerciseIds.push(
-          await upsertExercise(tx, curriculum.id, {
-            key: `char:${hanzi}:freehand`,
-            type: "FREEHAND_WRITING",
-            prompt: {
-              pinyin: content.characters[hanzi]!.pinyin,
-              meaning: content.characters[hanzi]!.meaning,
-            },
-            expectedAnswer: hanzi,
-            characterId: characterIds.get(hanzi)!,
-            difficulty: 2,
-            hint: null,
-            evaluationConfig: buildEvaluationConfig("INDEPENDENT", [hanzi]),
-          }),
-        );
-      }
-      summary.exercisesUpserted += exerciseIds.length;
-
-      await tx.lessonExercise.deleteMany({ where: { lessonId: lessonRecord.id } });
-      await tx.lessonExercise.createMany({
-        data: exerciseIds.map((exerciseId, i) => ({
-          lessonId: lessonRecord.id,
-          exerciseId,
-          position: i + 1,
-        })),
-        skipDuplicates: true,
+          ]),
+        ),
       });
+      for (const hanzi of built.characters) introduced.add(hanzi);
+      summary.exercisesUpserted += built.generatedExercises;
     }
   }
 
   return summary;
+}
+
+export interface LessonWordInput {
+  vocabularyId: string;
+  simplified: string;
+  pinyin: string;
+  meaning: string;
+}
+
+export interface LessonCharacterInfo {
+  id: string;
+  pinyin: string;
+  meaning: string;
+  hasStrokes: boolean;
+}
+
+/** Prefix of exercises written by hand in the admin; they survive lesson rebuilds. */
+export const CUSTOM_EXERCISE_PREFIX = "custom:";
+
+/**
+ * Rebuilds a lesson's characters and generated exercises from its ordered word list.
+ * Used by both the importer and the admin editor so generation rules live in one place:
+ * guided stroke practice for characters new to the level, two recall exercises per writable
+ * word, then free writing of the new characters. Hand-written (custom) exercises stay attached
+ * after the generated ones.
+ */
+export async function buildLessonContent(
+  tx: Tx,
+  input: {
+    curriculumId: string;
+    lessonId: string;
+    words: LessonWordInput[];
+    /** Characters introduced by earlier lessons in the level. */
+    introducedBefore: ReadonlySet<string>;
+    characters: ReadonlyMap<string, LessonCharacterInfo>;
+  },
+): Promise<{ characters: string[]; generatedExercises: number }> {
+  const { curriculumId, lessonId, words, characters } = input;
+  const lessonChars: { hanzi: string; isNew: boolean }[] = [];
+  for (const word of words) {
+    for (const ch of word.simplified) {
+      if (lessonChars.some((lc) => lc.hanzi === ch)) continue;
+      lessonChars.push({ hanzi: ch, isNew: !input.introducedBefore.has(ch) });
+    }
+  }
+  const info = (hanzi: string) => {
+    const c = characters.get(hanzi);
+    if (!c) throw new Error(`Character ${hanzi} is not in the database`);
+    return c;
+  };
+  await tx.lessonCharacter.deleteMany({ where: { lessonId } });
+  await tx.lessonCharacter.createMany({
+    data: lessonChars.map((lc, i) => ({
+      lessonId,
+      characterId: info(lc.hanzi).id,
+      position: i + 1,
+      isNew: lc.isNew,
+    })),
+  });
+
+  const exerciseIds: string[] = [];
+  const newChars = lessonChars.filter((lc) => lc.isNew && info(lc.hanzi).hasStrokes);
+  for (const { hanzi } of newChars) {
+    const c = info(hanzi);
+    exerciseIds.push(
+      await upsertExercise(tx, curriculumId, {
+        key: `char:${hanzi}:guided-stroke`,
+        type: "GUIDED_STROKE",
+        prompt: { hanzi, pinyin: c.pinyin, meaning: c.meaning },
+        expectedAnswer: hanzi,
+        characterId: c.id,
+        difficulty: 1,
+        hint: null,
+        evaluationConfig: buildEvaluationConfig("GUIDED", [hanzi]),
+      }),
+    );
+  }
+  for (const word of words) {
+    const chars = [...word.simplified];
+    if (!chars.every((ch) => info(ch).hasStrokes)) continue;
+    const wordKey = `word:${word.simplified}:${word.pinyin}`;
+    const singleCharId = chars.length === 1 ? info(chars[0]!).id : null;
+    exerciseIds.push(
+      await upsertExercise(tx, curriculumId, {
+        key: `${wordKey}:meaning-to-hanzi`,
+        type: "MEANING_TO_HANZI",
+        prompt: { meaning: word.meaning },
+        expectedAnswer: word.simplified,
+        vocabularyId: word.vocabularyId,
+        characterId: singleCharId,
+        difficulty: Math.min(5, chars.length + 1),
+        hint: word.pinyin,
+        evaluationConfig: buildEvaluationConfig("INDEPENDENT", chars),
+      }),
+    );
+    exerciseIds.push(
+      await upsertExercise(tx, curriculumId, {
+        key: `${wordKey}:pinyin-to-hanzi`,
+        type: "PINYIN_TO_HANZI",
+        prompt: { pinyin: word.pinyin },
+        expectedAnswer: word.simplified,
+        vocabularyId: word.vocabularyId,
+        characterId: singleCharId,
+        difficulty: Math.min(5, chars.length + 1),
+        hint: word.meaning,
+        evaluationConfig: buildEvaluationConfig("INDEPENDENT", chars),
+      }),
+    );
+  }
+  for (const { hanzi } of newChars) {
+    const c = info(hanzi);
+    exerciseIds.push(
+      await upsertExercise(tx, curriculumId, {
+        key: `char:${hanzi}:freehand`,
+        type: "FREEHAND_WRITING",
+        prompt: { pinyin: c.pinyin, meaning: c.meaning },
+        expectedAnswer: hanzi,
+        characterId: c.id,
+        difficulty: 2,
+        hint: null,
+        evaluationConfig: buildEvaluationConfig("INDEPENDENT", [hanzi]),
+      }),
+    );
+  }
+
+  const custom = await tx.lessonExercise.findMany({
+    where: { lessonId, exercise: { key: { startsWith: CUSTOM_EXERCISE_PREFIX } } },
+    orderBy: { position: "asc" },
+    select: { exerciseId: true },
+  });
+  const ordered = [...new Set([...exerciseIds, ...custom.map((c) => c.exerciseId)])];
+  await tx.lessonExercise.deleteMany({ where: { lessonId } });
+  await tx.lessonExercise.createMany({
+    data: ordered.map((exerciseId, i) => ({ lessonId, exerciseId, position: i + 1 })),
+  });
+  return { characters: lessonChars.map((lc) => lc.hanzi), generatedExercises: exerciseIds.length };
 }
 
 async function upsertWord(

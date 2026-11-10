@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/database/prisma";
 import { requirePagePermission } from "@/lib/auth/session";
@@ -74,7 +75,12 @@ export default async function AdminLessonsPage() {
                       <tr key={lesson.id} className="border-border border-b last:border-0">
                         <td className="px-4 py-2">
                           <span className="text-muted-foreground">{unit.title} › </span>
-                          <span className="font-bold">{lesson.title}</span>
+                          <Link
+                            href={`/admin/lessons/${lesson.id}`}
+                            className="font-bold hover:underline"
+                          >
+                            {lesson.title}
+                          </Link>
                         </td>
                         <td className="px-4 py-2">{lesson._count.vocabulary}</td>
                         <td className="px-4 py-2">{lesson._count.characters}</td>

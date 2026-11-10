@@ -28,7 +28,7 @@ const lessonStatusSchema = z.object({
 export async function setLessonStatusAction(input: unknown): Promise<AdminActionResult> {
   try {
     const user = await assertPermission("curriculum:publish");
-    if (!adminMutationLimiter.consume(user.id).allowed)
+    if (!(await adminMutationLimiter.consume(user.id)).allowed)
       return { ok: false, message: "Too many changes. Slow down." };
     const { lessonId, status } = lessonStatusSchema.parse(input);
     const { ip, userAgent } = await getRequestInfo();
@@ -56,7 +56,7 @@ const userRoleSchema = z.object({
 export async function setUserRoleAction(input: unknown): Promise<AdminActionResult> {
   try {
     const user = await assertPermission("users:manage-roles");
-    if (!adminMutationLimiter.consume(user.id).allowed)
+    if (!(await adminMutationLimiter.consume(user.id)).allowed)
       return { ok: false, message: "Too many changes. Slow down." };
     const { userId, role, grant } = userRoleSchema.parse(input);
     const { ip, userAgent } = await getRequestInfo();

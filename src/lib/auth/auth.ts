@@ -4,7 +4,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/database/prisma";
 import { verifyPasswordConstantTime } from "@/lib/auth/password";
 import { loginSchema } from "@/lib/validation/auth";
-import { loginLimiter } from "@/lib/security/rate-limit";
+import { loginEmailLimiter, loginLimiter } from "@/lib/security/rate-limit";
 import { ipFromHeaders } from "@/lib/security/request-info";
 import { recordAudit } from "@/lib/audit";
 
@@ -32,14 +32,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const { email, password } = parsed.data;
 
         const ip = ipFromHeaders(request.headers);
-        const limit = loginLimiter.consume(`${email}|${ip}`);
-        if (!limit.allowed) throw new RateLimitedSignin();
+        const limit = await loginLimiter.consume(`${email}|${ip}`);
+        // Also cap attempts per account across all IPs (distributed guessing).
+        const perEmail = await loginEmailLimiter.consume(email);
+        if (!limit.allowed || !perEmail.allowed) throw new RateLimitedSignin();
 
         const user = await prisma.user.findUnique({ where: { email } });
         const valid = await verifyPasswordConstantTime(password, user?.passwordHash);
         if (!user || !valid || user.status !== "ACTIVE") return null;
 
-        loginLimiter.reset(`${email}|${ip}`);
+        await loginLimiter.reset(`${email}|${ip}`);
         await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
         await recordAudit(prisma, {
           actorId: user.id,
@@ -55,11 +57,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     jwt({ token, user }) {
-      if (user?.id) token.sub = user.id;
+      if (user?.id) {
+        token.sub = user.id;
+        // Fixed at sign-in; Auth.js refreshes `iat` on rotation, so keep our own copy.
+        token.issuedAt = Math.floor(Date.now() / 1000);
+      }
       return token;
     },
     session({ session, token }) {
       if (token.sub) session.user.id = token.sub;
+      if (typeof token.issuedAt === "number") session.issuedAt = token.issuedAt;
       return session;
     },
   },

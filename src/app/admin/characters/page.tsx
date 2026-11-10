@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Pager } from "@/components/admin/pager";
 import { prisma } from "@/lib/database/prisma";
 import { requirePagePermission } from "@/lib/auth/session";
@@ -11,7 +13,7 @@ export default async function AdminCharactersPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  await requirePagePermission("curriculum:read");
+  const user = await requirePagePermission("curriculum:read");
   const page = parsePage((await searchParams).page);
   const [total, characters] = await Promise.all([
     prisma.character.count(),
@@ -25,10 +27,17 @@ export default async function AdminCharactersPage({
 
   return (
     <div>
-      <h1 className="mb-1 text-3xl font-black">Characters</h1>
-      <p className="text-muted-foreground mb-6 text-sm">
-        {total} characters. Editing arrives in a later milestone.
-      </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="mb-1 text-3xl font-black">Characters</h1>
+          <p className="text-muted-foreground text-sm">{total} characters</p>
+        </div>
+        {user.permissions.has("curriculum:write") ? (
+          <Button asChild>
+            <Link href="/admin/characters/new">New character</Link>
+          </Button>
+        ) : null}
+      </div>
       <div className="border-border bg-surface overflow-x-auto rounded-[var(--radius-card)] border-2">
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="border-border text-muted-foreground border-b-2">
@@ -44,8 +53,14 @@ export default async function AdminCharactersPage({
           <tbody>
             {characters.map((c) => (
               <tr key={c.id} className="border-border border-b last:border-0">
-                <td lang="zh" className="hanzi px-4 py-2 text-2xl">
-                  {c.hanzi}
+                <td className="px-4 py-2">
+                  <Link
+                    href={`/admin/characters/${c.id}`}
+                    lang="zh"
+                    className="hanzi text-2xl hover:underline"
+                  >
+                    {c.hanzi}
+                  </Link>
                 </td>
                 <td className="px-4 py-2">{c.pinyin}</td>
                 <td className="px-4 py-2">{c.meaning}</td>
