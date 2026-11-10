@@ -73,6 +73,14 @@ jobs:
           npm run db:deploy
           npm run db:seed
 
+      - name: Backup and restore drill
+        run: |
+          npm run db:backup -- --out backups/ci.ndjson.gz
+          PGPASSWORD=hanziquest psql -h localhost -U hanziquest -d hanziquest -c "CREATE DATABASE hanziquest_restore"
+          DATABASE_URL=postgresql://hanziquest:hanziquest@localhost:5432/hanziquest_restore npx prisma migrate deploy
+          npm run db:restore -- --in backups/ci.ndjson.gz --target postgresql://hanziquest:hanziquest@localhost:5432/hanziquest_restore
+          npm run db:verify -- --source "$DATABASE_URL" --target postgresql://hanziquest:hanziquest@localhost:5432/hanziquest_restore
+
       - name: Production build
         run: npm run build
 
