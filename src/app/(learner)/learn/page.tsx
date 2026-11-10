@@ -1,15 +1,26 @@
 import type { Metadata } from "next";
-import { BookOpen } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, CheckCircle2, CircleDot, Lock, SkipForward } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { requireUser } from "@/lib/auth/session";
-import { getLearningPath } from "@/features/curriculum/queries";
+import { getLearnerPath } from "@/features/curriculum/queries";
+import type { LessonState } from "@/features/progression/lesson-states";
+import { cn } from "@/lib/utilities/cn";
 
 export const metadata: Metadata = { title: "Learning path" };
 
+const STATE_META: Record<LessonState, { label: string; icon: typeof Lock | null }> = {
+  LOCKED: { label: "Locked", icon: Lock },
+  AVAILABLE: { label: "Start", icon: null },
+  IN_PROGRESS: { label: "In progress", icon: CircleDot },
+  COMPLETED: { label: "Completed", icon: CheckCircle2 },
+  TESTED_OUT: { label: "Tested out", icon: SkipForward },
+};
+
 export default async function LearnPage() {
-  await requireUser();
-  const curricula = await getLearningPath();
+  const user = await requireUser();
+  const { path: curricula, states, next, completed, total } = await getLearnerPath(user.id);
 
   if (curricula.length === 0) {
     return (
@@ -25,7 +36,7 @@ export default async function LearnPage() {
     <div className="flex flex-col gap-8">
       {curricula.map((curriculum) => (
         <section key={curriculum.id} aria-labelledby={`c-${curriculum.id}`}>
-          <div className="mb-4 flex flex-wrap items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <h1 id={`c-${curriculum.id}`} className="text-3xl font-black">
               {curriculum.name}
             </h1>
@@ -37,6 +48,12 @@ export default async function LearnPage() {
                 Provisional content
               </Badge>
             ) : null}
+          </div>
+          <div className="mb-6 flex items-center gap-3">
+            <ProgressBar value={completed} max={total} label="Lessons completed" />
+            <span className="text-muted-foreground text-sm font-bold whitespace-nowrap">
+              {completed}/{total} lessons
+            </span>
           </div>
 
           {curriculum.levels.map((level) => (
@@ -51,27 +68,48 @@ export default async function LearnPage() {
                     <p className="text-muted-foreground mb-3 text-sm">{unit.description}</p>
                   ) : null}
                   <ol className="grid gap-3 sm:grid-cols-2">
-                    {unit.lessons.map((lesson, lessonIndex) => (
-                      <li key={lesson.id}>
-                        <Card className="flex h-full flex-col gap-2 p-4">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <h3 className="font-extrabold">
-                              {lessonIndex + 1}. {lesson.title}
-                            </h3>
-                            <span className="text-muted-foreground text-xs whitespace-nowrap">
-                              {lesson._count.vocabulary} words
-                            </span>
-                          </div>
-                          <p lang="zh" className="hanzi text-foreground text-2xl tracking-widest">
-                            {lesson.characters.map((c) => c.character.hanzi).join("")}
-                          </p>
-                          <p className="text-muted-foreground text-xs">
-                            {lesson.characters.length} new characters · {lesson._count.exercises}{" "}
-                            exercises
-                          </p>
-                        </Card>
-                      </li>
-                    ))}
+                    {unit.lessons.map((lesson, lessonIndex) => {
+                      const state = states.get(lesson.id) ?? "LOCKED";
+                      const meta = STATE_META[state];
+                      const Icon = meta.icon;
+                      const isNext = next?.id === lesson.id;
+                      return (
+                        <li key={lesson.id}>
+                          <Link
+                            href={`/learn/${lesson.id}`}
+                            aria-label={`${lesson.title}, ${meta.label}`}
+                            className={cn(
+                              "border-border bg-surface hover:bg-surface-muted flex h-full flex-col gap-2 rounded-[var(--radius-card)] border-2 p-4 transition-colors",
+                              isNext && "border-primary shadow-[0_3px_0_0_var(--primary)]",
+                              state === "LOCKED" && "opacity-60",
+                            )}
+                          >
+                            <div className="flex items-baseline justify-between gap-2">
+                              <h3 className="font-extrabold">
+                                {lessonIndex + 1}. {lesson.title}
+                              </h3>
+                              <span
+                                className={cn(
+                                  "text-muted-foreground flex items-center gap-1 text-xs font-bold whitespace-nowrap",
+                                  (state === "COMPLETED" || state === "TESTED_OUT") &&
+                                    "text-primary",
+                                )}
+                              >
+                                {Icon ? <Icon className="size-4" aria-hidden /> : null}
+                                {isNext && state === "AVAILABLE" ? "Up next" : meta.label}
+                              </span>
+                            </div>
+                            <p lang="zh" className="hanzi text-foreground text-2xl tracking-widest">
+                              {lesson.characters.map((c) => c.character.hanzi).join("")}
+                            </p>
+                            <p className="text-muted-foreground text-xs">
+                              {lesson._count.vocabulary} words · {lesson.characters.length} new
+                              characters · {lesson._count.exercises} exercises
+                            </p>
+                          </Link>
+                        </li>
+                      );
+                    })}
                   </ol>
                 </div>
               ))}
@@ -80,8 +118,7 @@ export default async function LearnPage() {
         </section>
       ))}
       <p className="text-muted-foreground text-xs">
-        Lesson practice opens in the next milestone. Stroke data: Make Me a Hanzi via
-        hanzi-writer-data (Arphic Public License).
+        Stroke data: Make Me a Hanzi via hanzi-writer-data (Arphic Public License).
       </p>
     </div>
   );

@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Logo, Wordmark } from "@/components/brand/logo";
 import { LearnerBottomNav, LearnerSidebar } from "@/components/navigation/learner-nav";
 import { requireUser } from "@/lib/auth/session";
 
 export default async function LearnerLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  if (!user.profile?.onboardingCompletedAt) redirect("/onboarding");
   const showAdmin = user.permissions.has("admin:access");
   return (
     <div className="flex min-h-dvh">

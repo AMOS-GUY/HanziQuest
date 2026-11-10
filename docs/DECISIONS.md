@@ -2,6 +2,45 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-10 — M2 learning and handwriting
+
+**D-019 · A lesson completes only with real engagement.** Skip stays available (some learners
+can't draw), but completion needs an attempt for every exercise and non-skipped attempts on at
+least half of them (`MIN_ENGAGED_RATIO`). Otherwise a lesson could be "completed" by tapping
+Skip repeatedly.
+
+**D-018 · Placement tests out units, never single lessons, and only consecutively from the
+start.** Two recognition questions per unit; every question in a unit must be correct. Gaps in
+the path would confuse progression. The declared HSK level is stored but never used to skip
+content.
+
+**D-017 · Placement questions are derived from the assessment id.** The question plan is
+regenerated from a seeded PRNG at grading time, so no answers reach the client and no extra
+table is needed.
+
+**D-016 · Our own SVG stroke-order player; Hanzi Writer for the guided quiz.** Hanzi Writer's
+animation API doesn't support "show strokes 1..n and step back". The player renders the same
+Make Me a Hanzi data and reveals each stroke by drawing its median through the stroke's
+outline clip (the same technique Hanzi Writer uses). The guided quiz uses Hanzi Writer
+unchanged.
+
+**D-015 · Identity is verified against the level's characters, not recognised globally.**
+Nearest-neighbour matching against the HSK level's character set (102 now) is reliable and
+explainable, and its scope is stated in the UI ("compared with 102 HSK 1 characters"). A
+model-based recogniser can replace this step later.
+
+**D-014 · Evidence-based band caps on top of weighted scores.** The spec's weights
+(35/25/15/25) let a recognised character with a badly drawn stroke still score about 92.
+Caps, such as "a flagged stroke means at most Good", make bands match the feedback shown.
+Weights stay configurable per exercise.
+
+**D-013 · Same evaluator on client and server.** Pure TypeScript with no DOM or Node APIs. The
+browser gives instant (and later offline) feedback; the server recomputes from raw strokes and
+is authoritative.
+
+**D-012 · Using a hint downgrades an attempt to GUIDED.** A hint shows the pinyin or meaning,
+then the character, so the attempt is no longer independent recall.
+
 ## 2026-11-10 — M0/M1 foundation
 
 **D-011 · Integration tests don't wipe the database.** Prisma blocks `migrate reset` when an AI

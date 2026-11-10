@@ -25,16 +25,23 @@ Target public beta: **2026-12-08**.
 - [x] Learner shell: home, learning path (real data), profile
 - [x] Tests: unit, integration (real Postgres) and Playwright e2e
 - [x] GitHub Actions CI workflow (not yet run on GitHub; see Issues)
-- [ ] Onboarding flow (moved to early M2)
+- [x] Onboarding flow (done in M2)
 - [ ] Admin editing of curriculum records and the import UI (M4)
 
 ### M2 — Learning and handwriting (11-16 → 11-22)
 
-- [ ] Onboarding + placement assessment
-- [ ] Lesson screen, vocabulary screen, stroke-order player (Hanzi Writer)
-- [ ] Handwriting canvas (Pointer Events, normalised strokes)
-- [ ] Evaluation engine and feedback; validated test dataset
-- [ ] Exercise runner; attempt persistence (`/api/attempts`)
+- [x] Onboarding (experience, declared HSK level, lesson note, goals, daily target, time zone)
+- [x] Placement assessment: recognition check, server-graded, tests out consecutive units
+- [x] Lesson progression: locked / available / in progress / completed / tested out, enforced on the server
+- [x] Lesson overview, vocabulary and stroke-order screens (play, pause, previous, next, replay)
+- [x] Handwriting canvas (Pointer Events, high-DPI, undo, clear, hints, grid, no scroll)
+- [x] Guided stroke practice (Hanzi Writer quiz)
+- [x] Evaluation engine and feedback: identity gate, stroke count, order, direction, shape (`docs/HANDWRITING.md`)
+- [x] Synthetic validation dataset over all 102 characters
+- [x] Practice runner for all four exercise types, with retry, skip and a summary
+- [x] `/api/attempts` (server re-evaluation, idempotent) and `/api/sessions` (start/complete)
+- [ ] **Validation on real learner handwriting** (needs testers, before beta)
+- [ ] Listening-to-writing and character-reconstruction exercises (need verified audio / content)
 
 ### M3 — Progress and offline (11-23 → 11-29)
 
@@ -73,4 +80,47 @@ Target public beta: **2026-12-08**.
 - The rate limiter is per instance (see `docs/SECURITY.md`).
 - `gh` CLI not installed, so no pull request could be opened from this machine.
 
-**Next actions:** onboarding, lesson and vocabulary screens, Hanzi Writer stroke player, handwriting canvas and evaluation engine (M2).
+**Next actions:** done in session 2 (below).
+
+### 2026-11-10 — Session 2 (M2)
+
+**Completed:** everything checked under M2 above. Branch `feature/m2-learning`, which builds on
+`feature/m1-foundation`.
+
+**Tests run (all passing):**
+
+- `npm run lint`, `npm run typecheck`: clean
+- `npm test`: 76 unit tests, including an 18-test handwriting sweep over the 102 starter
+  characters (correct, wrong character, similar pairs, missing/extra strokes, reversed
+  direction, wrong order, distortion, size, speed, wobble)
+- `npm run test:integration`: 29 tests against PostgreSQL (attempts incl. idempotency and
+  ignored client scores, sessions incl. skip rules, placement, lesson states)
+- `npm run build`: succeeded
+- `npx playwright test`: 11 passed, 1 intentionally skipped (the full lesson runs once, on
+  desktop). It covers onboarding, a full lesson written stroke by stroke (18 exercises, all
+  Excellent/Good, saved by the server), next lesson unlocked, persistence after reload, a
+  locked lesson refused, and the stroke-order controls.
+- Manual browser checks (mobile, light): onboarding, placement (unit 1 tested out), learning
+  path states, stroke animation, guided quiz, freehand Excellent, and a wrong character (他 vs
+  她) correctly rejected with "looks more like 她".
+
+**Fixed during testing:**
+
+- Choice cards had no accessible names. Added labels.
+- Auth.js redirected e2e runs to the dev server (`AUTH_URL`). The e2e server now sets its own.
+- Registration rate limit blocked e2e. It is now configurable; the default stays at 5 per hour.
+- A lesson could be completed by skipping everything. It now needs at least 50 % real
+  attempts.
+
+**Issues / risks:**
+
+- Handwriting thresholds are calibrated on **synthetic** ink only. Real-tester validation is
+  required before calling feedback reliable.
+- Attempts made while offline are not queued yet. A failed save shows "Not saved yet" with
+  Retry; the M3 offline queue fixes this properly.
+- XP, mastery and review scheduling aren't computed yet. Attempts are stored, so M3 can derive
+  them from history.
+
+**Next actions (M3):** mastery from attempt history, spaced-repetition scheduler, XP ledger
+with anti-farming rules, streaks and daily goals, Review and Progress screens, then the
+service worker, Dexie storage, lesson downloads and idempotent `/api/sync`.

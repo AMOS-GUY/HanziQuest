@@ -52,9 +52,26 @@ Route groups:
 - Multi-step writes (registration, publishing, role changes, imports) run in transactions, with
   the audit-log write in the same transaction.
 
+## Learning flow (M2)
+
+```
+/onboarding ─► /placement (optional) ─► /home ─► /learn ─► /learn/:lessonId ─► /practice/lesson/:lessonId
+                                                    │            ├─ /vocabulary/:id
+                                                    │            └─ /characters/:hanzi ─► /practice/character/:hanzi
+```
+
+- Route groups: `(onboarding)` (no nav), `(learner)` (nav, onboarding required), `(practice)`
+  (focused full-screen runner).
+- **Progression** (`features/progression/lesson-states.ts`): lesson state is derived from
+  `LessonProgress` rows in curriculum order. The first lesson is available; each lesson unlocks
+  when the previous one is COMPLETED or TESTED_OUT. The server enforces this when starting a
+  session.
+- **Practice runner** (`components/lessons/practice-runner.tsx`): one client component drives
+  every exercise type. It evaluates handwriting locally for instant feedback, posts each attempt
+  to `/api/attempts` (with retries) and shows the server's authoritative result.
+- **Handwriting engine:** see `docs/HANDWRITING.md`.
+
 ## Not built yet
 
-The handwriting engine, exercise runner, progression (mastery, spaced repetition, XP, streaks),
-offline storage and sync, and the service worker are planned for milestones M2–M3. Their
-database tables already exist; see `docs/PROGRESS.md` for status. This document is updated as
-each one ships.
+Mastery, spaced repetition, XP, streaks, the Review and Progress screens, offline storage and
+sync, and the service worker are planned for M3. Their tables exist; see `docs/PROGRESS.md`.
