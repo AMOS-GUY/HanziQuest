@@ -1,0 +1,12 @@
+node_modules
+.next
+.local
+.env
+.env.*
+!.env.example
+test-results
+playwright-report
+coverage
+icon design
+*.log
+.git

@@ -42,18 +42,35 @@ strokes each, ≤ 600 points per stroke, coordinates within [-0.25, 1.25].
 
 ## Server actions
 
-| Action                     | Module                               | Permission           | Input                                                           | Result                                                                     |
-| -------------------------- | ------------------------------------ | -------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `loginAction`              | `features/authentication/actions.ts` | public, rate limited | `{ email, password }`, `callbackUrl?`                           | Redirects on success, or `{ error }`                                       |
-| `registerAction`           | same                                 | public, rate limited | `{ displayName, email, password }`                              | Redirects to `/home`, or `{ error?, fieldErrors? }`                        |
-| `logoutAction`             | same                                 | signed in            | –                                                               | Redirects to `/`                                                           |
-| `setLessonStatusAction`    | `features/administration/actions.ts` | `curriculum:publish` | `{ lessonId, status: "PUBLISHED" \| "DRAFT" }`                  | `{ ok, message? }`                                                         |
-| `setUserRoleAction`        | same                                 | `users:manage-roles` | `{ userId, role, grant }`                                       | `{ ok, message? }`                                                         |
-| `completeOnboardingAction` | `features/onboarding/actions.ts`     | signed in            | onboarding answers + `takePlacement`                            | Redirects to `/placement` or `/home`                                       |
-| `submitPlacementAction`    | same                                 | signed in            | `{ assessmentId, answers }` (option index or null per question) | `{ summary }`. Graded on the server; answers are never sent to the client. |
+| Action                                                                                                                                        | Module                                          | Permission             | Input                                                           | Result                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `loginAction`                                                                                                                                 | `features/authentication/actions.ts`            | public, rate limited   | `{ email, password }`, `callbackUrl?`                           | Redirects on success, or `{ error }`                                         |
+| `registerAction`                                                                                                                              | same                                            | public, rate limited   | `{ displayName, email, password }`                              | Redirects to `/home`, or `{ error?, fieldErrors? }`                          |
+| `logoutAction`                                                                                                                                | same                                            | signed in              | –                                                               | Redirects to `/`                                                             |
+| `setLessonStatusAction`                                                                                                                       | `features/administration/actions.ts`            | `curriculum:publish`   | `{ lessonId, status: "PUBLISHED" \| "DRAFT" }`                  | `{ ok, message? }`                                                           |
+| `setUserRoleAction`                                                                                                                           | same                                            | `users:manage-roles`   | `{ userId, role, grant }`                                       | `{ ok, message? }`                                                           |
+| `completeOnboardingAction`                                                                                                                    | `features/onboarding/actions.ts`                | signed in              | onboarding answers + `takePlacement`                            | Redirects to `/placement` or `/home`                                         |
+| `submitPlacementAction`                                                                                                                       | same                                            | signed in              | `{ assessmentId, answers }` (option index or null per question) | `{ summary }`. Graded on the server; answers are never sent to the client.   |
+| Curriculum actions (`create/update` curriculum, level, unit, lesson, character, word, exercise; `setLessonWords`; custom exercise add/remove) | `features/administration/curriculum-actions.ts` | `curriculum:write`     | Form data validated by the Zod schemas in `curriculum-admin.ts` | `FormState { ok, message, fieldErrors }`; creates redirect to the new record |
+| `validateImportAction` / `importContentAction`                                                                                                | same                                            | `content:import`       | Curriculum JSON (≤ 2 MB)                                        | Validation issues, or an import summary (new lessons as drafts)              |
+| `recordHandwritingSampleAction`                                                                                                               | `features/handwriting/lab-actions.ts`           | `handwriting:validate` | Participant code, character, category, ink, consent             | Engine verdict for the sample                                                |
+| `updateProfileAction`, `changePasswordAction`, `deleteAccountAction`                                                                          | `features/account/actions.ts`                   | signed in (self only)  | Profile fields / current + new password / password + "DELETE"   | `FormState`; password change and deletion sign out                           |
+| `setUserStatusAction`                                                                                                                         | same                                            | `users:moderate`       | `{ status: ACTIVE \| SUSPENDED, reason }`                       | `FormState`                                                                  |
 
 Error messages are deliberately generic. For example, sign-in failures never reveal whether an
 email exists.
+
+### Operational and admin endpoints (M4)
+
+| Method | Path                             | Auth                       | Purpose                                                                                                              |
+| ------ | -------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/health`                    | public                     | `{status, database, release, latencyMs}`; 503 when the database is down. No configuration details.                   |
+| POST   | `/api/client-errors`             | public, 30 / 10 min per IP | Error boundaries report `{message, name?, digest?, path?}` (8 KB max). Logged and forwarded to Sentry if configured. |
+| GET    | `/api/admin/handwriting/samples` | `handwriting:validate`     | Validation samples re-scored with the current engine, plus metrics. `?strokes=1` adds raw ink.                       |
+
+All JSON route handlers cap the request body (413 `payload_too_large`) and reject cross-site
+writes whose `Origin` doesn't match the app (403). Admin pages are additionally gated by
+`src/proxy.ts`.
 
 ### `POST /api/sync`
 

@@ -77,3 +77,23 @@ pass on other scores alone.
 
 Create a new content file with its own `curriculum.slug` and `version`, then validate and
 import it. Characters and words are shared across curricula automatically.
+
+## Editing in the admin (M4)
+
+Staff with `curriculum:write` can create and edit curricula, levels, units, lessons,
+characters, words and exercises under **Admin**. Every save stores a revision snapshot and an
+audit entry.
+
+- **Lesson words:** one per line as `你好 | nǐ hǎo`. Saving regenerates the lesson's
+  characters and exercises with the same rules as the importer. Characters are "new" only if
+  no earlier lesson in the level teaches them. Hand-written exercises are kept.
+- **Characters:** stroke data is attached automatically from `hanzi-writer-data` when it
+  exists. A character without stroke data can't be written in exercises.
+- **Words:** the written form and pinyin identify a word and can't be edited. Meaning edits
+  update the generated prompts.
+- **Exercises:** the prompt wording, hint, difficulty and status can be edited. Draft or
+  Archived exercises are hidden from learners and not required for completion.
+- **Import:** _Admin → Import_ validates and imports JSON in this format. New lessons arrive
+  as drafts.
+- **Publishing:** preview a lesson as a learner, then publish. Don't mark content Verified
+  unless a qualified reviewer has checked it.

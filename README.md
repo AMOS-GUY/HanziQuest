@@ -30,18 +30,20 @@ and run `npm run db:seed` again.
 
 ## Scripts
 
-| Script                                               | Purpose                                                     |
-| ---------------------------------------------------- | ----------------------------------------------------------- |
-| `dev` / `build` / `start`                            | Next.js                                                     |
-| `lint`, `typecheck`, `format`                        | Code quality                                                |
-| `test`                                               | Unit tests (Vitest)                                         |
-| `test:integration`                                   | Integration tests against `TEST_DATABASE_URL`               |
-| `test:e2e`                                           | Playwright against a production build (run `build` first)   |
-| `db:local`                                           | Local PostgreSQL without Docker                             |
-| `db:migrate` / `db:deploy` / `db:seed` / `db:studio` | Prisma                                                      |
-| `content:validate` / `content:import`                | Curriculum content pipeline                                 |
-| `progress:rebuild`                                   | Recompute mastery and review schedules from attempt history |
-| `brand:icons`                                        | Copy the approved logos and generate PWA icons              |
+| Script                                               | Purpose                                                           |
+| ---------------------------------------------------- | ----------------------------------------------------------------- |
+| `dev` / `build` / `start`                            | Next.js                                                           |
+| `lint`, `typecheck`, `format`                        | Code quality                                                      |
+| `test`                                               | Unit tests (Vitest)                                               |
+| `test:integration`                                   | Integration tests against `TEST_DATABASE_URL`                     |
+| `test:e2e`                                           | Playwright against a production build (run `build` first)         |
+| `db:local`                                           | Local PostgreSQL without Docker                                   |
+| `db:migrate` / `db:deploy` / `db:seed` / `db:studio` | Prisma                                                            |
+| `content:validate` / `content:import`                | Curriculum content pipeline                                       |
+| `progress:rebuild`                                   | Recompute mastery and review schedules from attempt history       |
+| `handwriting:report` (`-- --synthetic`)              | Handwriting validation report (real samples / synthetic baseline) |
+| `smoke -- <url>`                                     | Read-only post-deployment smoke test                              |
+| `brand:icons`                                        | Copy the approved logos and generate PWA icons                    |
 
 ## Repository layout
 

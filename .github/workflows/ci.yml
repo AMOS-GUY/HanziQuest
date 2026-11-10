@@ -50,6 +50,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Formatting
+        run: npm run format:check
+
       - name: Type check
         run: npm run typecheck
 
@@ -79,6 +82,12 @@ jobs:
       - name: End-to-end tests
         run: npm run test:e2e
 
+      - name: Smoke test (production server)
+        run: |
+          AUTH_URL=http://localhost:3200 npx next start -p 3200 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3200/api/health && break; sleep 1; done
+          npm run smoke -- http://localhost:3200
+
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
@@ -86,3 +95,11 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 7
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -t hanziquest:ci .

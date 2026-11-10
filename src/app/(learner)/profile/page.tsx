@@ -54,7 +54,7 @@ export default async function ProfilePage() {
               defaultValue: String(user.profile?.dailyGoalXp ?? 30),
               options: DAILY_GOAL_OPTIONS.map((o) => ({
                 value: String(o.value),
-                label: `${o.label}: ${o.value} XP (${o.detail})`,
+                label: `${o.label} · ${o.value} XP a day`,
               })),
             },
             {

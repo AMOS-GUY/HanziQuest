@@ -24,13 +24,18 @@ const FEATURES = [
   {
     icon: WifiOff,
     title: "Learn anywhere",
-    text: "Install it like an app. Offline practice is coming in the beta.",
+    text: "Install it like an app and download lessons to practise offline.",
   },
 ];
 
-export default async function WelcomePage() {
+export default async function WelcomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ deleted?: string }>;
+}) {
   const user = await getCurrentUser();
   if (user) redirect("/home");
+  const { deleted } = await searchParams;
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-5xl flex-col px-4 py-6 sm:px-8">
@@ -44,10 +49,18 @@ export default async function WelcomePage() {
         </Button>
       </header>
 
+      {deleted ? (
+        <p
+          role="status"
+          className="bg-accent text-accent-foreground mt-6 rounded-xl px-4 py-3 font-bold"
+        >
+          Your account and learning data have been deleted.
+        </p>
+      ) : null}
       <section className="grid flex-1 items-center gap-10 py-10 md:grid-cols-2 md:py-16">
         <div className="order-2 md:order-1">
           <p className="bg-accent text-accent-foreground mb-3 inline-block rounded-full px-3 py-1 text-sm font-bold">
-            Public beta in development
+            Public beta
           </p>
           <h1 className="text-4xl leading-tight font-black sm:text-5xl">
             Learn to write Chinese characters,{" "}

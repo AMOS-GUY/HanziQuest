@@ -66,6 +66,13 @@ evaluated separately, and the weakest character sets the overall band.
 - Guided-practice mistake counts are client-reported. They are labelled as such in the stored
   evaluation and never count as independent recall.
 
+## Validation with real learners
+
+Collection procedure, metric definitions, targets and the rules for changing thresholds are in
+`docs/HANDWRITING_VALIDATION.md`. The tooling is built (Admin → Handwriting lab), but **no real
+samples have been collected yet**, so nothing below is evidence of accuracy with real learners.
+The synthetic baseline report is `docs/handwriting-baseline-synthetic.md`.
+
 ## Validation status (honest)
 
 | What                                                                                          | Status                                                                     |

@@ -49,13 +49,23 @@ Target public beta: **2026-12-08**.
 - [x] Review and Progress screens, Home cards, review rounds
 - [x] Service worker, IndexedDB (Dexie), lesson downloads, offline practice, idempotent `/api/sync`
 - [ ] Tune SRS/XP numbers with real usage data (after beta testers)
-- [ ] Clear offline data on sign-out; offline-data controls in Profile
+- [x] Clear offline data on sign-out; offline-data controls in Profile (done in M4)
 
 ### M4 — Stabilisation (11-30 → 12-06) and release (12-07 → 12-08)
 
-- [ ] Admin editing, import UI, analytics, moderation
-- [ ] Shared rate-limit store, nonce CSP, Sentry
-- [ ] Deployment, backups, smoke tests, release notes
+- [x] Admin curriculum management: curricula, levels, units, lessons, characters, words, exercises; import UI with validation; learner preview; publish/unpublish; revisions and audit
+- [x] Admin overview with 7-day aggregate analytics; moderation (suspend/reactivate)
+- [x] Handwriting validation tooling: lab, consent, metrics (FAR/FRR by category, device, size), export, report script, synthetic baseline, procedure
+- [ ] **Real handwriting samples collected and analysed** (needs testers; thresholds unchanged until then)
+- [x] Offline account isolation, sign-out clearing, owner-bound queue, interrupted-sync resume (tested in a real browser)
+- [x] Security audit and fixes (see SECURITY.md); shared PostgreSQL rate limiter; error reporting (Sentry-compatible, optional DSN)
+- [ ] Nonce-based CSP (deferred: would make the cached offline pages dynamic; see SECURITY.md)
+- [x] Profile settings, password change with session revocation, account deletion
+- [x] UI review of every learner and admin screen, light and dark, mobile; error boundaries and loading states
+- [x] Deployment preparation: env check, health endpoint, smoke test, Dockerfile, CI (format, smoke, docker), deployment/backup/rollback docs, release notes, PR package
+- [ ] **Deployed to production** (owner: choose host and database, set secrets; see DEPLOYMENT.md)
+- [ ] Recovery drill against a real provider backup (needs the production database)
+- [ ] Branches merged to `main` in order (owner: open PRs; see RELEASE.md)
 
 ## Session log
 
@@ -171,3 +181,81 @@ and `ExerciseAttempt.localDate`, with a backfill for earlier single-character at
 **Next actions (M4):** admin curriculum editing and import UI, analytics, moderation, a shared
 rate-limit store, nonce CSP, Sentry, clearing offline data on sign-out, then deployment, backups,
 smoke tests and release notes.
+
+### 2026-11-10 — Session 4 (M4: beta readiness)
+
+**Branch:** `feature/m4-beta`, created from `feature/m3-progress-offline` (not from `main`,
+which only has the initial commit). Two migrations: `beta_quality` (`HandwritingSample`,
+`RateLimitBucket`) and `credentials_changed_at`. Both are additive.
+
+**Completed:**
+
+- **Curriculum management:** create and edit curricula, levels, units, lessons, characters,
+  words and exercises. Lesson word lists regenerate characters and exercises through the
+  importer's shared builder (`buildLessonContent`); hand-written exercises are kept. Import UI
+  (validate, import as drafts). Learner preview (nothing saved). Revision history on every
+  editor page. Every operation is checked on the server (`curriculum:write`,
+  `content:import`, `handwriting:validate`) and audited in the same transaction.
+- **Handwriting validation:** Admin → Handwriting lab collects consented, pseudonymous,
+  labelled samples. Metrics are false rejection, structural false acceptance, technique
+  errors accepted and error named, with breakdowns by device, size and participant. Exports,
+  `npm run handwriting:report`, `docs/HANDWRITING_VALIDATION.md`, and a synthetic baseline:
+  0 % false rejection (306), 0 % structural false acceptance (305), and 85 % of technique
+  errors graded Good by design (flagged as a policy question). **No thresholds changed; no
+  real samples collected yet.**
+- **Offline security:** downloads are bound to an account and deleted at sign-out or account
+  switch. Queued results stay with their owner and are never uploaded by another account.
+  Keep or delete when offline at sign-out. Adaptive batches on 413. Resume after interruption.
+- **Security** (details in SECURITY.md): trusted-proxy client IP (spoofing fix), per-email
+  login limit, shared PostgreSQL rate limiter, session revocation on password change, admin
+  gate in `proxy.ts` (no title leak), body size limits, cross-site origin check, start-up
+  configuration check, structured error reporting with redaction, moderation, password change,
+  account deletion.
+- **UI:** profile settings, offline-data card, admin overview analytics, error and loading
+  states, welcome and login notices, shorter goal labels; light and dark, desktop and mobile
+  reviewed in the browser.
+- **Deployment preparation:** `/api/health`, `npm run smoke`, `Dockerfile` and
+  `.dockerignore`, CI (format check, smoke test, Docker build), `DEPLOYMENT.md` (hosting
+  options, env, first deploy, release, rollback, backups, recovery drill, monitoring, PWA
+  checklist), `OFFLINE.md`, `RELEASE.md` (merge order, PR texts, release notes).
+
+**Bugs found and fixed during testing:**
+
+- Learners were given Draft or Archived exercises the server refused, so such lessons could
+  never be completed.
+- Stroke data failed to load inside the production server bundle (`require.resolve` returns a
+  module id there). This broke admin imports and character creation in production builds.
+- React 19 reset admin and profile forms after every submission, wiping input after
+  validation errors (and emptying the import box before "Import" could use it).
+- The shared rate limiter compared a UTC timestamp with the database session's `now()`, so on
+  a non-UTC server it never limited anything.
+- Error reports could include secrets from the stack trace (the message is repeated there).
+
+**Tests run (all passing):**
+
+- `npm run lint`, `npm run typecheck`, `npm run format:check`: clean
+- `npm test`: **106** unit tests (13 new: validation metrics, env check, Sentry DSN and
+  envelope redaction, proxy-aware IP, body limit)
+- `npm run test:integration`: **51** tests against PostgreSQL (12 new: curriculum editing
+  incl. revisions, audit, regeneration, custom exercises, prompt propagation, published-only
+  completion; account: profile, password change, deletion, last Super Admin, moderation
+  guards; shared rate limiter across instances; interrupted sync without duplicate XP)
+- `npm run content:validate`: passed
+- `npm run build`: succeeded
+- `npx playwright test`: **15 passed**, 5 skipped (desktop-only flows not repeated on mobile).
+  New: editor builds, previews and publishes a lesson, imports content and records a
+  handwriting sample; learners get a bare 404 on admin URLs and 403 on the admin API; offline
+  account isolation across sign-out, account switching and a blocked sync endpoint, with XP
+  counted once after the owner returns.
+- `npm run smoke -- http://localhost:3200` against a local production server: 8/8 checks.
+- `npm run handwriting:report -- --synthetic`: baseline regenerated (908 samples).
+
+**Not done / needs the owner:**
+
+- No real handwriting samples yet. Accuracy with real learners is **unknown**.
+- Not deployed: host, database, domain and secrets are owner decisions.
+- The recovery drill needs a real backup; `pg_dump` isn't available on this machine.
+- The Docker image hasn't been built locally (no Docker); the CI job builds it.
+- CI has never run on GitHub; the branches aren't merged and no PRs are open (no `gh` CLI).
+- Nonce-based CSP, email (verification, reset, reminders) and 2FA are post-beta.
+- The SRS and XP numbers are initial values, to be tuned with usage data.

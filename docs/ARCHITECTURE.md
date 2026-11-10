@@ -99,7 +99,29 @@ attempt save fails on network ──► IndexedDB outbox ──(online / every 6
 - The practice runner treats network failures as offline: attempts and lesson completion go to
   the outbox, and the learner sees "Saved on this device".
 
+## Administration (M4)
+
+- `features/administration/curriculum-admin.ts`: curriculum services. Each runs in one
+  transaction: snapshot a `ContentRevision`, apply the change, write an audit entry.
+  `curriculum-actions.ts` are the server actions (permission check, rate limit, Zod).
+- Lesson words → `buildLessonContent` (shared with the importer) regenerates characters and
+  exercises. Preview at `/admin/lessons/:id/preview` uses the practice runner in `preview` mode
+  (graded locally, nothing saved).
+- Handwriting lab (`/admin/handwriting`): `features/handwriting/validation.ts` (pure metrics),
+  `samples.ts` (record and re-score), `scripts/handwriting-report.ts`.
+- `features/account/`: profile, password change (session revocation), deletion, moderation.
+
+## Operations (M4)
+
+- `src/proxy.ts`: admin gate (session, roles and status checked in the database).
+- `src/instrumentation.ts`: start-up configuration check (`lib/env.ts`) and `onRequestError`
+  reporting (`lib/monitoring/report.ts`).
+- `lib/security/rate-limit.ts`: async limits with a PostgreSQL or memory store.
+  `lib/api/body.ts`: bounded JSON bodies.
+- Route error boundaries (`error.tsx`, `global-error.tsx`) and loading skeletons.
+- `GET /api/health`, `npm run smoke`, `Dockerfile`, CI `docker` job.
+
 ## Not built yet
 
-Admin curriculum editing and import UI, analytics, moderation, a shared rate-limit store,
-nonce-based CSP and Sentry are planned for M4. See `docs/PROGRESS.md`.
+Email (verification, password reset, reminders), 2FA, nonce-based CSP, payments, and the
+listening and reconstruction exercise types. See `docs/PROGRESS.md`.
