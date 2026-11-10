@@ -1,5 +1,10 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { DomainError } from "@/features/administration/services";
+import {
+  isLearnerVisible,
+  LEARNER_VISIBLE_LESSON,
+  VISIBILITY_SELECT,
+} from "@/features/curriculum/visibility";
 import { getLessonStatesForLevel } from "@/features/progression/lesson-states";
 import { applyLessonCompletion, lockLearner, type ProgressDelta } from "@/features/progress/record";
 
@@ -9,10 +14,13 @@ export const MIN_ENGAGED_RATIO = 0.5;
 export async function startLessonSession(prisma: PrismaClient, userId: string, lessonId: string) {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
-    select: { id: true, status: true, unit: { select: { levelId: true } } },
+    select: {
+      id: true,
+      status: true,
+      unit: { select: { levelId: true, ...VISIBILITY_SELECT.unit.select } },
+    },
   });
-  if (!lesson || lesson.status !== "PUBLISHED")
-    throw new DomainError("not_found", "Lesson not found.");
+  if (!lesson || !isLearnerVisible(lesson)) throw new DomainError("not_found", "Lesson not found.");
   const { states } = await getLessonStatesForLevel(prisma, userId, lesson.unit.levelId);
   if (states.get(lessonId) === "LOCKED")
     throw new DomainError("forbidden", "Complete the previous lesson first.");
@@ -138,7 +146,7 @@ export async function getDueReviews(
           some: {
             type: "FREEHAND_WRITING",
             status: "PUBLISHED",
-            lessons: { some: { lesson: { status: "PUBLISHED" } } },
+            lessons: { some: { lesson: LEARNER_VISIBLE_LESSON } },
           },
         },
       },
@@ -155,7 +163,7 @@ export async function getDueReviews(
             where: {
               type: "FREEHAND_WRITING",
               status: "PUBLISHED",
-              lessons: { some: { lesson: { status: "PUBLISHED" } } },
+              lessons: { some: { lesson: LEARNER_VISIBLE_LESSON } },
             },
             take: 1,
             select: { id: true },

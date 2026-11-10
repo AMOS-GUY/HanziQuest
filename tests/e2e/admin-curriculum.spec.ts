@@ -70,6 +70,27 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByRole("button", { name: "Unpublish" })).toBeVisible();
 
+  // A published lesson in a draft curriculum is still invisible to learners. Publishing the
+  // curriculum releases it to the learning path.
+  await page.goto("/learn");
+  await expect(page.getByRole("heading", { name: `E2E ${slug}` })).toHaveCount(0);
+  await page.goto("/admin/curricula");
+  await page.getByRole("link", { name: `E2E ${slug}` }).click();
+  await expect(page.getByText("Draft", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Publish curriculum" }).click();
+  await expect(page.getByText("Published", { exact: true })).toBeVisible();
+  await page.goto("/learn");
+  await expect(page.getByRole("heading", { name: `E2E ${slug}` })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: `E2E ${slug}` }).getByText("Hello again"),
+  ).toBeVisible();
+  // Withdraw it again so other tests' learning paths are unaffected.
+  await page.goto("/admin/curricula");
+  await page.getByRole("link", { name: `E2E ${slug}` }).click();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Archive" }).click();
+  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
+
   // Field validation on a new character
   await page.goto("/admin/characters/new");
   await page.getByLabel("Character").fill("你");

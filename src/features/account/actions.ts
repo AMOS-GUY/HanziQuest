@@ -8,6 +8,7 @@ import { assertPermission, AuthorizationError, getCurrentUser } from "@/lib/auth
 import {
   accountDeletionLimiter,
   adminMutationLimiter,
+  learningWriteLimiter,
   passwordChangeLimiter,
 } from "@/lib/security/rate-limit";
 import { getRequestInfo } from "@/lib/security/request-info";
@@ -49,6 +50,8 @@ async function signedIn() {
 export async function updateProfileAction(_: FormState, formData: FormData): Promise<FormState> {
   try {
     const user = await signedIn();
+    if (!(await learningWriteLimiter.consume(user.id)).allowed)
+      return { ok: false, message: "Too many changes. Try again in a minute." };
     const meta = await getRequestInfo();
     await updateProfile(prisma, user.id, fields(formData), meta);
     revalidatePath("/", "layout");
@@ -130,6 +133,8 @@ export async function setUserStatusAction(
 export async function acceptTermsAction(): Promise<FormState> {
   try {
     const user = await signedIn();
+    if (!(await learningWriteLimiter.consume(user.id)).allowed)
+      return { ok: false, message: "Too many attempts. Try again in a minute." };
     const meta = await getRequestInfo();
     await acceptTerms(prisma, user.id, meta);
     revalidatePath("/", "layout");

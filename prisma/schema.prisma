@@ -646,6 +646,8 @@ model ExerciseAttempt {
   @@index([userId, characterId, occurredAt])
   @@index([exerciseId])
   @@index([userId, exerciseId, localDate])
+  /// Lesson completion reads a session's attempts; also serves the SET NULL cascade.
+  @@index([sessionId])
 }
 
 /// Per-character outcome of an attempt (a word attempt yields one row per character).

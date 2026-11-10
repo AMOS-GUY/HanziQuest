@@ -132,3 +132,61 @@ export async function setUserRole(
     return { changed: true };
   });
 }
+
+/**
+ * Publishes, unpublishes (DRAFT) or archives a curriculum. Learners only see lessons of a
+ * PUBLISHED curriculum (features/curriculum/visibility.ts), so this is the switch that releases
+ * or withdraws a whole curriculum. Publishing needs at least one published lesson. Learner
+ * history is never deleted; republishing restores access.
+ */
+export async function setCurriculumStatus(
+  prisma: PrismaClient,
+  actor: Actor,
+  curriculumId: string,
+  status: "PUBLISHED" | "DRAFT" | "ARCHIVED",
+) {
+  return prisma.$transaction(async (tx) => {
+    const curriculum = await tx.curriculum.findUnique({ where: { id: curriculumId } });
+    if (!curriculum) throw new DomainError("not_found", "Curriculum not found");
+    if (curriculum.status === status) return curriculum;
+    if (status === "PUBLISHED") {
+      const published = await tx.lesson.count({
+        where: { status: "PUBLISHED", unit: { level: { curriculumId } } },
+      });
+      if (published === 0)
+        throw new DomainError("conflict", "Publish at least one lesson before the curriculum.");
+    }
+    await tx.contentRevision.create({
+      data: {
+        entityType: "Curriculum",
+        entityId: curriculum.id,
+        revision: await nextRevision(tx, "Curriculum", curriculum.id),
+        data: {
+          name: curriculum.name,
+          status: curriculum.status,
+          verification: curriculum.verification,
+          publishedAt: curriculum.publishedAt?.toISOString() ?? null,
+        },
+        authorId: actor.id,
+      },
+    });
+    const updated = await tx.curriculum.update({
+      where: { id: curriculum.id },
+      data: {
+        status,
+        publishedAt: status === "PUBLISHED" ? new Date() : curriculum.publishedAt,
+      },
+    });
+    await recordAudit(tx, {
+      actorId: actor.id,
+      action: `curriculum.${status === "PUBLISHED" ? "publish" : status === "ARCHIVED" ? "archive" : "unpublish"}`,
+      entityType: "Curriculum",
+      entityId: curriculum.id,
+      before: { status: curriculum.status },
+      after: { status },
+      ipAddress: actor.ip,
+      userAgent: actor.userAgent,
+    });
+    return updated;
+  });
+}

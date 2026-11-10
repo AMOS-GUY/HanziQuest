@@ -243,3 +243,19 @@ function strokeMediansFor(hanzi: string): number[][][] {
   const file = path.resolve(process.cwd(), "node_modules/hanzi-writer-data", `${hanzi}.json`);
   return (JSON.parse(fs.readFileSync(file, "utf8")) as { medians: number[][][] }).medians;
 }
+
+/** Sets an account's status directly in the e2e database (test setup only). */
+export async function setAccountStatus(email: string, status: "ACTIVE" | "SUSPENDED") {
+  const { Client } = await import("pg");
+  await import("dotenv/config");
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(`UPDATE "User" SET status = $2::"UserStatus" WHERE email = $1`, [
+      email,
+      status,
+    ]);
+  } finally {
+    await client.end();
+  }
+}

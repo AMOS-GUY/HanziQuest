@@ -70,6 +70,7 @@ Target public beta: **2026-12-08**.
 ### M5 — Release integration and beta launch preparation
 
 - [x] M1–M4 integrated into `main` in order, with merge commits and full history (PRs #1–#4, merged by the owner)
+- [x] M5 merged into `main` by the owner (PR #5)
 - [ ] **CI confirmed green on GitHub** (private repo; no CLI or token available to this session, so the owner must check)
 - [x] Recall vs technique mastery policy implemented, tested and documented (D-033)
 - [x] Handwriting pilot kit: five-tester plan, spoken instructions, consent script, anonymous IDs, device facts, test-sample exclusion
@@ -83,6 +84,18 @@ Target public beta: **2026-12-08**.
 - [x] QA: Chromium desktop and Android emulation, WebKit desktop and iPhone emulation (all e2e flows)
 - [ ] Firefox (Playwright's Firefox can't start on this machine: `spawn UNKNOWN`) and **real physical devices** (owner/testers)
 - [ ] **Verification of the deployed production app** (after deployment: smoke test plus a manual pass)
+
+### M6 — Quality and reliability (2026-11-11, `feature/m6-quality`)
+
+- [x] Server-boundary audit of every route handler, server action and admin page (`docs/M6_QUALITY_AUDIT.md`)
+- [x] Defects fixed:
+  - M6-01: draft or archived curricula were reachable
+  - M6-02: concurrent sync uploads returned a 500
+  - M6-03: unthrottled learner actions
+  - M6-04: missing index
+  - M6-05: no way to publish a curriculum
+- [x] Regression tests: 11 integration, 12 unit, 3 e2e (session revocation, suspension, API refusals)
+- [x] Prioritised defect register and accepted risks
 
 ## Session log
 
@@ -335,3 +348,18 @@ device info). Both are additive.
 - GitHub CI results not visible to this session.
 - Legal drafts not reviewed; placeholders unfilled. Keep the beta invite-only until done.
 - No testing on real phones or tablets yet (emulation only).
+
+### 2026-11-11 — Session 6 (M6–M9, overnight)
+
+**Starting point:** you merged M5 into `main` (PR #5, `01d128e`). M6 branches from there.
+
+**M6 (quality):** five defects found and fixed, each with a regression test that fails
+without the fix (checked by reverting the fix for M6-01 and M6-02). See
+`docs/M6_QUALITY_AUDIT.md`.
+
+- One migration: `attempt_session_index` (additive).
+- Checks: format, lint, typecheck clean; unit **126**; integration **66**; content validation;
+  production build.
+- Playwright Chromium (desktop and Pixel 7 emulation): **22 passed, 8 skipped**. The skipped
+  ones are mobile copies of desktop-only flows.
+- WebKit and Firefox were not run for M6.

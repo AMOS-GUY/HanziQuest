@@ -6,7 +6,7 @@ import { prisma } from "@/lib/database/prisma";
 import { assertPermission, AuthorizationError } from "@/lib/auth/session";
 import { adminMutationLimiter } from "@/lib/security/rate-limit";
 import { getRequestInfo } from "@/lib/security/request-info";
-import { DomainError, setLessonStatus, setUserRole } from "./services";
+import { DomainError, setCurriculumStatus, setLessonStatus, setUserRole } from "./services";
 
 export interface AdminActionResult {
   ok: boolean;
@@ -39,6 +39,34 @@ export async function setLessonStatusAction(input: unknown): Promise<AdminAction
       status,
     );
     revalidatePath("/admin/lessons");
+    revalidatePath("/learn");
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof z.ZodError) return { ok: false, message: "Invalid request." };
+    return toResult(error);
+  }
+}
+
+const curriculumStatusSchema = z.object({
+  curriculumId: z.string().min(1).max(64),
+  status: z.enum(["PUBLISHED", "DRAFT", "ARCHIVED"]),
+});
+
+export async function setCurriculumStatusAction(input: unknown): Promise<AdminActionResult> {
+  try {
+    const user = await assertPermission("curriculum:publish");
+    if (!(await adminMutationLimiter.consume(user.id)).allowed)
+      return { ok: false, message: "Too many changes. Slow down." };
+    const { curriculumId, status } = curriculumStatusSchema.parse(input);
+    const { ip, userAgent } = await getRequestInfo();
+    await setCurriculumStatus(
+      prisma,
+      { id: user.id, roles: user.roles, ip, userAgent },
+      curriculumId,
+      status,
+    );
+    revalidatePath(`/admin/curricula/${curriculumId}`);
+    revalidatePath("/admin/curricula");
     revalidatePath("/learn");
     return { ok: true };
   } catch (error) {

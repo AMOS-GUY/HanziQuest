@@ -5,12 +5,15 @@ import { z } from "zod";
 import { prisma } from "@/lib/database/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/audit";
+import { learningWriteLimiter } from "@/lib/security/rate-limit";
 import { onboardingSchema } from "./schema";
 import { submitPlacement, type PlacementSummary } from "@/features/assessment/placement";
 import { DomainError } from "@/features/administration/services";
 
 export async function completeOnboardingAction(input: unknown): Promise<{ error?: string }> {
   const user = await requireUser();
+  if (!(await learningWriteLimiter.consume(user.id)).allowed)
+    return { error: "Too many attempts. Try again in a minute." };
   const parsed = onboardingSchema.safeParse(input);
   if (!parsed.success) return { error: "Please answer every question." };
   const data = parsed.data;
@@ -66,6 +69,8 @@ export async function submitPlacementAction(
   input: unknown,
 ): Promise<{ summary?: PlacementSummary; error?: string }> {
   const user = await requireUser();
+  if (!(await learningWriteLimiter.consume(user.id)).allowed)
+    return { error: "Too many attempts. Try again in a minute." };
   const parsed = placementSchema.safeParse(input);
   if (!parsed.success) return { error: "Invalid answers." };
   try {

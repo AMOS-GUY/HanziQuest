@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import { isLearnerVisible, LEARNER_VISIBLE_LESSON } from "@/features/curriculum/visibility";
 
 export type LessonState = "LOCKED" | "AVAILABLE" | "IN_PROGRESS" | "COMPLETED" | "TESTED_OUT";
 
@@ -29,7 +30,7 @@ export function deriveLessonStates(
 /** Published lessons of a level in curriculum order (unit position, then lesson position). */
 export async function orderedLevelLessons(prisma: PrismaClient, levelId: string) {
   return prisma.lesson.findMany({
-    where: { status: "PUBLISHED", unit: { levelId } },
+    where: { ...LEARNER_VISIBLE_LESSON, unit: { ...LEARNER_VISIBLE_LESSON.unit, levelId } },
     orderBy: [{ unit: { position: "asc" } }, { position: "asc" }],
     select: { id: true, title: true, unitId: true },
   });
@@ -58,9 +59,14 @@ export async function getLessonState(
 ): Promise<LessonState | null> {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
-    select: { status: true, unit: { select: { levelId: true } } },
+    select: {
+      status: true,
+      unit: {
+        select: { levelId: true, level: { select: { curriculum: { select: { status: true } } } } },
+      },
+    },
   });
-  if (!lesson || lesson.status !== "PUBLISHED") return null;
+  if (!lesson || !isLearnerVisible(lesson)) return null;
   const { states } = await getLessonStatesForLevel(prisma, userId, lesson.unit.levelId);
   return states.get(lessonId) ?? null;
 }

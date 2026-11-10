@@ -3,6 +3,7 @@ import { prisma } from "@/lib/database/prisma";
 import { evaluationConfigSchema } from "@/features/exercises/evaluation-config";
 import type { ExerciseDTO, PracticePayload } from "@/features/exercises/dto";
 import { loadLevelReferences, loadStrokeJson } from "@/features/handwriting/reference-store";
+import { isLearnerVisible, LEARNER_VISIBLE_LESSON } from "@/features/curriculum/visibility";
 import { getLessonStatesForLevel, type LessonState } from "@/features/progression/lesson-states";
 
 type ExerciseRow = {
@@ -61,7 +62,9 @@ export async function getLessonForLearner(
           title: true,
           position: true,
           levelId: true,
-          level: { select: { name: true, curriculum: { select: { verification: true } } } },
+          level: {
+            select: { name: true, curriculum: { select: { verification: true, status: true } } },
+          },
         },
       },
       vocabulary: {
@@ -89,7 +92,7 @@ export async function getLessonForLearner(
       _count: { select: { exercises: { where: { exercise: { status: "PUBLISHED" } } } } },
     },
   });
-  if (!lesson || (lesson.status !== "PUBLISHED" && !options.preview)) return null;
+  if (!lesson || (!isLearnerVisible(lesson) && !options.preview)) return null;
   const { lessons, states } = await getLessonStatesForLevel(prisma, userId, lesson.unit.levelId);
   const state: LessonState = states.get(lesson.id) ?? "LOCKED";
   const index = lessons.findIndex((l) => l.id === lesson.id);
@@ -108,7 +111,9 @@ export async function getLessonPractice(
     where: { id: lessonId },
     select: {
       status: true,
-      unit: { select: { levelId: true } },
+      unit: {
+        select: { levelId: true, level: { select: { curriculum: { select: { status: true } } } } },
+      },
       exercises: {
         where: { exercise: { status: "PUBLISHED" } },
         orderBy: { position: "asc" },
@@ -116,7 +121,7 @@ export async function getLessonPractice(
       },
     },
   });
-  if (!lesson || (lesson.status !== "PUBLISHED" && !options.preview)) return null;
+  if (!lesson || (!isLearnerVisible(lesson) && !options.preview)) return null;
   return buildPayload(
     lesson.exercises.map((e) => e.exercise),
     lesson.unit.levelId,
@@ -130,12 +135,16 @@ export async function getCharacterPractice(hanzi: string): Promise<PracticePaylo
       character: { hanzi },
       type: { in: ["GUIDED_STROKE", "FREEHAND_WRITING"] },
       status: "PUBLISHED",
-      lessons: { some: { lesson: { status: "PUBLISHED" } } },
+      lessons: { some: { lesson: LEARNER_VISIBLE_LESSON } },
     },
     orderBy: { type: "asc" },
     select: {
       ...exerciseSelect,
-      lessons: { take: 1, select: { lesson: { select: { unit: { select: { levelId: true } } } } } },
+      lessons: {
+        where: { lesson: LEARNER_VISIBLE_LESSON },
+        take: 1,
+        select: { lesson: { select: { unit: { select: { levelId: true } } } } },
+      },
     },
   });
   const guided = exercises.find((e) => e.type === "GUIDED_STROKE");
@@ -168,7 +177,7 @@ export async function getVocabularyForLearner(id: string) {
         },
       },
       lessons: {
-        where: { lesson: { status: "PUBLISHED" } },
+        where: { lesson: LEARNER_VISIBLE_LESSON },
         take: 1,
         select: { lesson: { select: { id: true, title: true } } },
       },
@@ -187,7 +196,7 @@ export async function getCharacterForLearner(hanzi: string) {
       strokeCount: true,
       hasStrokeData: true,
       vocabulary: {
-        where: { vocabulary: { lessons: { some: { lesson: { status: "PUBLISHED" } } } } },
+        where: { vocabulary: { lessons: { some: { lesson: LEARNER_VISIBLE_LESSON } } } },
         select: {
           vocabulary: { select: { id: true, simplified: true, pinyin: true, meaning: true } },
         },
@@ -204,10 +213,18 @@ export async function getCharacterForLearner(hanzi: string) {
 /** Free-writing exercises for a review round, in the given order. */
 export async function getReviewPractice(exerciseIds: string[]): Promise<PracticePayload | null> {
   const rows = await prisma.exercise.findMany({
-    where: { id: { in: exerciseIds }, status: "PUBLISHED" },
+    where: {
+      id: { in: exerciseIds },
+      status: "PUBLISHED",
+      lessons: { some: { lesson: LEARNER_VISIBLE_LESSON } },
+    },
     select: {
       ...exerciseSelect,
-      lessons: { take: 1, select: { lesson: { select: { unit: { select: { levelId: true } } } } } },
+      lessons: {
+        where: { lesson: LEARNER_VISIBLE_LESSON },
+        take: 1,
+        select: { lesson: { select: { unit: { select: { levelId: true } } } } },
+      },
     },
   });
   const byId = new Map(rows.map((r) => [r.id, r]));
