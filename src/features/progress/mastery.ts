@@ -12,6 +12,14 @@
  *  - A failure (NEEDS_IMPROVEMENT / TRY_AGAIN) is a lapse: it halves the repetition count,
  *    resets the interval and brings the review back within minutes.
  *  - Skipped exercises are ignored.
+ *
+ * Recall vs technique (D-033, docs/HANDWRITING.md "Mastery policy"):
+ *  - A wrong character is TRY_AGAIN, so it is always a lapse and never advances anything.
+ *  - Technique (stroke order and direction) is judged on independent recalls only. A recall
+ *    with a technique fault still advances the schedule (the learner remembered), but as a
+ *    hard pass: smaller interval growth and lower ease, so it returns sooner for correction.
+ *  - MASTERED also needs the last SRS.cleanTechniqueForMastery recalls to have clean technique;
+ *    otherwise a character tops out at FAMILIAR.
  */
 import type { AttemptResult, MasteryLevel, PracticeMode } from "@/generated/prisma/enums";
 
@@ -19,6 +27,8 @@ export interface CharacterEvent {
   occurredAt: Date;
   mode: PracticeMode;
   result: AttemptResult;
+  /** Order and direction correct? null/undefined = not judged. */
+  techniqueOk?: boolean | null;
 }
 
 export interface ReviewState {
@@ -38,6 +48,10 @@ export interface MasteryState {
   independentAttempts: number;
   independentSuccesses: number;
   consecutiveIndependent: number;
+  techniqueAttempts: number;
+  techniqueClean: number;
+  consecutiveCleanTechnique: number;
+  lastTechniqueOk: boolean | null;
   firstSeenAt: Date;
   lastPracticedAt: Date;
 }
@@ -54,6 +68,11 @@ export const SRS = {
   guidedFirstHours: 4,
   familiarRepetitions: 2,
   masteredRepetitions: 4,
+  /** Clean-technique recalls in a row required for MASTERED. */
+  cleanTechniqueForMastery: 2,
+  /** Interval growth for a recall with a technique fault (instead of the ease factor). */
+  techniqueFaultGrowth: 1.2,
+  techniqueFaultEasePenalty: 0.14,
 } as const;
 
 const MINUTE = 60_000;
@@ -78,10 +97,18 @@ function nextInterval(repetitions: number, previous: number, ease: number) {
   return Math.min(SRS.maxIntervalDays, round2(Math.max(1, previous) * ease));
 }
 
-function levelFor(review: ReviewState | null, lastIndependentSucceeded: boolean): MasteryLevel {
-  if (!review) return "LEARNING";
-  if (lastIndependentSucceeded && review.repetitions >= SRS.masteredRepetitions) return "MASTERED";
-  if (lastIndependentSucceeded && review.repetitions >= SRS.familiarRepetitions) return "FAMILIAR";
+function levelFor(
+  review: ReviewState | null,
+  lastIndependentSucceeded: boolean,
+  cleanTechniqueRun: number,
+): MasteryLevel {
+  if (!review || !lastIndependentSucceeded) return "LEARNING";
+  if (
+    review.repetitions >= SRS.masteredRepetitions &&
+    cleanTechniqueRun >= SRS.cleanTechniqueForMastery
+  )
+    return "MASTERED";
+  if (review.repetitions >= SRS.familiarRepetitions) return "FAMILIAR";
   return "LEARNING";
 }
 
@@ -105,6 +132,10 @@ export function replayCharacter(events: readonly CharacterEvent[]): ReplayResult
     independentAttempts: 0,
     independentSuccesses: 0,
     consecutiveIndependent: 0,
+    techniqueAttempts: 0,
+    techniqueClean: 0,
+    consecutiveCleanTechnique: 0,
+    lastTechniqueOk: null,
     firstSeenAt: ordered[0]!.occurredAt,
     lastPracticedAt: ordered[0]!.occurredAt,
   };
@@ -149,15 +180,40 @@ export function replayCharacter(events: readonly CharacterEvent[]): ReplayResult
     if (success) {
       m.independentSuccesses += 1;
       m.consecutiveIndependent += 1;
+      const fault = e.techniqueOk === false;
+      if (e.techniqueOk === true || fault) {
+        m.techniqueAttempts += 1;
+        m.lastTechniqueOk = !fault;
+        if (fault) m.consecutiveCleanTechnique = 0;
+        else {
+          m.techniqueClean += 1;
+          m.consecutiveCleanTechnique += 1;
+        }
+      }
       const earlyBy = r.intervalDays * SRS.earlyFraction * DAY;
       const due = t >= r.dueAt.getTime() - earlyBy;
       if (r.repetitions === 0 || due) {
         r.repetitions += 1;
-        r.easeFactor = Math.min(
-          SRS.maxEase,
-          Math.max(SRS.minEase, round2(r.easeFactor + 0.1 - (5 - q) * 0.08)),
-        );
-        r.intervalDays = nextInterval(r.repetitions, r.intervalDays, r.easeFactor);
+        if (fault) {
+          // Remembered, but written with a stroke order/direction fault: a hard pass.
+          r.easeFactor = Math.max(
+            SRS.minEase,
+            round2(r.easeFactor - SRS.techniqueFaultEasePenalty),
+          );
+          r.intervalDays =
+            r.repetitions <= 1
+              ? 1
+              : Math.min(
+                  SRS.maxIntervalDays,
+                  round2(Math.max(1, r.intervalDays) * SRS.techniqueFaultGrowth),
+                );
+        } else {
+          r.easeFactor = Math.min(
+            SRS.maxEase,
+            Math.max(SRS.minEase, round2(r.easeFactor + 0.1 - (5 - q) * 0.08)),
+          );
+          r.intervalDays = nextInterval(r.repetitions, r.intervalDays, r.easeFactor);
+        }
         r.dueAt = new Date(t + r.intervalDays * DAY);
         r.lastReviewedAt = e.occurredAt;
       }
@@ -174,6 +230,6 @@ export function replayCharacter(events: readonly CharacterEvent[]): ReplayResult
   }
 
   m.strength = round2(Math.min(1, Math.max(0, m.strength)));
-  m.level = levelFor(review, lastIndependentSucceeded);
+  m.level = levelFor(review, lastIndependentSucceeded, m.consecutiveCleanTechnique);
   return { mastery: m, review: review! };
 }

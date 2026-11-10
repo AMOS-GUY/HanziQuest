@@ -18,6 +18,7 @@ export interface CurrentUser {
     timezone: string;
     declaredHskLevel: number | null;
     onboardingCompletedAt: Date | null;
+    termsVersion: string | null;
   } | null;
 }
 
@@ -56,6 +57,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
           timezone: user.profile.timezone,
           declaredHskLevel: user.profile.declaredHskLevel,
           onboardingCompletedAt: user.profile.onboardingCompletedAt,
+          termsVersion: user.profile.termsVersion,
         }
       : null,
   };

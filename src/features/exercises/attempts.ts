@@ -6,6 +6,7 @@ import { evaluateWord } from "@/features/handwriting/evaluate";
 import { loadLevelReferences } from "@/features/handwriting/reference-store";
 import { fromMakeMeAHanzi } from "@/features/handwriting/reference";
 import type { WordEvaluation } from "@/features/handwriting/types";
+import { techniqueVerdict } from "@/features/handwriting/technique";
 import { evaluationConfigSchema } from "./evaluation-config";
 import { attemptInputSchema } from "./attempt-schema";
 import { applyAttemptProgress, lockLearner, type ProgressDelta } from "@/features/progress/record";
@@ -120,7 +121,7 @@ export async function submitAttempt(
     select: { id: true, hanzi: true },
   });
   const characterIdOf = new Map(characterRows.map((c) => [c.hanzi, c.id]));
-  let perCharacter: { result: AttemptResult; score: number | null }[];
+  let perCharacter: { result: AttemptResult; score: number | null; techniqueOk?: boolean | null }[];
   let result: AttemptResult;
   let score: number | null = null;
   let mode: PracticeMode;
@@ -179,7 +180,12 @@ export async function submitAttempt(
     mode = input.hintsUsed > 0 ? "GUIDED" : "INDEPENDENT";
     evaluation = word as unknown as Prisma.InputJsonValue;
     strokeData = input.drawings as unknown as Prisma.InputJsonValue;
-    perCharacter = word.characters.map((c) => ({ result: c.band, score: c.score }));
+    perCharacter = word.characters.map((c) => ({
+      result: c.band,
+      score: c.score,
+      // Technique only counts for independent recall; hinted attempts are guided.
+      techniqueOk: mode === "INDEPENDENT" ? techniqueVerdict(c) : null,
+    }));
   }
 
   const characters = config.characters.flatMap((hanzi, i) => {

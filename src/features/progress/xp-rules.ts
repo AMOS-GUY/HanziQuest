@@ -12,6 +12,8 @@ export const XP = {
   rewardedAttemptsPerExercisePerDay: 3,
   /** Ceiling on XP from exercise attempts per local day. Bonuses are not capped. */
   dailyAttemptCap: 300,
+  /** Ceiling for a recall written with a stroke order/direction fault (D-033). */
+  techniqueFault: 5,
   lessonCompleted: 20,
   dailyGoalBonus: 10,
 } as const satisfies {
@@ -22,6 +24,8 @@ export const XP = {
 export function attemptXp(input: {
   result: AttemptResult;
   mode: PracticeMode;
+  /** At least one character was recalled with a stroke order/direction fault. */
+  techniqueFault?: boolean;
   /** Earlier attempts at this exercise today that already earned XP. */
   rewardedToday: number;
   /** XP already earned from attempts today. */
@@ -29,6 +33,7 @@ export function attemptXp(input: {
 }): number {
   if (input.rewardedToday >= XP.rewardedAttemptsPerExercisePerDay) return 0;
   let amount: number = XP.attempt[input.result];
+  if (input.techniqueFault) amount = Math.min(amount, XP.techniqueFault);
   if (input.mode === "GUIDED") amount = Math.ceil(amount * XP.guidedMultiplier);
   const room = Math.max(0, XP.dailyAttemptCap - input.attemptXpToday);
   return Math.min(amount, room);

@@ -2,7 +2,8 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
 import { prisma } from "@/lib/database/prisma";
 import { requirePagePermission } from "@/lib/auth/session";
-import { analyseSamples } from "@/features/handwriting/samples";
+import Link from "next/link";
+import { analyseSamples, participantSummary, pilotProgress } from "@/features/handwriting/samples";
 import { ENGINE_VERSION } from "@/features/handwriting/evaluate";
 import { CATEGORY_LABEL, formatRate } from "@/features/handwriting/validation";
 import { SampleRecorder } from "./sample-recorder";
@@ -10,16 +11,27 @@ import { SampleRecorder } from "./sample-recorder";
 export const metadata = { title: "Handwriting lab" };
 export const dynamic = "force-dynamic";
 
-export default async function HandwritingLabPage() {
+const PILOT_CODES = ["P01", "P02", "P03", "P04", "P05"];
+
+export default async function HandwritingLabPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ participant?: string }>;
+}) {
   await requirePagePermission("handwriting:validate");
-  const [characters, { metrics }] = await Promise.all([
+  const raw = (await searchParams).participant ?? "";
+  const participant = /^[A-Za-z0-9-]{1,16}$/.test(raw) ? raw.toUpperCase() : "";
+  const [characters, { metrics }, people, pilot] = await Promise.all([
     prisma.character.findMany({
       where: { hasStrokeData: true, lessons: { some: {} } },
       orderBy: { createdAt: "asc" },
       select: { hanzi: true },
     }),
     analyseSamples(prisma),
+    participantSummary(prisma),
+    participant ? pilotProgress(prisma, participant) : Promise.resolve(null),
   ]);
+  const counts = new Map(people.map((p) => [p.code, p.samples]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -115,8 +127,39 @@ export default async function HandwritingLabPage() {
       </Card>
 
       <Card>
+        <CardTitle className="mb-1">Pilot: five testers</CardTitle>
+        <CardDescription className="mb-3">
+          Follow <code>docs/HANDWRITING_PILOT.md</code>. Pick the tester, then record the 36 prompts
+          in order. Each prompt fills in the character and what to ask for.
+        </CardDescription>
+        <ul className="flex flex-wrap gap-2">
+          {PILOT_CODES.map((code) => (
+            <li key={code}>
+              <Link
+                href={`/admin/handwriting?participant=${code}`}
+                aria-current={participant === code ? "true" : undefined}
+                className="border-border aria-[current=true]:border-primary aria-[current=true]:bg-accent rounded-full border-2 px-3 py-1 text-sm font-bold"
+              >
+                {code} · {counts.get(code) ?? 0}/36
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {pilot ? (
+          <p className="mt-3 text-sm font-bold" role="status">
+            {participant}: {pilot.recorded} of {pilot.plan.length} pilot prompts recorded.
+            {pilot.next ? "" : " Session complete. Thank the tester!"}
+          </p>
+        ) : null}
+      </Card>
+
+      <Card>
         <CardTitle className="mb-4">Record a sample</CardTitle>
-        <SampleRecorder characters={characters.map((c) => c.hanzi)} />
+        <SampleRecorder
+          characters={characters.map((c) => c.hanzi)}
+          preset={pilot?.next ?? null}
+          defaultParticipant={participant}
+        />
       </Card>
     </div>
   );

@@ -6,6 +6,7 @@ import {
   ChartNoAxesColumn,
   Home,
   Map,
+  MessageSquare,
   RefreshCcw,
   ShieldCheck,
   UserRound,
@@ -55,6 +56,17 @@ export function LearnerSidebar({ showAdmin }: { showAdmin: boolean }) {
             {label}
           </Link>
         ))}
+        <Link
+          href={`/feedback?from=${encodeURIComponent(pathname)}`}
+          aria-current={isActive(pathname, "/feedback") ? "page" : undefined}
+          className={cn(
+            "text-muted-foreground hover:bg-surface-muted mt-4 flex items-center gap-3 rounded-xl px-3 py-2.5 font-bold",
+            isActive(pathname, "/feedback") && "bg-accent text-accent-foreground",
+          )}
+        >
+          <MessageSquare className="size-5" aria-hidden />
+          Feedback
+        </Link>
         {showAdmin ? (
           <Link
             href="/admin"

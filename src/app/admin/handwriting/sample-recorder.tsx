@@ -18,9 +18,66 @@ import { cn } from "@/lib/utilities/cn";
 const select =
   "border-border bg-surface focus-visible:border-primary h-11 w-full rounded-xl border-2 px-3 focus-visible:outline-none";
 
+export interface RecorderPreset {
+  key: string;
+  hanzi: string;
+  category: (typeof SAMPLE_CATEGORIES)[number];
+  style: string;
+  writtenHanzi: string | null;
+  instruction: string;
+}
+
+/** Coarse device facts for the study; deliberately not the full user agent. */
+function deviceFacts() {
+  const ua = navigator.userAgent;
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /SamsungBrowser/.test(ua)
+      ? "Samsung Internet"
+      : /Firefox\//.test(ua)
+        ? "Firefox"
+        : /Chrome\//.test(ua)
+          ? "Chrome"
+          : /Safari\//.test(ua)
+            ? "Safari"
+            : "Other";
+  const os = /Android/.test(ua)
+    ? "Android"
+    : /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+      ? "iOS/iPadOS"
+      : /Windows/.test(ua)
+        ? "Windows"
+        : /Mac OS X/.test(ua)
+          ? "macOS"
+          : /Linux/.test(ua)
+            ? "Linux"
+            : "Other";
+  const pointer = matchMedia("(pointer: coarse)").matches
+    ? ("coarse" as const)
+    : matchMedia("(pointer: fine)").matches
+      ? ("fine" as const)
+      : ("unknown" as const);
+  return {
+    screen: `${screen.width}x${screen.height}`,
+    pixelRatio: Math.round(devicePixelRatio * 100) / 100,
+    pointer,
+    browser,
+    os,
+  };
+}
+
 /** Records labelled samples for the validation study. */
-export function SampleRecorder({ characters }: { characters: string[] }) {
-  const [participant, setParticipant] = useState("");
+export function SampleRecorder({
+  characters,
+  preset,
+  defaultParticipant = "",
+}: {
+  characters: string[];
+  /** Next prompt of the pilot plan, if a pilot participant is selected. */
+  preset?: RecorderPreset | null;
+  defaultParticipant?: string;
+}) {
+  const [participant, setParticipant] = useState(defaultParticipant);
   const [hanzi, setHanzi] = useState(characters[0] ?? "");
   const [category, setCategory] = useState<(typeof SAMPLE_CATEGORIES)[number]>("CORRECT");
   const [written, setWritten] = useState("");
@@ -33,6 +90,17 @@ export function SampleRecorder({ characters }: { characters: string[] }) {
   const [canvasKey, setCanvasKey] = useState(0);
   const box = useRef<HTMLDivElement>(null);
 
+  // Follow the pilot plan: each new prompt fills in what to ask for (adjusted during render,
+  // the React-recommended way to reset state when a prop changes).
+  const [appliedPreset, setAppliedPreset] = useState<string | null>(null);
+  if (preset && preset.key !== appliedPreset) {
+    setAppliedPreset(preset.key);
+    setHanzi(preset.hanzi);
+    setCategory(preset.category);
+    setStyle(preset.style);
+    setWritten(preset.writtenHanzi ?? "");
+  }
+
   const record = () =>
     start(async () => {
       const r = await recordHandwritingSampleAction({
@@ -43,6 +111,7 @@ export function SampleRecorder({ characters }: { characters: string[] }) {
         style: style || null,
         inputDevice: device,
         canvasSizePx: Math.round(box.current?.getBoundingClientRect().width ?? 0) || undefined,
+        deviceInfo: deviceFacts(),
         strokes,
         consentConfirmed: consent,
       });
@@ -155,6 +224,11 @@ export function SampleRecorder({ characters }: { characters: string[] }) {
           </span>{" "}
           · {CATEGORY_LABEL[category].toLowerCase()}
         </p>
+        {preset ? (
+          <p className="bg-accent text-accent-foreground rounded-xl px-3 py-2 text-center text-sm font-bold">
+            Say: “{preset.instruction}”
+          </p>
+        ) : null}
         <div ref={box}>
           <HandwritingCanvas
             key={canvasKey}

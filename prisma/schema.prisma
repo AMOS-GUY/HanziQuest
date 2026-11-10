@@ -172,19 +172,19 @@ enum PaymentStatus {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model User {
-  id            String     @id @default(cuid())
-  email         String     @unique
-  emailVerified DateTime?
-  name          String?
-  image         String?
+  id                   String     @id @default(cuid())
+  email                String     @unique
+  emailVerified        DateTime?
+  name                 String?
+  image                String?
   /// bcrypt hash. Null for users who only sign in through an OAuth provider.
-  passwordHash  String?
-  status        UserStatus @default(ACTIVE)
-  lastLoginAt   DateTime?
+  passwordHash         String?
+  status               UserStatus @default(ACTIVE)
+  lastLoginAt          DateTime?
   /// Sessions issued before this instant are rejected (set on password change).
   credentialsChangedAt DateTime?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
   profile             Profile?
   accounts            Account[]
@@ -213,6 +213,7 @@ model User {
   paymentTransactions PaymentTransaction[]
   entitlements        Entitlement[]
   handwritingSamples  HandwritingSample[]
+  feedback            Feedback[]
 
   @@index([status])
 }
@@ -232,6 +233,9 @@ model Profile {
   notificationsEnabled   Boolean         @default(true)
   reviewRemindersEnabled Boolean         @default(true)
   onboardingCompletedAt  DateTime?
+  /// When the learner accepted the beta terms and privacy notice, and which version.
+  termsAcceptedAt        DateTime?
+  termsVersion           String?
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
@@ -655,6 +659,8 @@ model AttemptCharacterResult {
   mode        PracticeMode
   result      AttemptResult
   score       Float?
+  /// Stroke order and direction correct? Null when not judged (guided, skipped or recall failed).
+  techniqueOk Boolean?
   occurredAt  DateTime
 
   attempt   ExerciseAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
@@ -667,19 +673,25 @@ model AttemptCharacterResult {
 
 /// Derived per-character mastery. Guided and independent performance are tracked separately.
 model CharacterMastery {
-  userId                 String
-  characterId            String
-  level                  MasteryLevel @default(NEW)
+  userId                    String
+  characterId               String
+  level                     MasteryLevel @default(NEW)
   /// 0–1 estimate of retrieval strength.
-  strength               Float        @default(0)
-  guidedAttempts         Int          @default(0)
-  guidedSuccesses        Int          @default(0)
-  independentAttempts    Int          @default(0)
-  independentSuccesses   Int          @default(0)
-  consecutiveIndependent Int          @default(0)
-  firstSeenAt            DateTime     @default(now())
-  lastPracticedAt        DateTime?
-  updatedAt              DateTime     @updatedAt
+  strength                  Float        @default(0)
+  guidedAttempts            Int          @default(0)
+  guidedSuccesses           Int          @default(0)
+  independentAttempts       Int          @default(0)
+  independentSuccesses      Int          @default(0)
+  consecutiveIndependent    Int          @default(0)
+  /// Independent recalls whose stroke order and direction were judged.
+  techniqueAttempts         Int          @default(0)
+  techniqueClean            Int          @default(0)
+  /// Clean-technique recalls in a row; MASTERED needs at least 2.
+  consecutiveCleanTechnique Int          @default(0)
+  lastTechniqueOk           Boolean?
+  firstSeenAt               DateTime     @default(now())
+  lastPracticedAt           DateTime?
+  updatedAt                 DateTime     @updatedAt
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character @relation(fields: [characterId], references: [id], onDelete: Restrict)
@@ -1043,6 +1055,8 @@ model HandwritingSample {
   style            String?
   inputDevice      String?
   canvasSizePx     Int?
+  /// Captured automatically: screen size, pixel ratio, pointer type, browser family, OS family.
+  deviceInfo       Json?
   strokes          Json
   /// Engine result at collection time. Metrics are recomputed with the current engine.
   engineVersion    String
@@ -1067,4 +1081,39 @@ model RateLimitBucket {
   resetAt DateTime
 
   @@index([resetAt])
+}
+
+enum FeedbackKind {
+  BUG
+  IDEA
+  CONTENT
+  HANDWRITING
+  OTHER
+}
+
+enum FeedbackStatus {
+  NEW
+  TRIAGED
+  RESOLVED
+  CLOSED
+}
+
+/// In-app beta feedback and bug reports.
+model Feedback {
+  id           String         @id @default(cuid())
+  userId       String?
+  kind         FeedbackKind
+  message      String
+  pagePath     String?
+  appRelease   String?
+  userAgent    String?
+  allowContact Boolean        @default(false)
+  status       FeedbackStatus @default(NEW)
+  staffNote    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
 }

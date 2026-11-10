@@ -4,6 +4,8 @@ import { Logo, Wordmark } from "@/components/brand/logo";
 import { LearnerBottomNav, LearnerSidebar } from "@/components/navigation/learner-nav";
 import { requireUser } from "@/lib/auth/session";
 import { SyncManager } from "@/components/offline/sync-manager";
+import { TermsPrompt } from "@/components/feedback/terms-prompt";
+import { LEGAL_VERSION } from "@/features/legal/version";
 
 export default async function LearnerLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -18,13 +20,19 @@ export default async function LearnerLayout({ children }: { children: React.Reac
             <Logo size={32} />
             <Wordmark className="text-lg" />
           </Link>
-          {showAdmin ? (
-            <Link href="/admin" className="text-primary text-sm font-bold">
-              Admin
+          <div className="flex items-center gap-4">
+            <Link href="/feedback" className="text-primary text-sm font-bold">
+              Feedback
             </Link>
-          ) : null}
+            {showAdmin ? (
+              <Link href="/admin" className="text-primary text-sm font-bold">
+                Admin
+              </Link>
+            ) : null}
+          </div>
         </header>
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-6 pb-28 md:px-8 md:pb-10">
+          {user.profile?.termsVersion !== LEGAL_VERSION ? <TermsPrompt /> : null}
           {children}
         </main>
       </div>

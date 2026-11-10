@@ -13,7 +13,7 @@ test("a downloaded lesson can be practised offline and syncs into progress", asy
   page,
   context,
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "Offline flow runs once (desktop)");
+  test.skip(!!testInfo.project.use.isMobile, "Offline flow runs once (desktop)");
   await register(page, "Offline", uniqueEmail(testInfo.project.name), throwawayPassword());
   await completeOnboarding(page);
 

@@ -30,6 +30,9 @@
     "progress:rebuild": "tsx scripts/rebuild-progress.ts",
     "handwriting:report": "tsx scripts/handwriting-report.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "db:backup": "tsx scripts/db-backup.ts",
+    "db:restore": "tsx scripts/db-restore.ts",
+    "db:verify": "tsx scripts/db-verify.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

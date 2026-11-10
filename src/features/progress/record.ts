@@ -46,7 +46,7 @@ async function learnerContext(tx: Tx, userId: string): Promise<LearnerContext> {
 export async function recomputeCharacter(tx: Tx, userId: string, characterId: string) {
   const events = await tx.attemptCharacterResult.findMany({
     where: { userId, characterId },
-    select: { occurredAt: true, mode: true, result: true },
+    select: { occurredAt: true, mode: true, result: true, techniqueOk: true },
   });
   const replay = replayCharacter(events);
   if (!replay) return null;
@@ -218,7 +218,12 @@ export interface AttemptForProgress {
   mode: PracticeMode;
   result: AttemptResult;
   sessionType: LearningSessionType | null;
-  characters: { characterId: string; result: AttemptResult; score: number | null }[];
+  characters: {
+    characterId: string;
+    result: AttemptResult;
+    score: number | null;
+    techniqueOk?: boolean | null;
+  }[];
 }
 
 /** Records per-character results and applies all progress effects of a new attempt. */
@@ -240,6 +245,7 @@ export async function applyAttemptProgress(
         mode: attempt.mode,
         result: c.result,
         score: c.score,
+        techniqueOk: c.techniqueOk ?? null,
         occurredAt: attempt.occurredAt,
       })),
     });
@@ -274,6 +280,7 @@ export async function applyAttemptProgress(
   const amount = attemptXp({
     result: attempt.result,
     mode: attempt.mode,
+    techniqueFault: attempt.characters.some((c) => c.techniqueOk === false),
     rewardedToday,
     attemptXpToday: todayXp._sum.xpAwarded ?? 0,
   });

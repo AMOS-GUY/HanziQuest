@@ -13,7 +13,13 @@ import {
 import { getRequestInfo } from "@/lib/security/request-info";
 import { DomainError } from "@/features/administration/services";
 import type { FormState } from "@/features/administration/curriculum-actions";
-import { changePassword, deleteAccount, setUserStatus, updateProfile } from "./account";
+import {
+  acceptTerms,
+  changePassword,
+  deleteAccount,
+  setUserStatus,
+  updateProfile,
+} from "./account";
 
 function fields(formData: FormData) {
   return Object.fromEntries(
@@ -116,6 +122,19 @@ export async function setUserStatusAction(
   } catch (error) {
     if (error instanceof AuthorizationError)
       return { ok: false, message: "You do not have permission to do that." };
+    return failure(error);
+  }
+}
+
+/** Records that the signed-in learner accepted the current beta terms and privacy notice. */
+export async function acceptTermsAction(): Promise<FormState> {
+  try {
+    const user = await signedIn();
+    const meta = await getRequestInfo();
+    await acceptTerms(prisma, user.id, meta);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (error) {
     return failure(error);
   }
 }

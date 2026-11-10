@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { hashPassword } from "@/lib/auth/password";
 import { recordAudit } from "@/lib/audit";
 import { registerSchema } from "@/lib/validation/auth";
+import { LEGAL_VERSION } from "@/features/legal/version";
 
 export type RegisterResult =
   | { ok: true; userId: string; email: string }
@@ -27,7 +28,7 @@ export async function registerUser(
     }
     return { ok: false, error: "invalid", fieldErrors };
   }
-  const { email, password, displayName } = parsed.data;
+  const { email, password, displayName, acceptTerms } = parsed.data;
 
   const passwordHash = await hashPassword(password);
   try {
@@ -39,7 +40,12 @@ export async function registerUser(
           email,
           name: displayName,
           passwordHash,
-          profile: { create: { displayName } },
+          profile: {
+            create: {
+              displayName,
+              ...(acceptTerms ? { termsAcceptedAt: new Date(), termsVersion: LEGAL_VERSION } : {}),
+            },
+          },
           roles: { create: { roleId: learnerRole.id } },
           streak: { create: {} },
         },

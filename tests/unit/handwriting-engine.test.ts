@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { evaluateCharacter, evaluateWord } from "@/features/handwriting/evaluate";
 import { assign, longestIncreasingSubsequence, resample } from "@/features/handwriting/geometry";
 import { fromMakeMeAHanzi } from "@/features/handwriting/reference";
+import { isRecall, techniqueNote, techniqueVerdict } from "@/features/handwriting/technique";
 import type { ReferenceCharacter } from "@/features/handwriting/types";
 import { loadStrokeData } from "@/features/curriculum/stroke-data";
 import { longestStroke, toInk, variants } from "../support/handwriting-fixtures";
@@ -236,5 +237,26 @@ describe("result contract", () => {
       candidates: REFERENCES,
     });
     expect(bad.band).toBe("TRY_AGAIN");
+  });
+});
+
+describe("technique verdict", () => {
+  it("judges reversed strokes as a technique fault, not a failed recall", () => {
+    let faults = 0;
+    REFERENCES.forEach((r, i) => {
+      const result = evaluate(toInk(variants.reversed(r, longestStroke(r)), { seed: i + 21 }), r);
+      if (isRecall(result) && techniqueVerdict(result) === false) faults += 1;
+    });
+    expect(faults / REFERENCES.length).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("gives clean writing a clean verdict and wrong characters no verdict", () => {
+    const r = ref("你");
+    const clean = evaluate(toInk(r.medians, { seed: 3 }), r);
+    expect(techniqueVerdict(clean)).toBe(true);
+    expect(techniqueNote(clean)).toBeNull();
+    const wrong = evaluate(toInk(ref("她").medians, { seed: 2 }), ref("他"));
+    expect(isRecall(wrong)).toBe(false);
+    expect(techniqueVerdict(wrong)).toBeNull();
   });
 });

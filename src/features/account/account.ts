@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { passwordSchema } from "@/lib/validation/auth";
 import { DAILY_GOAL_OPTIONS } from "@/features/onboarding/schema";
 import { DomainError, type Actor } from "@/features/administration/services";
+import { LEGAL_VERSION } from "@/features/legal/version";
 
 function isValidTimeZone(tz: string) {
   try {
@@ -171,5 +172,28 @@ export async function setUserStatus(
       userAgent: actor.userAgent,
     });
     return { changed: true };
+  });
+}
+
+/** Records acceptance of the current beta terms and privacy notice (audited). */
+export async function acceptTerms(
+  prisma: PrismaClient,
+  userId: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+) {
+  await prisma.$transaction(async (tx) => {
+    await tx.profile.update({
+      where: { userId },
+      data: { termsAcceptedAt: new Date(), termsVersion: LEGAL_VERSION },
+    });
+    await recordAudit(tx, {
+      actorId: userId,
+      action: "terms.accept",
+      entityType: "User",
+      entityId: userId,
+      after: { version: LEGAL_VERSION },
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+    });
   });
 }

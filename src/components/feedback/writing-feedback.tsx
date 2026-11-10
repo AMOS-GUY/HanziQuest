@@ -9,6 +9,7 @@ import type {
 } from "@/features/handwriting/types";
 import type { CharacterStrokeJson } from "@/features/handwriting/reference-store";
 import { MMAH_TRANSFORM } from "@/components/characters/stroke-geometry";
+import { techniqueNote } from "@/features/handwriting/technique";
 import { cn } from "@/lib/utilities/cn";
 
 export const BAND_COPY: Record<
@@ -160,6 +161,11 @@ function CharacterFeedback({
               );
             })}
           </dl>
+        ) : null}
+        {techniqueNote(evaluation) ? (
+          <p className="text-accent-foreground bg-accent rounded-lg px-2 py-1 font-semibold">
+            {techniqueNote(evaluation)}
+          </p>
         ) : null}
         {evaluation.feedback.length > 0 ? (
           <ul className="list-disc space-y-0.5 pl-5">

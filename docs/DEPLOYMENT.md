@@ -6,6 +6,12 @@ endpoint, smoke test, error reporting, Dockerfile and CI. Choosing a host, creat
 buying a domain and entering production secrets are owner actions. Nothing has been purchased,
 registered or deployed.
 
+## Hosting choice
+
+The researched comparison with pricing, limits and sources is in `docs/HOSTING.md`. The
+recommendation is a Render web service (Starter) with Neon Launch for PostgreSQL (7-day PITR),
+estimated at roughly $10–30/month. Verify prices before signing up.
+
 ## Recommended low-cost setup
 
 Any Node.js 20.19+ host that runs `next start` behind HTTPS works. Two paths fit a small beta:
@@ -81,12 +87,12 @@ item is wrong (`src/lib/env.ts`, checked from `src/instrumentation.ts`).
 
 ## Backups and recovery
 
-| What                        | How                                                                              | Frequency                 |
-| --------------------------- | -------------------------------------------------------------------------------- | ------------------------- |
-| Database (primary)          | Provider-managed point-in-time recovery, retention ≥ 7 days                      | continuous                |
-| Database (independent copy) | `pg_dump --format=custom --no-owner "$DIRECT_URL" > hanziquest-$(date +%F).dump` | weekly, kept off-provider |
-| Curriculum source           | `content/*.json` in git (imports are idempotent)                                 | every change              |
-| Configuration               | Environment variables recorded in the team password manager                      | on change                 |
+| What                        | How                                                                                                                 | Frequency                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Database (primary)          | Provider-managed point-in-time recovery, retention ≥ 7 days                                                         | continuous                           |
+| Database (independent copy) | `npm run db:backup -- --source "$DIRECT_URL" --out hanziquest-$(date +%F).ndjson.gz` (or `pg_dump --format=custom`) | weekly, encrypted, kept off-provider |
+| Curriculum source           | `content/*.json` in git (imports are idempotent)                                                                    | every change                         |
+| Configuration               | Environment variables recorded in the team password manager                                                         | on change                            |
 
 **Recovery drill (do it before public launch, then every quarter):**
 
@@ -98,9 +104,24 @@ item is wrong (`src/lib/env.ts`, checked from `src/instrumentation.ts`).
    `npm run smoke -- http://localhost:3000`.
 4. Record the date, backup age and time to restore in `docs/PROGRESS.md`.
 
-Not yet done: the drill needs a real provider backup. The development machine has no
-`pg_dump`, so it couldn't be rehearsed locally beyond the smoke test, which passes against a
-local production build.
+With the portable tools the drill is:
+
+```bash
+npm run db:backup -- --source "$PROD_DIRECT_URL" --out backup.ndjson.gz
+DATABASE_URL="$SCRATCH_URL" npx prisma migrate deploy     # same release as production
+npm run db:restore -- --in backup.ndjson.gz --target "$SCRATCH_URL"
+npm run db:verify -- --source "$PROD_DIRECT_URL" --target "$SCRATCH_URL"
+DATABASE_URL="$SCRATCH_URL" AUTH_URL=http://localhost:3300 npx next start -p 3300 &
+npm run smoke -- http://localhost:3300
+```
+
+**Local drill (2026-11-10, development database):** backup of every table (38 contain data, about 3,500 rows)
+(389 KB gzip), into a new migrated database. Restore took 2.6 s. Verify: every table identical
+by row count and content checksum, 68 foreign keys checked with 0 orphaned rows, and progress
+summaries and lesson states identical for 5 learners. Smoke test 8/8 against the production
+build running on the restored database. A second restore into the non-empty database was
+refused. The drill found and fixed a hang in the restore tool. **The production drill is still
+pending: there is no production database yet.** CI runs the same drill on every push.
 
 ## Monitoring
 

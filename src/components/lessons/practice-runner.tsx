@@ -614,6 +614,16 @@ export function PracticeRunner({
               ) : null}
             </p>
 
+            {outcome?.kind === "writing" && mode.kind !== "preview" ? (
+              <Link
+                href={`/feedback?kind=HANDWRITING&from=${encodeURIComponent(
+                  typeof window === "undefined" ? "/practice" : window.location.pathname,
+                )}`}
+                className="text-muted-foreground self-center text-xs font-bold underline"
+              >
+                Grading looks wrong? Tell us
+              </Link>
+            ) : null}
             <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" size="lg" onClick={() => resetFor(index)}>
                 <RotateCcw aria-hidden /> Retry

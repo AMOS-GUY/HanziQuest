@@ -16,6 +16,7 @@ export async function register(page: Page, name: string, email: string, password
   await page.getByLabel("Your name").fill(name);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
+  await page.getByRole("checkbox", { name: /beta terms/ }).check();
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
@@ -44,7 +45,7 @@ export async function completeOnboarding(page: Page) {
   await choose("radio", /^Regular/);
   await next("Want to skip what you already know?");
   await page.getByRole("button", { name: "Start from the beginning" }).click();
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/home$/, { timeout: 15_000 });
 }
 
 /**

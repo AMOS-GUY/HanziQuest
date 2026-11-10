@@ -76,6 +76,7 @@ export async function getProgressDetails(
       select: {
         level: true,
         strength: true,
+        lastTechniqueOk: true,
         character: { select: { hanzi: true, pinyin: true, meaning: true } },
       },
     }),
@@ -102,7 +103,12 @@ export async function getProgressDetails(
       icon: a.icon,
       earnedAt: earnedAt.get(a.id) ?? null,
     })),
-    characters: characters.map((c) => ({ ...c.character, level: c.level, strength: c.strength })),
+    characters: characters.map((c) => ({
+      ...c.character,
+      level: c.level,
+      strength: c.strength,
+      techniqueNeedsWork: c.lastTechniqueOk === false,
+    })),
   };
 }
 

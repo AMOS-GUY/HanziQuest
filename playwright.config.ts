@@ -10,6 +10,9 @@ const PORT = Number(process.env.E2E_PORT ?? 3100);
 export default defineConfig({
   testDir: "tests/e2e",
   fullyParallel: false,
+  // One local `next start` serves every worker; more workers than this mostly measure CPU
+  // contention (bcrypt cost 12 on every sign-up) rather than the app.
+  workers: process.env.CI ? 2 : 3,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
@@ -19,6 +22,14 @@ export default defineConfig({
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile", use: { ...devices["Pixel 7"] } },
+    // Cross-browser QA (E2E_ALL_BROWSERS=1; needs `npx playwright install firefox webkit`).
+    ...(process.env.E2E_ALL_BROWSERS
+      ? [
+          { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+          { name: "webkit-iphone", use: { ...devices["iPhone 14"] } },
+          { name: "webkit-desktop", use: { ...devices["Desktop Safari"] } },
+        ]
+      : []),
   ],
   webServer: process.env.E2E_BASE_URL
     ? undefined

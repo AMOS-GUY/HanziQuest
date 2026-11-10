@@ -4,6 +4,7 @@ import { BookOpen, PenLine, Repeat, WifiOff } from "lucide-react";
 import { Logo, Wordmark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/session";
+import { SiteFooter } from "@/components/brand/site-footer";
 
 const FEATURES = [
   {
@@ -72,7 +73,7 @@ export default async function WelcomePage({
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg">
-              <Link href="/register">Get started</Link>
+              <Link href="/register">Join the free beta</Link>
             </Button>
             <Button asChild size="lg" variant="secondary">
               <Link href="/login">I already have an account</Link>
@@ -108,6 +109,40 @@ export default async function WelcomePage({
           </div>
         ))}
       </section>
+
+      <section
+        aria-labelledby="beta"
+        className="border-border bg-surface rounded-[var(--radius-card)] border-2 p-5"
+      >
+        <h2 id="beta" className="text-xl font-extrabold">
+          How the beta works
+        </h2>
+        <ul className="text-muted-foreground mt-2 grid gap-2 text-sm sm:grid-cols-3">
+          <li>
+            <strong className="text-foreground">Free while in beta.</strong> HSK 1 starter course
+            (16 lessons, 102 characters). Content is marked provisional until a teacher has reviewed
+            it.
+          </li>
+          <li>
+            <strong className="text-foreground">Honest feedback.</strong> The writing checker knows
+            the course&apos;s characters and is still being tested with real handwriting. Tell us
+            when it gets something wrong.
+          </li>
+          <li>
+            <strong className="text-foreground">Your data.</strong> No ads or trackers. Delete your
+            account any time. Read the{" "}
+            <Link href="/privacy" className="text-primary font-bold underline">
+              privacy notice
+            </Link>{" "}
+            and{" "}
+            <Link href="/beta-guide" className="text-primary font-bold underline">
+              beta guide
+            </Link>
+            .
+          </li>
+        </ul>
+      </section>
+      <SiteFooter />
     </main>
   );
 }

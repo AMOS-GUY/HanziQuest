@@ -13,7 +13,7 @@ test("learner completes the first lesson by writing every exercise; progress per
   page,
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop",
+    !!testInfo.project.use.isMobile,
     "Full lesson run once (desktop); mobile covered by the auth journey",
   );
   await register(page, "Writer", uniqueEmail(testInfo.project.name), throwawayPassword());

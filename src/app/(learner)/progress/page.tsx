@@ -131,9 +131,10 @@ export default async function ProgressPage() {
           Characters
         </h2>
         <p className="text-muted-foreground mb-3 text-sm">
-          A character becomes familiar after you write it from memory on two spaced reviews, and
-          mastered after four. Traced or hinted practice helps you learn but doesn&apos;t count
-          towards mastery.
+          A character becomes familiar after you write it from memory on two spaced reviews. It
+          becomes mastered after four, once your last two were written with the correct stroke order
+          and direction. Traced or hinted practice helps you learn but doesn&apos;t count towards
+          mastery.
         </p>
         <ul className="mb-3 flex flex-wrap gap-2 text-xs" aria-label="Mastery counts">
           {(["LEARNING", "FAMILIAR", "MASTERED"] as const).map((l) => (
@@ -169,6 +170,9 @@ export default async function ProgressPage() {
                     {c.hanzi}
                   </span>
                   <span className="text-[11px] font-bold">{LEVEL_COPY[c.level].label}</span>
+                  {c.techniqueNeedsWork ? (
+                    <span className="text-[10px] font-semibold">Check strokes</span>
+                  ) : null}
                   <span className="sr-only">
                     {c.pinyin}, {c.meaning}
                   </span>
