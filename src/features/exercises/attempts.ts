@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { Prisma as PrismaNS } from "@/generated/prisma/client";
-import type { AttemptResult, PracticeMode } from "@/generated/prisma/enums";
+import type { AttemptResult, LearningSessionType, PracticeMode } from "@/generated/prisma/enums";
 import { DomainError } from "@/features/administration/services";
 import { evaluateWord } from "@/features/handwriting/evaluate";
 import { loadLevelReferences } from "@/features/handwriting/reference-store";
@@ -8,6 +8,7 @@ import { fromMakeMeAHanzi } from "@/features/handwriting/reference";
 import type { WordEvaluation } from "@/features/handwriting/types";
 import { evaluationConfigSchema } from "./evaluation-config";
 import { attemptInputSchema } from "./attempt-schema";
+import { applyAttemptProgress, lockLearner, type ProgressDelta } from "@/features/progress/record";
 
 export interface AttemptOutcome {
   attemptId: string;
@@ -16,6 +17,15 @@ export interface AttemptOutcome {
   score: number | null;
   mode: PracticeMode;
   evaluation: unknown;
+  xpAwarded: number;
+  /** Progress effects of this submission; null when it was a duplicate. */
+  progress: ProgressDelta | null;
+}
+
+export interface SubmitOptions {
+  now?: Date;
+  /** Server-side device id when the attempt arrived through offline sync. */
+  deviceId?: string;
 }
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
@@ -35,8 +45,10 @@ function toStored(
     score: number | null;
     mode: PracticeMode;
     evaluation: Prisma.JsonValue;
+    xpAwarded: number;
   },
   duplicate: boolean,
+  progress: ProgressDelta | null = null,
 ): AttemptOutcome {
   return {
     attemptId: outcome.id,
@@ -45,6 +57,8 @@ function toStored(
     score: outcome.score,
     mode: outcome.mode,
     evaluation: outcome.evaluation,
+    xpAwarded: progress ? progress.xpAwarded : outcome.xpAwarded,
+    progress,
   };
 }
 
@@ -56,8 +70,9 @@ export async function submitAttempt(
   prisma: PrismaClient,
   userId: string,
   rawInput: unknown,
-  now: Date = new Date(),
+  options: SubmitOptions = {},
 ): Promise<AttemptOutcome> {
+  const now = options.now ?? new Date();
   const input = attemptInputSchema.parse(rawInput);
 
   const existing = await prisma.exerciseAttempt.findUnique({
@@ -91,13 +106,21 @@ export async function submitAttempt(
     throw new DomainError("not_found", "Exercise not found.");
   }
 
+  let sessionType: LearningSessionType | null = null;
   if (input.sessionId) {
     const session = await prisma.learningSession.findUnique({ where: { id: input.sessionId } });
     if (!session || session.userId !== userId)
       throw new DomainError("not_found", "Session not found.");
+    sessionType = session.type;
   }
 
   const config = evaluationConfigSchema.parse(exercise.evaluationConfig);
+  const characterRows = await prisma.character.findMany({
+    where: { hanzi: { in: config.characters } },
+    select: { id: true, hanzi: true },
+  });
+  const characterIdOf = new Map(characterRows.map((c) => [c.hanzi, c.id]));
+  let perCharacter: { result: AttemptResult; score: number | null }[];
   let result: AttemptResult;
   let score: number | null = null;
   let mode: PracticeMode;
@@ -108,6 +131,7 @@ export async function submitAttempt(
     result = "SKIPPED";
     mode = exercise.type === "GUIDED_STROKE" ? "GUIDED" : "INDEPENDENT";
     evaluation = { kind: "skip" };
+    perCharacter = config.characters.map(() => ({ result, score: null }));
   } else if (exercise.type === "GUIDED_STROKE") {
     if (input.kind !== "guided")
       throw new DomainError("conflict", "This exercise expects guided practice.");
@@ -120,6 +144,7 @@ export async function submitAttempt(
       mistakes: input.mistakes,
       trust: "client-reported",
     };
+    perCharacter = config.characters.map(() => ({ result, score: null }));
   } else {
     if (input.kind !== "writing")
       throw new DomainError("conflict", "This exercise expects handwriting.");
@@ -154,28 +179,52 @@ export async function submitAttempt(
     mode = input.hintsUsed > 0 ? "GUIDED" : "INDEPENDENT";
     evaluation = word as unknown as Prisma.InputJsonValue;
     strokeData = input.drawings as unknown as Prisma.InputJsonValue;
+    perCharacter = word.characters.map((c) => ({ result: c.band, score: c.score }));
   }
 
+  const characters = config.characters.flatMap((hanzi, i) => {
+    const characterId = characterIdOf.get(hanzi);
+    return characterId ? [{ characterId, ...perCharacter[i]! }] : [];
+  });
+
   try {
-    const created = await prisma.exerciseAttempt.create({
-      data: {
-        clientEventId: input.clientEventId,
-        userId,
-        exerciseId: exercise.id,
-        characterId: exercise.characterId,
-        sessionId: input.sessionId ?? null,
-        curriculumId: exercise.curriculumId,
-        mode,
-        result,
-        score,
-        strokeData,
-        evaluation,
-        hintsUsed: input.hintsUsed,
-        durationMs: input.durationMs ?? null,
-        occurredAt,
-      },
+    return await prisma.$transaction(async (tx) => {
+      await lockLearner(tx, userId);
+      const created = await tx.exerciseAttempt.create({
+        data: {
+          clientEventId: input.clientEventId,
+          userId,
+          exerciseId: exercise.id,
+          characterId: exercise.characterId,
+          sessionId: input.sessionId ?? null,
+          deviceId: options.deviceId ?? null,
+          curriculumId: exercise.curriculumId,
+          mode,
+          result,
+          score,
+          strokeData,
+          evaluation,
+          hintsUsed: input.hintsUsed,
+          durationMs: input.durationMs ?? null,
+          occurredAt,
+        },
+      });
+      const progress = await applyAttemptProgress(
+        tx,
+        {
+          id: created.id,
+          userId,
+          exerciseId: exercise.id,
+          occurredAt,
+          mode,
+          result,
+          sessionType,
+          characters,
+        },
+        now,
+      );
+      return toStored(created, false, progress);
     });
-    return toStored(created, false);
   } catch (error) {
     // Concurrent duplicate submission: return the attempt that won the race.
     if (error instanceof PrismaNS.PrismaClientKnownRequestError && error.code === "P2002") {

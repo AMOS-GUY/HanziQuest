@@ -20,5 +20,12 @@ export default async function LessonPracticePage({
   if (state === "LOCKED") redirect(`/learn/${lessonId}`);
   const payload = await getLessonPractice(lessonId);
   if (!payload) notFound();
-  return <PracticeRunner payload={payload} lessonId={lessonId} exitHref={`/learn/${lessonId}`} />;
+  return (
+    <PracticeRunner
+      payload={payload}
+      mode={{ kind: "lesson", lessonId }}
+      userId={user.id}
+      exitHref={`/learn/${lessonId}`}
+    />
+  );
 }

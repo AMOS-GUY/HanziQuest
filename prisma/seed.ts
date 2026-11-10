@@ -9,7 +9,6 @@ import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import bcrypt from "bcryptjs";
-import type { Prisma } from "../src/generated/prisma/client";
 import type { RoleKey } from "../src/generated/prisma/enums";
 import { createPrismaClient } from "../src/lib/database/client";
 import { ROLE_DEFINITIONS } from "../src/lib/permissions/permissions";
@@ -17,58 +16,9 @@ import { loadStrokeData } from "../src/features/curriculum/stroke-data";
 import { validateCurriculumContent } from "../src/features/curriculum/validate-content";
 import { importCurriculumContent } from "../src/features/curriculum/import-content";
 import { BCRYPT_COST } from "../src/lib/auth/password";
+import { ACHIEVEMENTS } from "../src/features/progress/achievements";
 
 const prisma = createPrismaClient();
-
-const ACHIEVEMENTS: {
-  key: string;
-  name: string;
-  description: string;
-  icon: string;
-  criteria: Prisma.InputJsonValue;
-  xpReward: number;
-}[] = [
-  {
-    key: "first-character",
-    name: "First stroke",
-    description: "Write your first character correctly.",
-    icon: "pen-line",
-    criteria: { type: "characters_written", count: 1 },
-    xpReward: 10,
-  },
-  {
-    key: "first-lesson",
-    name: "Lesson one",
-    description: "Complete your first lesson.",
-    icon: "book-open-check",
-    criteria: { type: "lessons_completed", count: 1 },
-    xpReward: 20,
-  },
-  {
-    key: "ten-characters",
-    name: "Ten characters",
-    description: "Learn ten different characters.",
-    icon: "sparkles",
-    criteria: { type: "characters_learned", count: 10 },
-    xpReward: 30,
-  },
-  {
-    key: "streak-3",
-    name: "Three-day streak",
-    description: "Practise three days in a row.",
-    icon: "flame",
-    criteria: { type: "streak", days: 3 },
-    xpReward: 20,
-  },
-  {
-    key: "streak-7",
-    name: "One-week streak",
-    description: "Practise seven days in a row.",
-    icon: "flame",
-    criteria: { type: "streak", days: 7 },
-    xpReward: 50,
-  },
-];
 
 async function seedRoles() {
   for (const [key, def] of Object.entries(ROLE_DEFINITIONS) as [

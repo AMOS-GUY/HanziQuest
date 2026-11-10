@@ -27,6 +27,7 @@
     "content:validate": "tsx scripts/content.ts validate",
     "content:import": "tsx scripts/content.ts import",
     "brand:icons": "tsx scripts/generate-icons.ts",
+    "progress:rebuild": "tsx scripts/rebuild-progress.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -39,6 +40,8 @@
     "bcryptjs": "3.0.3",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "dexie": "4.4.7",
+    "dexie-react-hooks": "4.4.0",
     "framer-motion": "14.11.1",
     "hanzi-writer": "3.7.3",
     "hanzi-writer-data": "2.0.1",

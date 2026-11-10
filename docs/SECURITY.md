@@ -28,7 +28,19 @@
 - Placement answers are graded on the server from a question plan derived from the assessment
   id. Correct answers are never sent to the browser.
 - Guided-practice mistake counts are client-reported and labelled as such. They never count
-  as independent recall and will only earn capped XP (M3).
+  as independent recall and earn half XP.
+
+### Progress and offline (M3)
+
+- XP, mastery, streaks and achievements are computed only on the server from server-evaluated
+  attempts. Any XP or score in a request body is ignored, and an integration test sends one to
+  prove it.
+- XP grants are idempotent (unique keys). Repeating an exercise earns XP at most 3 times per
+  day, with a daily cap, so XP can't be farmed.
+- Offline sync re-runs the same validation and evaluation as online submission. Events are
+  idempotent by id, another user's event id is rejected, and the batch size is bounded.
+- The browser stores downloaded lessons and queued attempts (stroke data) in IndexedDB, tagged
+  with the user id. Signing out doesn't erase them yet; see limitation 7.
 
 ## Known limitations / planned hardening
 
@@ -43,6 +55,10 @@
 5. **No account lockout notifications** and no 2FA for admins (post-beta).
 6. **Moderation actions** (suspend/reactivate) exist in the data model (`UserStatus`) but have
    no UI or action yet.
+7. **Offline data stays on the device after sign-out.** Queued attempts are kept so they can
+   sync at the owner's next sign-in, and they are never uploaded for another account. Downloaded
+   lessons are curriculum content. Before beta: clear packages on sign-out and offer "remove
+   offline data" in the profile.
 
 ## Reporting
 

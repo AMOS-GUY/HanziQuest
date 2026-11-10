@@ -36,19 +36,41 @@ export interface AttemptResponse {
   score: number | null;
   mode: string;
   evaluation: unknown;
+  xpAwarded: number;
+  progress: ProgressDelta | null;
+}
+
+export interface ProgressDelta {
+  xpAwarded: number;
+  dailyGoalReached: boolean;
+  streak: number;
+  achievements: { key: string; name: string }[];
 }
 
 export const learningApi = {
   startSession: (lessonId: string) => post<{ sessionId: string }>("/api/sessions", { lessonId }),
+  startReview: () => post<{ sessionId: string }>("/api/sessions", { type: "REVIEW" }),
   completeSession: (sessionId: string) =>
-    post<{ completed: boolean; lessonId: string; nextLessonId: string | null }>(
-      `/api/sessions/${sessionId}/complete`,
-    ),
+    post<{
+      completed: boolean;
+      lessonId: string | null;
+      nextLessonId: string | null;
+      progress: ProgressDelta | null;
+    }>(`/api/sessions/${sessionId}/complete`),
   submitAttempt: (payload: Record<string, unknown>) =>
     post<AttemptResponse>("/api/attempts", payload),
 };
 
 /** Retries transient failures (network / 5xx / 429) with backoff; client errors are not retried. */
+export function isNetworkFailure(error: unknown) {
+  return (
+    !(error instanceof ApiRequestError) ||
+    error.status === 0 ||
+    error.status >= 500 ||
+    error.status === 429
+  );
+}
+
 export async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   let lastError: unknown;
   for (let i = 0; i < attempts; i += 1) {

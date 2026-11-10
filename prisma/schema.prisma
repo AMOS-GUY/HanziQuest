@@ -181,6 +181,7 @@ model User {
   learningSessions    LearningSession[]
   lessonProgress      LessonProgress[]
   attempts            ExerciseAttempt[]
+  characterResults    AttemptCharacterResult[]
   masteries           CharacterMastery[]
   reviewSchedules     ReviewSchedule[]
   learningGoals       LearningGoal[]
@@ -402,6 +403,7 @@ model Character {
   lessons         LessonCharacter[]
   exercises       Exercise[]
   attempts        ExerciseAttempt[]
+  attemptResults  AttemptCharacterResult[]
   masteries       CharacterMastery[]
   reviewSchedules ReviewSchedule[]
   assessmentItems AssessmentResult[]
@@ -608,6 +610,8 @@ model ExerciseAttempt {
   occurredAt    DateTime
   /// When the server stored it.
   receivedAt    DateTime      @default(now())
+  /// Learner's local calendar day of `occurredAt` (their timezone at processing time).
+  localDate     DateTime?     @db.Date
   xpAwarded     Int           @default(0)
 
   user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -617,9 +621,33 @@ model ExerciseAttempt {
   device     Device?          @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   curriculum Curriculum       @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
 
+  characterResults AttemptCharacterResult[]
+
   @@index([userId, occurredAt])
   @@index([userId, characterId, occurredAt])
   @@index([exerciseId])
+  @@index([userId, exerciseId, localDate])
+}
+
+/// Per-character outcome of an attempt (a word attempt yields one row per character).
+/// Mastery and review schedules are replayed from these rows in `occurredAt` order, so offline
+/// attempts that arrive late still land in the right place in the learner's history.
+model AttemptCharacterResult {
+  attemptId   String
+  position    Int
+  userId      String
+  characterId String
+  mode        PracticeMode
+  result      AttemptResult
+  score       Float?
+  occurredAt  DateTime
+
+  attempt   ExerciseAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character       @relation(fields: [characterId], references: [id], onDelete: Restrict)
+
+  @@id([attemptId, position])
+  @@index([userId, characterId, occurredAt])
 }
 
 /// Derived per-character mastery. Guided and independent performance are tracked separately.

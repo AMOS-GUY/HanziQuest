@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Logo, Wordmark } from "@/components/brand/logo";
 import { LearnerBottomNav, LearnerSidebar } from "@/components/navigation/learner-nav";
 import { requireUser } from "@/lib/auth/session";
+import { SyncManager } from "@/components/offline/sync-manager";
 
 export default async function LearnerLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -28,6 +29,7 @@ export default async function LearnerLayout({ children }: { children: React.Reac
         </main>
       </div>
       <LearnerBottomNav />
+      <SyncManager userId={user.id} />
     </div>
   );
 }

@@ -51,6 +51,7 @@ export async function getLessonForLearner(userId: string, lessonId: string) {
       description: true,
       status: true,
       position: true,
+      contentVersion: true,
       unit: {
         select: {
           title: true,
@@ -183,4 +184,29 @@ export async function getCharacterForLearner(hanzi: string) {
     ? ((await loadStrokeJson(prisma, [hanzi]))[hanzi] ?? null)
     : null;
   return { ...character, strokeData };
+}
+
+/** Free-writing exercises for a review round, in the given order. */
+export async function getReviewPractice(exerciseIds: string[]): Promise<PracticePayload | null> {
+  const rows = await prisma.exercise.findMany({
+    where: { id: { in: exerciseIds }, status: "PUBLISHED" },
+    select: {
+      ...exerciseSelect,
+      lessons: { take: 1, select: { lesson: { select: { unit: { select: { levelId: true } } } } } },
+    },
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const ordered = exerciseIds.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
+  if (ordered.length === 0) return null;
+  const levelIds = [
+    ...new Set(ordered.flatMap((e) => (e.lessons[0] ? [e.lessons[0].lesson.unit.levelId] : []))),
+  ];
+  const dtos = ordered.map(toDTO);
+  const chars = [...new Set(dtos.flatMap((e) => e.characters))];
+  const [strokeData, ...levels] = await Promise.all([
+    loadStrokeJson(prisma, chars),
+    ...levelIds.map((id) => loadLevelReferences(prisma, id)),
+  ]);
+  const candidates = [...new Map(levels.flat().map((c) => [c.hanzi, c])).values()];
+  return { exercises: dtos, strokeData, candidates };
 }

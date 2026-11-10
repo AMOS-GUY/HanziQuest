@@ -45,9 +45,11 @@ Target public beta: **2026-12-08**.
 
 ### M3 — Progress and offline (11-23 → 11-29)
 
-- [ ] Mastery, spaced repetition, XP ledger, streaks, daily goals, achievements
-- [ ] Review and Progress screens
-- [ ] Service worker, IndexedDB (Dexie), lesson downloads, idempotent sync
+- [x] Mastery (guided vs independent), spaced repetition, XP ledger with anti-farming rules, streaks, daily goals, achievements
+- [x] Review and Progress screens, Home cards, review rounds
+- [x] Service worker, IndexedDB (Dexie), lesson downloads, offline practice, idempotent `/api/sync`
+- [ ] Tune SRS/XP numbers with real usage data (after beta testers)
+- [ ] Clear offline data on sign-out; offline-data controls in Profile
 
 ### M4 — Stabilisation (11-30 → 12-06) and release (12-07 → 12-08)
 
@@ -124,3 +126,48 @@ Target public beta: **2026-12-08**.
 **Next actions (M3):** mastery from attempt history, spaced-repetition scheduler, XP ledger
 with anti-farming rules, streaks and daily goals, Review and Progress screens, then the
 service worker, Dexie storage, lesson downloads and idempotent `/api/sync`.
+
+### 2026-11-10 — Session 3 (M3)
+
+**Completed:** everything checked under M3 above. Branch `feature/m3-progress-offline`, which
+builds on `feature/m2-learning`. One migration (`progress_offline`): `AttemptCharacterResult`
+and `ExerciseAttempt.localDate`, with a backfill for earlier single-character attempts.
+
+**Tests run (all passing):**
+
+- `npm run lint`, `npm run typecheck`, `npm run format:check`: clean
+- `npm test`: 93 unit tests (17 new: calendar and streaks, SRS intervals, anti-cramming, guided
+  never masters, lapses, order independence, ease bounds, XP rules)
+- `npm run test:integration`: 39 tests (10 new: server-only XP, per-exercise daily limit, skip
+  and wrong-character XP, daily goal once, lesson XP once, per-character mastery for words,
+  review due → review session → rescheduled, streak across 3 days in Asia/Shanghai with
+  achievements, concurrent submissions, offline batch incl. `lesson.complete`, idempotent
+  re-upload, rejections and another user's ids)
+- `npm run build`: succeeded; `/offline` and `/offline/practice` are static
+- `npx playwright test`: 12 passed, 2 intentionally skipped (desktop-only flows). New: download
+  a lesson → go offline → the service worker serves the offline page → practise → "Saved on this
+  device" → back online → outbox syncs → XP and 你 appear on Progress.
+- Manual browser check: a review round for 他 graded Good, "+8 XP" from the server, the "First
+  stroke" achievement, and Progress/Home updated (18 XP, 1-day streak); the 5-item mobile nav fits
+  at 375 px.
+
+**Fixed during testing:**
+
+- Hanzi Writer was loaded with a dynamic `import()`, a chunk the offline page never referenced,
+  so guided practice failed offline. It is now a static import.
+- The e2e writing helper fetched stroke data from the API, which can't work offline. It now
+  reads `hanzi-writer-data` in the test process.
+- The sign-up wait in e2e was too short under parallel load (bcrypt cost 12). It is now 20 s.
+
+**Issues / risks:**
+
+- SRS and XP numbers (D-020, D-021) are initial choices. Tune them once there is real usage.
+- Word attempts made before this migration have no per-character rows, so they don't count
+  towards mastery. This is development data only.
+- Offline data isn't cleared on sign-out (SECURITY.md limitation 7).
+- Offline practice covers downloaded lessons only. Review rounds need a connection.
+- Handwriting thresholds are still validated on synthetic ink only (carried over from M2).
+
+**Next actions (M4):** admin curriculum editing and import UI, analytics, moderation, a shared
+rate-limit store, nonce CSP, Sentry, clearing offline data on sign-out, then deployment, backups,
+smoke tests and release notes.

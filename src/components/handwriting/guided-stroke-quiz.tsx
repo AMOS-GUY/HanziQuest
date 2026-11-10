@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+// Static import so the library ships with the page and works in offline practice.
+import HanziWriter from "hanzi-writer";
 import type { CharacterStrokeJson } from "@/features/handwriting/reference-store";
 import { GridLines } from "@/components/characters/stroke-order-player";
 
@@ -37,8 +39,8 @@ export function GuidedStrokeQuiz({
     let cancelled = false;
     let writer: { cancelQuiz: () => void } | null = null;
 
-    import("hanzi-writer")
-      .then(({ default: HanziWriter }) => {
+    Promise.resolve()
+      .then(() => {
         if (cancelled) return;
         const size = Math.round(host.getBoundingClientRect().width);
         const instance = HanziWriter.create(host, hanzi, {

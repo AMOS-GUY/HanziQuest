@@ -11,10 +11,16 @@ export default async function CharacterPracticePage({
 }: {
   params: Promise<{ hanzi: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const hanzi = decodeURIComponent((await params).hanzi);
   if ([...hanzi].length !== 1) notFound();
   const payload = await getCharacterPractice(hanzi);
   if (!payload) notFound();
-  return <PracticeRunner payload={payload} exitHref={`/characters/${encodeURIComponent(hanzi)}`} />;
+  return (
+    <PracticeRunner
+      payload={payload}
+      userId={user.id}
+      exitHref={`/characters/${encodeURIComponent(hanzi)}`}
+    />
+  );
 }

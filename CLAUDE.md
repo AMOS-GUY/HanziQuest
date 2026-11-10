@@ -52,3 +52,8 @@ npm run content:validate
 - The local Postgres cluster must be UTF-8 (`scripts/local-postgres.ts` handles it).
 - Next 16: `params`/`searchParams` are Promises, and middleware is called `proxy.ts`.
 - `hanzi-writer-data` coordinates use a 1024 grid with the y axis pointing up (top edge y = 900).
+- Progress effects (XP, mastery, streaks) run inside the attempt transaction under a per-learner
+  advisory lock (`features/progress/record.ts`). Mastery/SRS are replayed from
+  `AttemptCharacterResult`; never update `CharacterMastery` or `ReviewSchedule` directly.
+- The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it
+  when caching rules change. Test offline flows with `npm run build` + Playwright.

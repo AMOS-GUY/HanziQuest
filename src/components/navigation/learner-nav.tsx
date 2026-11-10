@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Map, ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
+import {
+  ChartNoAxesColumn,
+  Home,
+  Map,
+  RefreshCcw,
+  ShieldCheck,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { Logo, Wordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utilities/cn";
 
@@ -12,10 +20,11 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-// Review and Progress join this list when those screens ship (milestone M3).
 const ITEMS: NavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/learn", label: "Learn", icon: Map },
+  { href: "/review", label: "Review", icon: RefreshCcw },
+  { href: "/progress", label: "Progress", icon: ChartNoAxesColumn },
   { href: "/profile", label: "Profile", icon: UserRound },
 ];
 
@@ -74,7 +83,7 @@ export function LearnerBottomNav() {
               href={href}
               aria-current={isActive(pathname, href) ? "page" : undefined}
               className={cn(
-                "text-muted-foreground flex min-w-16 flex-col items-center gap-0.5 px-3 py-2 text-xs font-bold",
+                "text-muted-foreground flex min-w-14 flex-col items-center gap-0.5 px-1.5 py-2 text-xs font-bold",
                 isActive(pathname, href) && "text-primary",
               )}
             >

@@ -48,10 +48,26 @@ PostgreSQL via Prisma 7. Schema: `prisma/schema.prisma`; migrations: `prisma/mig
   JSON (`evaluation`, including `engineVersion`), `mode` (GUIDED/INDEPENDENT), `result` and an
   integer `score`. `clientEventId` (UUID) makes submission idempotent.
 
+### Progress (M3)
+
+- `AttemptCharacterResult(attemptId, position)`: one row per character of an attempt, with
+  `mode`, `result`, `score` and `occurredAt` copied from the attempt. It is indexed on
+  `(userId, characterId, occurredAt)`. `CharacterMastery` and `ReviewSchedule` are derived from
+  these rows by replay (see D-022), so they can be rebuilt at any time with
+  `npm run progress:rebuild`.
+- `ExerciseAttempt.localDate`: the learner's local day of the attempt, used for the per-day XP
+  limits. `xpAwarded` is the XP that attempt earned.
+- `XPTransaction` is the ledger: balance = `SUM(amount)`, one unique `idempotencyKey` per grant.
+- `DailyActivity(userId, date)` holds the XP, exercise count and goal flag per local day.
+  `Streak` caches the current and longest runs, recomputed from `DailyActivity`.
+- `SyncEvent` is the offline inbox (id = client UUID). `Device` is keyed by `(userId,
+clientId)`, and `DownloadedContentVersion` records which lesson version each device holds.
+
 ### Mastery vs vocabulary
 
 Character mastery (`CharacterMastery`) and vocabulary knowledge are tracked separately. Guided
-and independent attempts have separate counters. No mastery logic exists yet (milestone M3).
+and independent attempts have separate counters, and only independent recall can make a
+character FAMILIAR or MASTERED.
 
 ## Local development database
 
