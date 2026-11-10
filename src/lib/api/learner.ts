@@ -11,8 +11,8 @@ export async function requireApiUser(): Promise<CurrentUser> {
 }
 
 /** Returns a 429 response when the learner exceeded the write rate, else null. */
-export function rateLimitWrite(userId: string): Response | null {
-  const limit = learningWriteLimiter.consume(userId);
+export async function rateLimitWrite(userId: string): Promise<Response | null> {
+  const limit = await learningWriteLimiter.consume(userId);
   if (limit.allowed) return null;
   const response = apiError(429, "rate_limited", "Too many requests. Please slow down.");
   response.headers.set("Retry-After", String(limit.retryAfterSeconds));

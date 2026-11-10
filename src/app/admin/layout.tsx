@@ -13,12 +13,31 @@ export const metadata: Metadata = {
 
 const NAV: (AdminNavItem & { permission: Permission })[] = [
   { href: "/admin", label: "Overview", icon: "layout-dashboard", permission: "admin:access" },
+  {
+    href: "/admin/curricula",
+    label: "Curricula",
+    icon: "library",
+    permission: "curriculum:read",
+  },
   { href: "/admin/lessons", label: "Lessons", icon: "book-open", permission: "curriculum:read" },
   {
     href: "/admin/characters",
     label: "Characters",
     icon: "languages",
     permission: "curriculum:read",
+  },
+  {
+    href: "/admin/vocabulary",
+    label: "Vocabulary",
+    icon: "book-a",
+    permission: "curriculum:read",
+  },
+  { href: "/admin/import", label: "Import", icon: "upload", permission: "content:import" },
+  {
+    href: "/admin/handwriting",
+    label: "Handwriting lab",
+    icon: "pen-line",
+    permission: "handwriting:validate",
   },
   { href: "/admin/users", label: "Users", icon: "users", permission: "users:read" },
   { href: "/admin/audit-logs", label: "Audit log", icon: "scroll-text", permission: "audit:read" },

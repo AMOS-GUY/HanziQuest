@@ -8,7 +8,7 @@ import { completeLessonSession } from "@/features/learning/sessions";
 export const POST = handleApi(
   async (_request: Request, context: { params: Promise<{ id: string }> }) => {
     const user = await requireApiUser();
-    const limited = rateLimitWrite(user.id);
+    const limited = await rateLimitWrite(user.id);
     if (limited) return limited;
     const { id } = await context.params;
     const result = await completeLessonSession(prisma, user.id, id);

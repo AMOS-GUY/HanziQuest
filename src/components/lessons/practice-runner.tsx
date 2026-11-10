@@ -28,7 +28,11 @@ import { cn } from "@/lib/utilities/cn";
 type SaveState = "saving" | "saved" | "queued" | "failed";
 
 export type PracticeMode =
-  { kind: "lesson"; lessonId: string } | { kind: "review" } | { kind: "free" };
+  | { kind: "lesson"; lessonId: string }
+  | { kind: "review" }
+  | { kind: "free" }
+  /** Admin preview: graded locally, nothing is saved. */
+  | { kind: "preview" };
 type Outcome =
   | { kind: "writing"; band: EvaluationBand; evaluation: WordEvaluation; eventId: string }
   | { kind: "guided"; band: EvaluationBand; mistakes: number; eventId: string };
@@ -123,7 +127,7 @@ export function PracticeRunner({
 
   const sessionKind = mode.kind;
   useEffect(() => {
-    if (sessionKind === "free") return;
+    if (sessionKind === "free" || sessionKind === "preview") return;
     let cancelled = false;
     (lessonId ? learningApi.startSession(lessonId) : learningApi.startReview())
       .then((r) => !cancelled && setSessionId(r.sessionId))
@@ -197,6 +201,7 @@ export function PracticeRunner({
   const submit = (body: Record<string, unknown>) => {
     if (!exercise) return "";
     const eventId = crypto.randomUUID();
+    if (mode.kind === "preview") return eventId;
     payloads.current.set(eventId, {
       clientEventId: eventId,
       exerciseId: exercise.id,
@@ -250,6 +255,12 @@ export function PracticeRunner({
       });
     };
     const anyQueued = Object.values(saves).some((v) => v === "queued");
+    if (mode.kind === "preview") {
+      setCompletion({ nextLessonId: null, queued: false });
+      setPhase("done");
+      setFinishing(false);
+      return;
+    }
     try {
       if (sessionId && !anyQueued) {
         try {
@@ -579,17 +590,19 @@ export function PracticeRunner({
               className="text-muted-foreground text-center text-xs font-semibold"
               aria-live="polite"
             >
-              {currentSave === "saving"
-                ? "Saving…"
-                : currentSave === "saved"
-                  ? outcome && xpByEvent[outcome.eventId]
-                    ? `Saved · +${xpByEvent[outcome.eventId]} XP`
-                    : "Saved"
-                  : currentSave === "queued"
-                    ? "Saved on this device. It will sync when you're online."
-                    : currentSave === "failed"
-                      ? "Not saved yet."
-                      : ""}
+              {mode.kind === "preview"
+                ? "Preview: nothing is saved."
+                : currentSave === "saving"
+                  ? "Saving…"
+                  : currentSave === "saved"
+                    ? outcome && xpByEvent[outcome.eventId]
+                      ? `Saved · +${xpByEvent[outcome.eventId]} XP`
+                      : "Saved"
+                    : currentSave === "queued"
+                      ? "Saved on this device. It will sync when you're online."
+                      : currentSave === "failed"
+                        ? "Not saved yet."
+                        : ""}
               {currentSave === "failed" ? (
                 <button
                   type="button"

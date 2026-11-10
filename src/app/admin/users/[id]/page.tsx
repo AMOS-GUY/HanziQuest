@@ -8,6 +8,8 @@ import { requirePagePermission } from "@/lib/auth/session";
 import { ROLE_DEFINITIONS } from "@/lib/permissions/permissions";
 import type { RoleKey } from "@/generated/prisma/enums";
 import { RoleEditor } from "./role-editor";
+import { AdminForm } from "@/components/admin/admin-form";
+import { setUserStatusAction } from "@/features/account/actions";
 
 export const metadata = { title: "User" };
 
@@ -74,6 +76,32 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
           <dd>{user._count.attempts}</dd>
         </dl>
       </Card>
+      {viewer.permissions.has("users:moderate") && viewer.id !== user.id ? (
+        <Card>
+          <CardTitle className="mb-1">Moderation</CardTitle>
+          <p className="text-muted-foreground mb-4 text-sm">
+            A suspended account is signed out on its next request and can&apos;t sign in until it is
+            reactivated. Every change is written to the audit log.
+          </p>
+          <AdminForm
+            action={setUserStatusAction.bind(null, user.id)}
+            submitLabel="Apply"
+            fields={[
+              {
+                name: "status",
+                label: "Status",
+                type: "select",
+                defaultValue: user.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED",
+                options: [
+                  { value: "SUSPENDED", label: "Suspend" },
+                  { value: "ACTIVE", label: "Reactivate" },
+                ],
+              },
+              { name: "reason", label: "Reason", required: true },
+            ]}
+          />
+        </Card>
+      ) : null}
       <Card>
         <CardTitle className="mb-3">Roles</CardTitle>
         {canManage ? (

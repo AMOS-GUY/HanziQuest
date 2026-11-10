@@ -6,12 +6,17 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Button } from "@/components/ui/button";
 import { PracticeRunner } from "@/components/lessons/practice-runner";
 import { getDb } from "@/features/offline/client/db";
+import { getActiveAccount } from "@/features/offline/client/account";
 import { SyncManager } from "./sync-manager";
 
 /** Runs a downloaded lesson from IndexedDB. */
 export function OfflinePractice() {
   const lessonId = useSearchParams().get("lesson") ?? "";
-  const pkg = useLiveQuery(async () => (await getDb()?.packages.get(lessonId)) ?? null, [lessonId]);
+  // Only the active account's downloads are usable; another account's are never shown.
+  const pkg = useLiveQuery(async () => {
+    const [owner, found] = await Promise.all([getActiveAccount(), getDb()?.packages.get(lessonId)]);
+    return found && owner && found.userId === owner ? found : null;
+  }, [lessonId]);
 
   if (pkg === undefined) return null;
   if (!pkg) {

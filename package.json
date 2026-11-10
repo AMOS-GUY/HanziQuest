@@ -28,6 +28,7 @@
     "content:import": "tsx scripts/content.ts import",
     "brand:icons": "tsx scripts/generate-icons.ts",
     "progress:rebuild": "tsx scripts/rebuild-progress.ts",
+    "handwriting:report": "tsx scripts/handwriting-report.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

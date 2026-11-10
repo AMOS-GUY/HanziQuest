@@ -409,4 +409,51 @@ describe("offline sync", () => {
     });
     expect(stolen.results[0]!.status).toBe("rejected");
   });
+
+  it("resumes an interrupted sync without duplicating XP", async () => {
+    const user = await newUser();
+    const deviceId = randomUUID();
+    const ex = await exercise(lesson1, "char:我:freehand").catch(() =>
+      exercise(lesson1, "char:你:freehand"),
+    );
+    const events = [0, 1].map(() => ({
+      id: randomUUID(),
+      type: "attempt" as const,
+      clientCreatedAt: new Date().toISOString(),
+      payload: {
+        exerciseId: ex.id,
+        occurredAt: new Date().toISOString(),
+        kind: "writing",
+        drawings: [ink((ex.evaluationConfig as { characters: string[] }).characters[0]!)],
+      },
+    }));
+    // A previous upload was cut off after the server stored the first event but before it
+    // finished processing it.
+    await prisma.syncEvent.create({
+      data: {
+        id: events[0]!.id,
+        userId: user,
+        deviceId: (await prisma.device.create({ data: { userId: user, clientId: deviceId } })).id,
+        type: "attempt",
+        payload: events[0]!.payload as unknown as Prisma.InputJsonValue,
+        clientCreatedAt: new Date(),
+      },
+    });
+    const first = await processSyncBatch(prisma, user, { deviceId, events });
+    expect(first.results.map((r) => r.status)).toEqual(["processed", "processed"]);
+    const xp = await prisma.xPTransaction.aggregate({
+      where: { userId: user },
+      _sum: { amount: true },
+    });
+
+    // The response was lost, so the device uploads the same batch again.
+    const again = await processSyncBatch(prisma, user, { deviceId, events });
+    expect(again.results.map((r) => r.status)).toEqual(["duplicate", "duplicate"]);
+    const xpAfter = await prisma.xPTransaction.aggregate({
+      where: { userId: user },
+      _sum: { amount: true },
+    });
+    expect(xpAfter._sum.amount).toBe(xp._sum.amount);
+    expect(await prisma.exerciseAttempt.count({ where: { userId: user } })).toBe(2);
+  });
 });

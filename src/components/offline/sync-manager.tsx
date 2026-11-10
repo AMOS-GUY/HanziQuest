@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CloudOff, RefreshCcw } from "lucide-react";
-import { getDb, setMeta } from "@/features/offline/client/db";
+import { getDb } from "@/features/offline/client/db";
+import { adoptAccount } from "@/features/offline/client/account";
 import { flushOutbox } from "@/features/offline/client/sync";
 
 const RETRY_MS = 60_000;
@@ -50,7 +51,7 @@ export function SyncManager({ userId }: { userId: string }) {
   const pending = counts?.pending ?? 0;
 
   useEffect(() => {
-    void setMeta("lastUserId", userId);
+    void adoptAccount(userId);
   }, [userId]);
 
   useEffect(() => {

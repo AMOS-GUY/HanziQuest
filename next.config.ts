@@ -36,6 +36,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   serverExternalPackages: ["@prisma/client", "pg", "hanzi-writer-data"],
+  experimental: {
+    // Curriculum imports are uploaded through a server action (validated, max 2 MB of JSON).
+    serverActions: { bodySizeLimit: "3mb" },
+  },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

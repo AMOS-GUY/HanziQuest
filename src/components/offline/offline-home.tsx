@@ -7,14 +7,15 @@ import { CloudOff, PenLine } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { getDb, getMeta } from "@/features/offline/client/db";
+import { getDb } from "@/features/offline/client/db";
+import { getActiveAccount } from "@/features/offline/client/account";
 import { SyncManager } from "./sync-manager";
 
 /** Offline landing page: downloaded lessons and what's waiting to sync. */
 export function OfflineHome() {
   const [userId, setUserId] = useState<string | null>();
   useEffect(() => {
-    void getMeta("lastUserId").then(setUserId);
+    void getActiveAccount().then(setUserId);
   }, []);
   const data = useLiveQuery(async () => {
     const db = getDb();
@@ -52,7 +53,14 @@ export function OfflineHome() {
         <h2 id="downloaded" className="mb-3 text-lg font-extrabold">
           Downloaded lessons
         </h2>
-        {!data ? null : data.packages.length === 0 ? (
+        {userId === null ? (
+          <Card>
+            <CardTitle className="text-base">Not signed in</CardTitle>
+            <CardDescription>
+              Sign in while online, then download lessons to practise them offline.
+            </CardDescription>
+          </Card>
+        ) : !data ? null : data.packages.length === 0 ? (
           <Card>
             <CardTitle className="text-base">No lessons downloaded</CardTitle>
             <CardDescription>

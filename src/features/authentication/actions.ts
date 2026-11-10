@@ -37,7 +37,7 @@ export async function loginAction(input: unknown, callbackUrl?: string): Promise
 
 export async function registerAction(input: unknown): Promise<ActionState> {
   const { ip, userAgent } = await getRequestInfo();
-  const limit = registerLimiter.consume(ip);
+  const limit = await registerLimiter.consume(ip);
   if (!limit.allowed) {
     return { error: "Too many accounts created from this network. Please try again later." };
   }

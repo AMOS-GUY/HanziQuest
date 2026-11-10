@@ -54,7 +54,11 @@ export async function completeLessonSession(
   const lessonId = session.lessonId;
 
   const [exercises, attempts] = await Promise.all([
-    prisma.lessonExercise.findMany({ where: { lessonId }, select: { exerciseId: true } }),
+    // Only published exercises are shown to learners, so only they are required.
+    prisma.lessonExercise.findMany({
+      where: { lessonId, exercise: { status: "PUBLISHED" } },
+      select: { exerciseId: true },
+    }),
     prisma.exerciseAttempt.findMany({
       where: { sessionId, userId },
       select: { exerciseId: true, result: true },

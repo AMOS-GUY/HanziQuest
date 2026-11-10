@@ -3,10 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BookA,
   BookOpen,
   Languages,
   LayoutDashboard,
+  Library,
+  PenLine,
   ScrollText,
+  Upload,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -18,6 +22,10 @@ const ICONS: Record<string, LucideIcon> = {
   languages: Languages,
   users: Users,
   "scroll-text": ScrollText,
+  library: Library,
+  "book-a": BookA,
+  upload: Upload,
+  "pen-line": PenLine,
 };
 
 export interface AdminNavItem {

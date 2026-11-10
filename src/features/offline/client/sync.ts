@@ -43,6 +43,9 @@ async function doFlush(userId: string): Promise<FlushResult> {
   const result: FlushResult = { sent: 0, rejected: 0, interrupted: false };
   if (!db) return result;
   const deviceId = await getDeviceId();
+  // Shrinks when the server says a batch is too large (413); a single oversized event is
+  // marked rejected so it can't block the queue.
+  let batchSize = BATCH;
   for (;;) {
     const events = await db.outbox
       .where("userId")
@@ -50,7 +53,7 @@ async function doFlush(userId: string): Promise<FlushResult> {
       .filter((e) => e.status === "pending")
       .sortBy("createdAt");
     if (events.length === 0) return result;
-    const batch = events.slice(0, BATCH);
+    const batch = events.slice(0, batchSize);
     let response: Response;
     try {
       response = await fetch("/api/sync", {
@@ -69,6 +72,15 @@ async function doFlush(userId: string): Promise<FlushResult> {
       });
     } catch {
       return { ...result, interrupted: true };
+    }
+    if (response.status === 413) {
+      if (batchSize > 1) {
+        batchSize = Math.max(1, Math.floor(batchSize / 4));
+        continue;
+      }
+      await db.outbox.update(batch[0]!.id, { status: "rejected", error: "Too large to sync" });
+      result.rejected += 1;
+      continue;
     }
     if (!response.ok) {
       // 401: signed out; 429/5xx: try later. Nothing is dropped.

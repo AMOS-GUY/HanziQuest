@@ -35,6 +35,12 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     include: { roles: { include: { role: true } }, profile: true },
   });
   if (!user || user.status !== "ACTIVE") return null;
+  // Sessions issued before a password change are no longer valid.
+  if (
+    user.credentialsChangedAt &&
+    (session?.issuedAt ?? 0) * 1000 < user.credentialsChangedAt.getTime()
+  )
+    return null;
 
   const roles = user.roles.map((r) => r.role.key);
   return {
