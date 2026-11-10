@@ -8,6 +8,7 @@ export const PERMISSIONS = [
   "curriculum:publish",
   "content:import",
   "handwriting:validate",
+  "feedback:manage",
   "users:read",
   "users:moderate",
   "users:manage-roles",
@@ -27,10 +28,11 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly Permission[]> = {
     "curriculum:publish",
     "content:import",
     "handwriting:validate",
+    "feedback:manage",
   ],
-  MODERATOR: ["admin:access", "curriculum:read", "users:read", "users:moderate"],
+  MODERATOR: ["admin:access", "curriculum:read", "users:read", "users:moderate", "feedback:manage"],
   ANALYST: ["admin:access", "curriculum:read", "analytics:read"],
-  SUPPORT: ["admin:access", "users:read"],
+  SUPPORT: ["admin:access", "users:read", "feedback:manage"],
   LEARNER: [],
 };
 

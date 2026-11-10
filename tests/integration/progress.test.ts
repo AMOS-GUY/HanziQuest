@@ -17,7 +17,8 @@ import { getProgressSummary } from "@/features/progress/queries";
 import { XP } from "@/features/progress/xp-rules";
 import { fromMakeMeAHanzi } from "@/features/handwriting/reference";
 import type { Prisma } from "@/generated/prisma/client";
-import { toInk } from "../support/handwriting-fixtures";
+import { longestStroke, toInk, variants } from "../support/handwriting-fixtures";
+import { techniqueVerdict } from "@/features/handwriting/technique";
 import { ensureRoles, testPrisma, uniqueEmail } from "./helpers";
 
 const prisma = testPrisma();
@@ -455,5 +456,65 @@ describe("offline sync", () => {
     });
     expect(xpAfter._sum.amount).toBe(xp._sum.amount);
     expect(await prisma.exerciseAttempt.count({ where: { userId: user } })).toBe(2);
+  });
+});
+
+describe("recall vs technique", () => {
+  it("records a technique fault, caps XP and keeps guided practice out of technique", async () => {
+    const user = await newUser();
+    const ex = await exercise(lesson1, "char:好:freehand");
+    const r = fromMakeMeAHanzi("好", loadStrokeData("好")!.medians);
+    const reversed = toInk(variants.reversed(r, longestStroke(r)), { seed: 21 });
+    const out = await submitAttempt(prisma, user, {
+      clientEventId: randomUUID(),
+      exerciseId: ex.id,
+      occurredAt: new Date().toISOString(),
+      kind: "writing",
+      drawings: [reversed],
+    });
+    const evaluation = (out.evaluation as { characters: Parameters<typeof techniqueVerdict>[0][] })
+      .characters[0]!;
+    const verdict = techniqueVerdict(evaluation);
+    const row = await prisma.attemptCharacterResult.findFirstOrThrow({
+      where: { attempt: { clientEventId: { not: "" } }, userId: user },
+    });
+    expect(row.techniqueOk).toBe(verdict);
+    expect(verdict).toBe(false);
+    {
+      expect(out.xpAwarded).toBeLessThanOrEqual(XP.techniqueFault);
+      const m = await prisma.characterMastery.findFirstOrThrow({ where: { userId: user } });
+      expect(m.lastTechniqueOk).toBe(false);
+      expect(m.consecutiveCleanTechnique).toBe(0);
+    }
+
+    const guided = await exercise(lesson1, "char:好:guided-stroke");
+    await submitAttempt(prisma, user, {
+      clientEventId: randomUUID(),
+      exerciseId: guided.id,
+      occurredAt: new Date().toISOString(),
+      kind: "guided",
+      mistakes: 0,
+    });
+    const rows = await prisma.attemptCharacterResult.findMany({
+      where: { userId: user, mode: "GUIDED" },
+    });
+    expect(rows.every((g) => g.techniqueOk === null)).toBe(true);
+  });
+
+  it("never advances mastery for a wrong character", async () => {
+    const user = await newUser();
+    const ex = await exercise(lesson1, "char:你:freehand");
+    for (let i = 0; i < 3; i += 1) {
+      await submitAttempt(prisma, user, write(ex.id, ["我"], { clientEventId: randomUUID() }));
+    }
+    const m = await prisma.characterMastery.findFirstOrThrow({
+      where: { userId: user, character: { hanzi: "你" } },
+    });
+    expect(m.independentSuccesses).toBe(0);
+    expect(m.level).toBe("LEARNING");
+    const s = await prisma.reviewSchedule.findFirstOrThrow({
+      where: { userId: user, character: { hanzi: "你" } },
+    });
+    expect(s.repetitions).toBe(0);
   });
 });

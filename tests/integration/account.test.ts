@@ -167,3 +167,61 @@ describe("shared rate limit store", () => {
     }
   });
 });
+
+describe("beta terms and feedback", () => {
+  it("records terms acceptance at registration and on later acceptance", async () => {
+    const { LEGAL_VERSION } = await import("@/features/legal/version");
+    const { acceptTerms } = await import("@/features/account/account");
+    const r = await registerUser(prisma, {
+      displayName: "T",
+      email: uniqueEmail("terms"),
+      password: "password-1234",
+      acceptTerms: true,
+    });
+    if (!r.ok) throw new Error("setup");
+    const p = await prisma.profile.findUniqueOrThrow({ where: { userId: r.userId } });
+    expect(p.termsVersion).toBe(LEGAL_VERSION);
+    const legacy = await newUser();
+    expect(
+      (await prisma.profile.findUniqueOrThrow({ where: { userId: legacy } })).termsVersion,
+    ).toBeNull();
+    await acceptTerms(prisma, legacy);
+    expect(
+      (await prisma.profile.findUniqueOrThrow({ where: { userId: legacy } })).termsVersion,
+    ).toBe(LEGAL_VERSION);
+  });
+
+  it("stores feedback with minimal metadata and audits status changes", async () => {
+    const { submitFeedback, updateFeedbackStatus } = await import("@/features/feedback/feedback");
+    const user = await newUser();
+    await expect(submitFeedback(prisma, user, { kind: "BUG", message: "short" })).rejects.toThrow();
+    const f = await submitFeedback(
+      prisma,
+      user,
+      {
+        kind: "HANDWRITING",
+        message: "My 你 was rejected but looked right",
+        pagePath: "/practice/lesson/x?token=secret",
+        allowContact: "yes",
+      },
+      {
+        userAgent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+      },
+    );
+    expect(f.pagePath).toBe("/practice/lesson/x");
+    expect(f.userAgent).toBe("Safari on iOS");
+    expect(f.allowContact).toBe(true);
+    const staff = await newUser();
+    await updateFeedbackStatus(prisma, { id: staff, roles: ["SUPPORT"] }, f.id, {
+      status: "TRIAGED",
+      staffNote: "GH-12",
+    });
+    expect((await prisma.feedback.findUniqueOrThrow({ where: { id: f.id } })).status).toBe(
+      "TRIAGED",
+    );
+    expect(
+      await prisma.auditLog.count({ where: { entityId: f.id, action: "feedback.status" } }),
+    ).toBe(1);
+  });
+});

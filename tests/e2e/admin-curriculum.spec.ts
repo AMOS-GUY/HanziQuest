@@ -122,7 +122,7 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
 
   // Handwriting lab: record a labelled sample with consent.
   await page.goto("/admin/handwriting");
-  await page.getByLabel("Participant code").fill("P99");
+  await page.getByLabel("Participant code").fill("TEST-E2E");
   await page.getByLabel("Character asked for").selectOption("你");
   await page.getByRole("checkbox").check();
   await writeOnCanvas(page, "你");

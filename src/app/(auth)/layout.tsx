@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Logo, Wordmark } from "@/components/brand/logo";
 import { getCurrentUser } from "@/lib/auth/session";
+import { SiteFooter } from "@/components/brand/site-footer";
 
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
   if (await getCurrentUser()) redirect("/home");
@@ -11,7 +12,10 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         <Logo size={44} priority />
         <Wordmark />
       </Link>
-      <div className="w-full max-w-sm">{children}</div>
+      <div className="w-full max-w-sm flex-1">{children}</div>
+      <div className="w-full max-w-sm">
+        <SiteFooter />
+      </div>
     </main>
   );
 }

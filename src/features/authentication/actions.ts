@@ -6,7 +6,7 @@ import { prisma } from "@/lib/database/prisma";
 import { registerUser } from "@/features/authentication/register";
 import { registerLimiter } from "@/lib/security/rate-limit";
 import { getRequestInfo } from "@/lib/security/request-info";
-import { loginSchema } from "@/lib/validation/auth";
+import { loginSchema, registerFormSchema } from "@/lib/validation/auth";
 import { safeRedirectPath } from "@/lib/utilities/safe-redirect";
 
 export interface ActionState {
@@ -41,6 +41,11 @@ export async function registerAction(input: unknown): Promise<ActionState> {
   if (!limit.allowed) {
     return { error: "Too many accounts created from this network. Please try again later." };
   }
+
+  // The beta terms must be accepted; enforced here, not only in the browser.
+  const terms = registerFormSchema.pick({ acceptTerms: true }).safeParse(input);
+  if (!terms.success)
+    return { fieldErrors: { acceptTerms: ["Please accept the beta terms and privacy notice"] } };
 
   const result = await registerUser(prisma, input, { ip, userAgent });
   if (!result.ok) {

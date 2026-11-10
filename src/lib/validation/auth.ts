@@ -29,7 +29,15 @@ export const registerSchema = z.object({
   displayName: displayNameSchema,
   email: emailSchema,
   password: passwordSchema,
+  /** Recorded with the terms version when true. Required by the sign-up form and action. */
+  acceptTerms: z.boolean().optional(),
 });
+
+/** What the public sign-up form and action require: the beta terms must be accepted. */
+export const registerFormSchema = registerSchema.extend({
+  acceptTerms: z.literal(true, "Please accept the beta terms and privacy notice"),
+});
+export type RegisterFormInput = z.infer<typeof registerFormSchema>;
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;

@@ -110,3 +110,50 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Long-form public documents (privacy, terms, beta guide). */
+.prose-hq h1 {
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1.15;
+  margin-bottom: 0.5rem;
+}
+.prose-hq h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+}
+.prose-hq p,
+.prose-hq li {
+  line-height: 1.65;
+}
+.prose-hq p {
+  margin-bottom: 0.75rem;
+}
+.prose-hq ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.prose-hq li {
+  margin-bottom: 0.25rem;
+}
+.prose-hq a {
+  color: var(--color-primary);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.prose-hq table {
+  width: 100%;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+}
+.prose-hq th,
+.prose-hq td {
+  border: 2px solid var(--color-border);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}

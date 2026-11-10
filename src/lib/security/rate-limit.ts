@@ -148,5 +148,7 @@ export const learningWriteLimiter = createLimit("learning", 120, 60 * 1000);
 export const adminMutationLimiter = createLimit("admin", 60, 60 * 1000);
 /** 5 password changes per hour per user. */
 export const passwordChangeLimiter = createLimit("password", 5, 60 * 60 * 1000);
+/** 10 feedback messages per hour per user. */
+export const feedbackLimiter = createLimit("feedback", 10, 60 * 60 * 1000);
 /** 30 client error reports per 10 minutes per IP. */
 export const clientErrorLimiter = createLimit("client-error", 30, 10 * 60 * 1000);

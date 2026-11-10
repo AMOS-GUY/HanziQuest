@@ -1,0 +1,62 @@
+name: Bug report
+description: Something in HanziQuest is broken or behaves unexpectedly.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please do **not** include passwords, emails or other personal data.
+        Security problems: contact the maintainers privately instead of opening an issue.
+  - type: textarea
+    id: steps
+    attributes:
+      label: What did you do?
+      description: Steps to reproduce, one per line.
+      placeholder: "1. Open lesson 'Saying hello'\n2. Write 你 from memory\n3. Press Check"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+      description: Include the error reference shown on the error page, if any.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Sign-in / account
+        - Lessons / practice
+        - Handwriting grading
+        - Review / progress / XP
+        - Offline / sync
+        - Admin
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: "e.g. iPhone 13, Safari 18 / Windows laptop, Chrome 131"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How bad is it?
+      options:
+        - "S1: data loss, security, or nobody can use the app"
+        - "S2: a main feature is broken, no workaround"
+        - "S3: broken but there is a workaround"
+        - "S4: cosmetic or minor"
+    validations:
+      required: true

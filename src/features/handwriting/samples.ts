@@ -7,6 +7,7 @@ import { inkStrokeSchema } from "@/features/exercises/attempt-schema";
 import { ENGINE_VERSION } from "./evaluate";
 import { fromMakeMeAHanzi } from "./reference";
 import type { InkStroke, ReferenceCharacter } from "./types";
+import { pilotPlan, sampleKey, TEST_PARTICIPANT_PREFIX } from "./pilot";
 import {
   computeMetrics,
   SAMPLE_CATEGORIES,
@@ -27,6 +28,16 @@ export const sampleInputSchema = z.object({
   style: z.string().trim().max(40).optional().nullable(),
   inputDevice: z.enum(["finger", "stylus", "mouse", "trackpad"]),
   canvasSizePx: z.number().int().min(80).max(4000).optional(),
+  /** Coarse device facts only (no full user agent): limits fingerprinting. */
+  deviceInfo: z
+    .object({
+      screen: z.string().max(20),
+      pixelRatio: z.number().min(0.5).max(6),
+      pointer: z.enum(["coarse", "fine", "unknown"]),
+      browser: z.string().max(20),
+      os: z.string().max(20),
+    })
+    .optional(),
   strokes: z.array(inkStrokeSchema).min(1).max(40),
   notes: z.string().trim().max(500).optional().nullable(),
   consentConfirmed: z.literal(true, "Confirm the participant consented before recording."),
@@ -73,6 +84,7 @@ export async function recordSample(prisma: PrismaClient, actor: Actor, raw: unkn
         style: input.style ?? null,
         inputDevice: input.inputDevice,
         canvasSizePx: input.canvasSizePx ?? null,
+        deviceInfo: input.deviceInfo ?? undefined,
         strokes: input.strokes,
         engineVersion: ENGINE_VERSION,
         band: evaluation.band,
@@ -96,10 +108,20 @@ export async function recordSample(prisma: PrismaClient, actor: Actor, raw: unkn
   return { sampleId: sample.id, evaluation, accepted, detected };
 }
 
-/** Re-scores every stored sample with the current engine and computes the metrics. */
-export async function analyseSamples(prisma: PrismaClient, limit = 20_000) {
+/**
+ * Re-scores stored samples with the current engine and computes the metrics. Samples from
+ * automated tests (participant codes starting with TEST) are excluded unless asked for.
+ */
+export async function analyseSamples(
+  prisma: PrismaClient,
+  limit = 20_000,
+  { includeTests = false }: { includeTests?: boolean } = {},
+) {
   const [samples, candidates] = await Promise.all([
     prisma.handwritingSample.findMany({
+      where: includeTests
+        ? {}
+        : { NOT: { participantCode: { startsWith: TEST_PARTICIPANT_PREFIX } } },
       take: limit,
       orderBy: { createdAt: "asc" },
       include: { character: { select: { hanzi: true } } },
@@ -128,4 +150,29 @@ export async function analyseSamples(prisma: PrismaClient, limit = 20_000) {
     ];
   });
   return { samples: scored, metrics: computeMetrics(scored) };
+}
+
+/** Pilot progress for one participant: which plan prompts are recorded, and what's next. */
+export async function pilotProgress(prisma: PrismaClient, participantCode: string) {
+  const code = participantCode.toUpperCase();
+  const plan = pilotPlan(code);
+  const rows = await prisma.handwritingSample.findMany({
+    where: { participantCode: code },
+    select: { category: true, style: true, character: { select: { hanzi: true } } },
+  });
+  const done = new Set(
+    rows.map((r) => sampleKey({ hanzi: r.character.hanzi, category: r.category, style: r.style })),
+  );
+  const remaining = plan.filter((p) => !done.has(p.key));
+  return { plan, recorded: plan.length - remaining.length, next: remaining[0] ?? null };
+}
+
+/** Per-participant sample counts (human samples only). */
+export async function participantSummary(prisma: PrismaClient) {
+  const rows = await prisma.handwritingSample.groupBy({
+    by: ["participantCode"],
+    where: { NOT: { participantCode: { startsWith: TEST_PARTICIPANT_PREFIX } } },
+    _count: true,
+  });
+  return rows.map((r) => ({ code: r.participantCode, samples: r._count }));
 }

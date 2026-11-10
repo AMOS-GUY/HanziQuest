@@ -6,10 +6,12 @@ import { attemptXp, XP } from "@/features/progress/xp-rules";
 const T0 = new Date("2026-11-10T08:00:00Z");
 const at = (days: number, minutes = 0) =>
   new Date(T0.getTime() + days * 86_400_000 + minutes * 60_000);
+/** Independent writing as the server records it: clean technique on every recall. */
 const ind = (d: Date, result: CharacterEvent["result"] = "EXCELLENT"): CharacterEvent => ({
   occurredAt: d,
   mode: "INDEPENDENT",
   result,
+  techniqueOk: result === "EXCELLENT" || result === "GOOD" ? true : null,
 });
 const guided = (d: Date, result: CharacterEvent["result"] = "EXCELLENT"): CharacterEvent => ({
   occurredAt: d,
@@ -170,5 +172,56 @@ describe("XP rules", () => {
       attemptXp({ ...base, result: "EXCELLENT", attemptXpToday: XP.dailyAttemptCap - 3 }),
     ).toBe(3);
     expect(attemptXp({ ...base, result: "EXCELLENT", attemptXpToday: XP.dailyAttemptCap })).toBe(0);
+  });
+});
+
+describe("recall vs technique policy", () => {
+  const rec = (d: Date, techniqueOk: boolean | null, result: CharacterEvent["result"] = "GOOD") =>
+    ({ occurredAt: d, mode: "INDEPENDENT", result, techniqueOk }) as CharacterEvent;
+  const spaced = [0, 1, 4, 12, 30];
+
+  it("never masters a character while its strokes are out of order or reversed", () => {
+    const r = replayCharacter(spaced.map((d) => rec(at(d), false)))!;
+    expect(r.review.repetitions).toBeGreaterThanOrEqual(4);
+    expect(r.mastery.level).toBe("FAMILIAR");
+    expect(r.mastery.techniqueAttempts).toBe(5);
+    expect(r.mastery.techniqueClean).toBe(0);
+    expect(r.mastery.lastTechniqueOk).toBe(false);
+  });
+
+  it("masters once the last recalls are written with clean technique", () => {
+    const events = [rec(at(0), false), rec(at(1), false), rec(at(4), true), rec(at(12), true)];
+    expect(replayCharacter(events)!.mastery.level).toBe("MASTERED");
+    // One more faulty recall drops it back below MASTERED.
+    expect(replayCharacter([...events, rec(at(30), false)])!.mastery.level).toBe("FAMILIAR");
+  });
+
+  it("brings faulty-technique recalls back sooner than clean ones", () => {
+    const clean = replayCharacter([0, 1, 4].map((d) => rec(at(d), true)))!;
+    const faulty = replayCharacter([rec(at(0), true), rec(at(1), true), rec(at(4), false)])!;
+    expect(faulty.review.intervalDays).toBeLessThan(clean.review.intervalDays);
+    expect(faulty.review.easeFactor).toBeLessThan(clean.review.easeFactor);
+  });
+
+  it("never advances anything for a wrong character", () => {
+    const r = replayCharacter([rec(at(0), true), rec(at(1), null, "TRY_AGAIN")])!;
+    expect(r.review.repetitions).toBe(0);
+    expect(r.review.lapses).toBe(1);
+    expect(r.mastery.level).toBe("LEARNING");
+    expect(r.mastery.techniqueAttempts).toBe(1);
+  });
+
+  it("ignores technique on guided practice", () => {
+    const r = replayCharacter([
+      { occurredAt: at(0), mode: "GUIDED", result: "EXCELLENT", techniqueOk: true },
+    ])!;
+    expect(r.mastery.techniqueAttempts).toBe(0);
+  });
+
+  it("caps XP for a recall with a technique fault", () => {
+    const base = { mode: "INDEPENDENT" as const, rewardedToday: 0, attemptXpToday: 0 };
+    expect(attemptXp({ ...base, result: "GOOD", techniqueFault: true })).toBe(XP.techniqueFault);
+    expect(attemptXp({ ...base, result: "GOOD" })).toBe(XP.attempt.GOOD);
+    expect(XP.techniqueFault).toBeGreaterThan(XP.attempt.NEEDS_IMPROVEMENT);
   });
 });

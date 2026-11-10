@@ -8,6 +8,7 @@ import {
   Languages,
   LayoutDashboard,
   Library,
+  MessageSquare,
   PenLine,
   ScrollText,
   Upload,
@@ -26,6 +27,7 @@ const ICONS: Record<string, LucideIcon> = {
   "book-a": BookA,
   upload: Upload,
   "pen-line": PenLine,
+  message: MessageSquare,
 };
 
 export interface AdminNavItem {

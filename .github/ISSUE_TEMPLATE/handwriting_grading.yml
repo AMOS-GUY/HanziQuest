@@ -1,0 +1,28 @@
+name: Handwriting grading problem
+description: The writing checker accepted or rejected something it shouldn't have.
+labels: ["handwriting", "triage"]
+body:
+  - type: input
+    id: character
+    attributes:
+      label: Character asked for
+    validations:
+      required: true
+  - type: dropdown
+    id: verdict
+    attributes:
+      label: What went wrong?
+      options:
+        - Correct writing was rejected
+        - A wrong character was accepted
+        - The feedback named the wrong problem (e.g. wrong stroke number)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What you wrote, what the app said, and the input (finger / stylus / mouse).
+    validations:
+      required: true
