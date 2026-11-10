@@ -1,0 +1,954 @@
+// HanziQuest database schema.
+// See docs/DATABASE.md for the design rationale behind each domain.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum RoleKey {
+  SUPER_ADMIN
+  CURRICULUM_EDITOR
+  MODERATOR
+  ANALYST
+  SUPPORT
+  LEARNER
+}
+
+enum ExperienceLevel {
+  NEW
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum CurriculumFramework {
+  HSK_2_0
+  HSK_3_0
+  CUSTOM
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// How trustworthy a content record is. Only VERIFIED content may be labelled official.
+enum VerificationStatus {
+  PROVISIONAL
+  REVIEWED
+  VERIFIED
+}
+
+enum LicenseStatus {
+  UNKNOWN
+  OPEN_LICENSE
+  LICENSED
+  ORIGINAL
+  PUBLIC_FACT
+}
+
+enum CharacterAssetType {
+  STROKE_DATA
+  AUDIO
+  IMAGE
+}
+
+enum ExerciseType {
+  PINYIN_TO_HANZI
+  MEANING_TO_HANZI
+  GUIDED_STROKE
+  FREEHAND_WRITING
+  CHARACTER_RECONSTRUCTION
+  LISTENING_TO_WRITING
+}
+
+enum PracticeMode {
+  GUIDED
+  INDEPENDENT
+}
+
+enum AttemptResult {
+  EXCELLENT
+  GOOD
+  NEEDS_IMPROVEMENT
+  TRY_AGAIN
+  SKIPPED
+}
+
+enum MasteryLevel {
+  NEW
+  LEARNING
+  FAMILIAR
+  MASTERED
+}
+
+enum LearningSessionType {
+  LESSON
+  REVIEW
+  PRACTICE
+  ASSESSMENT
+}
+
+enum AssessmentStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum XPReason {
+  EXERCISE_COMPLETED
+  LESSON_COMPLETED
+  REVIEW_COMPLETED
+  DAILY_GOAL_MET
+  ACHIEVEMENT_EARNED
+  ADMIN_ADJUSTMENT
+}
+
+enum SyncEventStatus {
+  RECEIVED
+  PROCESSED
+  DUPLICATE
+  REJECTED
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  IN_GRACE_PERIOD
+  CANCELED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Authentication
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  /// bcrypt hash. Null for users who only sign in through an OAuth provider.
+  passwordHash  String?
+  status        UserStatus @default(ACTIVE)
+  lastLoginAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  profile             Profile?
+  accounts            Account[]
+  sessions            Session[]
+  roles               UserRole[]                 @relation("UserRoles")
+  rolesAssigned       UserRole[]                 @relation("RoleAssigner")
+  learningSessions    LearningSession[]
+  attempts            ExerciseAttempt[]
+  masteries           CharacterMastery[]
+  reviewSchedules     ReviewSchedule[]
+  learningGoals       LearningGoal[]
+  assessments         PlacementAssessment[]
+  xpTransactions      XPTransaction[]
+  achievements        UserAchievement[]
+  dailyActivities     DailyActivity[]
+  streak              Streak?
+  devices             Device[]
+  syncEvents          SyncEvent[]
+  downloadedContent   DownloadedContentVersion[]
+  auditLogs           AuditLog[]
+  contentRevisions    ContentRevision[]
+  subscriptions       Subscription[]
+  paymentCustomers    PaymentCustomer[]
+  paymentTransactions PaymentTransaction[]
+  entitlements        Entitlement[]
+
+  @@index([status])
+}
+
+model Profile {
+  id                     String          @id @default(cuid())
+  userId                 String          @unique
+  displayName            String
+  experienceLevel        ExperienceLevel @default(NEW)
+  /// Self-reported. Never treated as proven mastery (see placement assessment).
+  declaredHskLevel       Int?
+  declaredLessonNote     String?
+  learningObjectives     String[]
+  dailyGoalXp            Int             @default(30)
+  timezone               String          @default("UTC")
+  locale                 String          @default("en")
+  notificationsEnabled   Boolean         @default(true)
+  reviewRemindersEnabled Boolean         @default(true)
+  onboardingCompletedAt  DateTime?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Auth.js OAuth account link.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+/// Auth.js database session (unused while the JWT strategy is active; kept for adapter compatibility).
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  key         RoleKey  @unique
+  name        String
+  description String
+  createdAt   DateTime @default(now())
+
+  users UserRole[]
+}
+
+model UserRole {
+  userId       String
+  roleId       String
+  assignedById String?
+  createdAt    DateTime @default(now())
+
+  user       User  @relation("UserRoles", fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("RoleAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Curriculum
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A versioned curriculum, e.g. "HSK 2.0 starter v1". Content is never shared
+/// silently between versions: lessons and exercises belong to exactly one version.
+model Curriculum {
+  id            String              @id @default(cuid())
+  slug          String              @unique
+  name          String
+  framework     CurriculumFramework
+  version       String
+  description   String?
+  status        PublicationStatus   @default(DRAFT)
+  source        String
+  licenseStatus LicenseStatus       @default(UNKNOWN)
+  verification  VerificationStatus  @default(PROVISIONAL)
+  publishedAt   DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  levels      HSKLevel[]
+  exercises   Exercise[]
+  attempts    ExerciseAttempt[]
+  assessments PlacementAssessment[]
+
+  @@unique([framework, version])
+}
+
+model HSKLevel {
+  id           String   @id @default(cuid())
+  curriculumId String
+  level        Int
+  name         String
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  curriculum Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  units      Unit[]
+
+  @@unique([curriculumId, level])
+}
+
+model Unit {
+  id          String   @id @default(cuid())
+  levelId     String
+  slug        String
+  title       String
+  description String?
+  position    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  level   HSKLevel @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  lessons Lesson[]
+
+  @@unique([levelId, slug])
+  @@index([levelId, position])
+}
+
+model Lesson {
+  id             String            @id @default(cuid())
+  unitId         String
+  slug           String
+  title          String
+  description    String?
+  position       Int
+  status         PublicationStatus @default(DRAFT)
+  /// Incremented whenever the lesson's learner-facing content changes; offline packages compare against it.
+  contentVersion Int               @default(1)
+  publishedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  unit              Unit                       @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  vocabulary        LessonVocabulary[]
+  characters        LessonCharacter[]
+  exercises         LessonExercise[]
+  learningSessions  LearningSession[]
+  downloadedContent DownloadedContentVersion[]
+
+  @@unique([unitId, slug])
+  @@index([unitId, position])
+  @@index([status])
+}
+
+/// A single Chinese character. Independent of any curriculum version.
+model Character {
+  id                 String             @id @default(cuid())
+  /// Simplified form.
+  hanzi              String             @unique
+  traditional        String?
+  /// Primary reading with tone marks, e.g. "nǐ".
+  pinyin             String
+  pinyinAlternatives String[]
+  meaning            String
+  radical            String?
+  /// Derived from verified stroke data where available.
+  strokeCount        Int?
+  hasStrokeData      Boolean            @default(false)
+  source             String
+  licenseStatus      LicenseStatus      @default(UNKNOWN)
+  verification       VerificationStatus @default(PROVISIONAL)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  strokes         CharacterStroke[]
+  assets          CharacterAsset[]
+  vocabulary      VocabularyCharacter[]
+  lessons         LessonCharacter[]
+  exercises       Exercise[]
+  attempts        ExerciseAttempt[]
+  masteries       CharacterMastery[]
+  reviewSchedules ReviewSchedule[]
+  assessmentItems AssessmentResult[]
+}
+
+/// Reference stroke geometry (from hanzi-writer-data / Make Me a Hanzi).
+/// Coordinates use the 1024x1024 Make Me a Hanzi space.
+model CharacterStroke {
+  id          String @id @default(cuid())
+  characterId String
+  strokeIndex Int
+  /// SVG outline path of the stroke.
+  path        String
+  /// Ordered median points [[x, y], ...] from stroke start to end.
+  median      Json
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, strokeIndex])
+}
+
+model CharacterAsset {
+  id            String             @id @default(cuid())
+  characterId   String
+  type          CharacterAssetType
+  url           String
+  source        String
+  licenseStatus LicenseStatus      @default(UNKNOWN)
+  checksum      String?
+  createdAt     DateTime           @default(now())
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@index([characterId, type])
+}
+
+/// A word (one or more characters). Tracked separately from character mastery.
+model Vocabulary {
+  id            String             @id @default(cuid())
+  simplified    String
+  traditional   String?
+  pinyin        String
+  meaning       String
+  partOfSpeech  String?
+  audioUrl      String?
+  exampleZh     String?
+  examplePinyin String?
+  exampleEn     String?
+  source        String
+  licenseStatus LicenseStatus      @default(UNKNOWN)
+  verification  VerificationStatus @default(PROVISIONAL)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  characters VocabularyCharacter[]
+  lessons    LessonVocabulary[]
+  exercises  Exercise[]
+
+  @@unique([simplified, pinyin])
+}
+
+model VocabularyCharacter {
+  vocabularyId String
+  characterId  String
+  position     Int
+
+  vocabulary Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+  character  Character  @relation(fields: [characterId], references: [id], onDelete: Restrict)
+
+  @@id([vocabularyId, position])
+  @@index([characterId])
+}
+
+model LessonVocabulary {
+  lessonId     String
+  vocabularyId String
+  position     Int
+
+  lesson     Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  vocabulary Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Restrict)
+
+  @@id([lessonId, vocabularyId])
+  @@index([vocabularyId])
+}
+
+/// Characters taught in a lesson. `isNew` marks the first lesson that introduces the character.
+model LessonCharacter {
+  lessonId    String
+  characterId String
+  position    Int
+  isNew       Boolean @default(true)
+
+  lesson    Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Restrict)
+
+  @@id([lessonId, characterId])
+  @@index([characterId])
+}
+
+model Exercise {
+  id               String            @id @default(cuid())
+  /// Stable key from the content source, unique within a curriculum version.
+  key              String
+  curriculumId     String
+  type             ExerciseType
+  /// Structured prompt, e.g. { "pinyin": "nǐ hǎo" } or { "meaning": "thank you" }.
+  prompt           Json
+  expectedAnswer   String
+  characterId      String?
+  vocabularyId     String?
+  difficulty       Int               @default(1)
+  audioUrl         String?
+  hint             String?
+  evaluationConfig Json
+  status           PublicationStatus @default(PUBLISHED)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  curriculum      Curriculum         @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  character       Character?         @relation(fields: [characterId], references: [id], onDelete: Restrict)
+  vocabulary      Vocabulary?        @relation(fields: [vocabularyId], references: [id], onDelete: Restrict)
+  lessons         LessonExercise[]
+  attempts        ExerciseAttempt[]
+  assessmentItems AssessmentResult[]
+
+  @@unique([curriculumId, key])
+  @@index([characterId])
+  @@index([vocabularyId])
+}
+
+model LessonExercise {
+  lessonId   String
+  exerciseId String
+  position   Int
+
+  lesson   Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@id([lessonId, exerciseId])
+  @@index([lessonId, position])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Learning
+// ─────────────────────────────────────────────────────────────────────────────
+
+model LearningSession {
+  id        String              @id @default(cuid())
+  userId    String
+  lessonId  String?
+  deviceId  String?
+  type      LearningSessionType
+  startedAt DateTime            @default(now())
+  endedAt   DateTime?
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson   Lesson?           @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  device   Device?           @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  attempts ExerciseAttempt[]
+
+  @@index([userId, startedAt])
+}
+
+/// Immutable history of every exercise attempt. Derived state (mastery, reviews, XP) is recomputed from it.
+model ExerciseAttempt {
+  id            String        @id @default(cuid())
+  /// Client-generated UUID; makes online submission and offline sync idempotent.
+  clientEventId String        @unique
+  userId        String
+  exerciseId    String
+  characterId   String?
+  sessionId     String?
+  deviceId      String?
+  curriculumId  String
+  mode          PracticeMode
+  result        AttemptResult
+  /// Overall score 0–100 where the engine supports it; null otherwise.
+  score         Float?
+  /// Normalised strokes captured from the canvas.
+  strokeData    Json?
+  /// Per-dimension evaluation output from the handwriting engine.
+  evaluation    Json?
+  hintsUsed     Int           @default(0)
+  durationMs    Int?
+  /// When the learner made the attempt (client clock).
+  occurredAt    DateTime
+  /// When the server stored it.
+  receivedAt    DateTime      @default(now())
+  xpAwarded     Int           @default(0)
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise   Exercise         @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  character  Character?       @relation(fields: [characterId], references: [id], onDelete: Restrict)
+  session    LearningSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  device     Device?          @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  curriculum Curriculum       @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+
+  @@index([userId, occurredAt])
+  @@index([userId, characterId, occurredAt])
+  @@index([exerciseId])
+}
+
+/// Derived per-character mastery. Guided and independent performance are tracked separately.
+model CharacterMastery {
+  userId                 String
+  characterId            String
+  level                  MasteryLevel @default(NEW)
+  /// 0–1 estimate of retrieval strength.
+  strength               Float        @default(0)
+  guidedAttempts         Int          @default(0)
+  guidedSuccesses        Int          @default(0)
+  independentAttempts    Int          @default(0)
+  independentSuccesses   Int          @default(0)
+  consecutiveIndependent Int          @default(0)
+  firstSeenAt            DateTime     @default(now())
+  lastPracticedAt        DateTime?
+  updatedAt              DateTime     @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Restrict)
+
+  @@id([userId, characterId])
+  @@index([userId, level])
+}
+
+model ReviewSchedule {
+  id             String    @id @default(cuid())
+  userId         String
+  characterId    String
+  dueAt          DateTime
+  intervalDays   Float     @default(0)
+  easeFactor     Float     @default(2.5)
+  repetitions    Int       @default(0)
+  lapses         Int       @default(0)
+  lastReviewedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, characterId])
+  @@index([userId, dueAt])
+}
+
+model LearningGoal {
+  id        String   @id @default(cuid())
+  userId    String
+  /// e.g. "daily_xp", "hsk_level".
+  type      String
+  target    Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, active])
+}
+
+model PlacementAssessment {
+  id             String           @id @default(cuid())
+  userId         String
+  curriculumId   String
+  status         AssessmentStatus @default(IN_PROGRESS)
+  estimatedLevel Int?
+  startedAt      DateTime         @default(now())
+  completedAt    DateTime?
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  curriculum Curriculum         @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  results    AssessmentResult[]
+
+  @@index([userId, startedAt])
+}
+
+model AssessmentResult {
+  id             String   @id @default(cuid())
+  assessmentId   String
+  exerciseId     String?
+  characterId    String?
+  correct        Boolean
+  score          Float?
+  responseTimeMs Int?
+  createdAt      DateTime @default(now())
+
+  assessment PlacementAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  exercise   Exercise?           @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  character  Character?          @relation(fields: [characterId], references: [id], onDelete: Restrict)
+
+  @@index([assessmentId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gamification
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Server-authoritative XP ledger. Balance = SUM(amount). Never written from client-supplied values.
+model XPTransaction {
+  id             String   @id @default(cuid())
+  userId         String
+  amount         Int
+  reason         XPReason
+  sourceType     String?
+  sourceId       String?
+  /// Prevents double awards, e.g. "attempt:<clientEventId>".
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String
+  icon        String
+  criteria    Json
+  xpReward    Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  userId        String
+  achievementId String
+  earnedAt      DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Restrict)
+
+  @@id([userId, achievementId])
+}
+
+/// One row per learner per local calendar day (in the learner's timezone).
+model DailyActivity {
+  userId             String
+  date               DateTime @db.Date
+  xpEarned           Int      @default(0)
+  exercisesCompleted Int      @default(0)
+  goalMet            Boolean  @default(false)
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, date])
+}
+
+model Streak {
+  userId         String    @id
+  currentLength  Int       @default(0)
+  longestLength  Int       @default(0)
+  lastActiveDate DateTime? @db.Date
+  updatedAt      DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Offline
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Device {
+  id         String   @id @default(cuid())
+  userId     String
+  /// Client-generated stable identifier stored in IndexedDB.
+  clientId   String
+  label      String?
+  userAgent  String?
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user              User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  syncEvents        SyncEvent[]
+  learningSessions  LearningSession[]
+  attempts          ExerciseAttempt[]
+  downloadedContent DownloadedContentVersion[]
+
+  @@unique([userId, clientId])
+}
+
+/// Inbox of events uploaded by devices. `id` is the client event UUID, giving idempotency.
+model SyncEvent {
+  id              String          @id
+  userId          String
+  deviceId        String
+  type            String
+  payload         Json
+  status          SyncEventStatus @default(RECEIVED)
+  error           String?
+  clientCreatedAt DateTime
+  receivedAt      DateTime        @default(now())
+  processedAt     DateTime?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, receivedAt])
+  @@index([status])
+}
+
+model DownloadedContentVersion {
+  id             String   @id @default(cuid())
+  userId         String
+  deviceId       String
+  lessonId       String
+  contentVersion Int
+  downloadedAt   DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, lessonId])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Administration
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([actorId])
+}
+
+/// Snapshot of curriculum content before each admin edit, enabling non-destructive updates and rollback.
+model ContentRevision {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  revision   Int
+  data       Json
+  authorId   String?
+  createdAt  DateTime @default(now())
+
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([entityType, entityId, revision])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Future monetization (schema only — no payment provider is integrated)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SubscriptionPlan {
+  id         String          @id @default(cuid())
+  key        String          @unique
+  name       String
+  interval   BillingInterval
+  /// Price in minor units of `currency` (e.g. cents). Currency is never assumed.
+  priceMinor Int
+  currency   String
+  active     Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String
+  planId                 String
+  status                 SubscriptionStatus
+  provider               String
+  providerSubscriptionId String?
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean            @default(false)
+  canceledAt             DateTime?
+  graceUntil             DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+  transactions PaymentTransaction[]
+
+  @@unique([provider, providerSubscriptionId])
+  @@index([userId, status])
+}
+
+model PaymentCustomer {
+  id                 String   @id @default(cuid())
+  userId             String
+  provider           String
+  providerCustomerId String
+  createdAt          DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerCustomerId])
+  @@index([userId])
+}
+
+model PaymentTransaction {
+  id                    String        @id @default(cuid())
+  userId                String
+  subscriptionId        String?
+  provider              String
+  providerTransactionId String
+  amountMinor           Int
+  currency              String
+  status                PaymentStatus
+  createdAt             DateTime      @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerTransactionId])
+  @@index([userId])
+}
+
+/// Raw provider webhook events, stored once per provider event ID.
+model PaymentEvent {
+  id              String    @id @default(cuid())
+  provider        String
+  providerEventId String
+  type            String
+  payload         Json
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@unique([provider, providerEventId])
+}
+
+/// What a user may access. Checked server-side; never derived from client state.
+model Entitlement {
+  id         String    @id @default(cuid())
+  userId     String
+  key        String
+  source     String
+  validFrom  DateTime  @default(now())
+  validUntil DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, key])
+}

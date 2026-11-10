@@ -1,0 +1,8 @@
+node_modules
+.next
+src/generated
+prisma/migrations
+.local
+icon design
+public
+package-lock.json
