@@ -6,7 +6,8 @@
 
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
-ENV CI=true
+# prisma.config.ts requires DATABASE_URL even for `prisma generate` (run by postinstall).
+ENV CI=true DATABASE_URL="postgresql://build:build@localhost:5432/build"
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
