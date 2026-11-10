@@ -407,3 +407,6 @@ without the fix (checked by reverting the fix for M6-01 and M6-02). See
 - Playwright Chromium: **30 passed, 16 skipped**. The skips are mobile copies of desktop-only
   flows, plus the 4 opt-in screenshot runs. New: 4 accessibility runs and 4 writing-experience
   tests.
+- Playwright WebKit (desktop Safari and iPhone 14 emulation, `E2E_ALL_BROWSERS=1`): **32
+  passed, 14 skipped, 0 failed**.
+- Firefox: not run (it can't start on this machine).
