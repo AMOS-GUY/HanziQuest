@@ -43,6 +43,12 @@ npm run content:validate
 
 - The Prisma client is generated into `src/generated/prisma` (git-ignored). `npm install` runs
   `prisma generate`.
+- Prisma 7 `migrate dev` does **not** regenerate the client. Run `npx prisma generate`, and restart
+  `npm run dev`, because the dev server caches the old client on `globalThis`.
+- Playwright starts its own `next start` on :3100 with `AUTH_URL` pointed at it. Run
+  `npm run build` first.
+- Handwriting: thresholds live in `src/features/handwriting/evaluate.ts`. Changing them means
+  bumping `ENGINE_VERSION` and re-running `tests/unit/handwriting-engine.test.ts`.
 - The local Postgres cluster must be UTF-8 (`scripts/local-postgres.ts` handles it).
 - Next 16: `params`/`searchParams` are Promises, and middleware is called `proxy.ts`.
 - `hanzi-writer-data` coordinates use a 1024 grid with the y axis pointing up (top edge y = 900).

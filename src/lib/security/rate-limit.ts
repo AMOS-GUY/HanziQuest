@@ -59,7 +59,17 @@ const limiters = (globalForLimiters.hqLimiters ??= {});
 
 /** 10 sign-in attempts per 15 minutes per (email, IP). */
 export const loginLimiter = (limiters.login ??= new RateLimiter(10, 15 * 60 * 1000));
-/** 5 registrations per hour per IP. */
-export const registerLimiter = (limiters.register ??= new RateLimiter(5, 60 * 60 * 1000));
+function envLimit(name: string, fallback: number) {
+  const value = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/** 5 registrations per hour per IP (override with REGISTER_LIMIT_PER_HOUR, e.g. for e2e tests). */
+export const registerLimiter = (limiters.register ??= new RateLimiter(
+  envLimit("REGISTER_LIMIT_PER_HOUR", 5),
+  60 * 60 * 1000,
+));
+/** 120 learning API writes (attempts, sessions) per minute per user. */
+export const learningWriteLimiter = (limiters.learning ??= new RateLimiter(120, 60 * 1000));
 /** 60 admin mutations per minute per user. */
 export const adminMutationLimiter = (limiters.admin ??= new RateLimiter(60, 60 * 1000));

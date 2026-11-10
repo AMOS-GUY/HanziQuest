@@ -25,7 +25,10 @@ export default defineConfig({
     : {
         command: `npx next start -p ${PORT}`,
         port: PORT,
-        reuseExistingServer: !process.env.CI,
+        // Auth.js builds redirect URLs from AUTH_URL; it must point at this server, not the dev server.
+        // E2E creates many accounts from one IP, so the registration limit is raised for this server only.
+        env: { AUTH_URL: `http://localhost:${PORT}`, REGISTER_LIMIT_PER_HOUR: "1000" },
+        reuseExistingServer: false,
         timeout: 120_000,
       },
 });

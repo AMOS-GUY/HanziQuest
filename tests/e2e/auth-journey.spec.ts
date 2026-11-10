@@ -1,8 +1,5 @@
 import { expect, test } from "@playwright/test";
-
-function uniqueEmail(project: string) {
-  return `e2e-${project}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@hanziquest.test`;
-}
+import { completeOnboarding, uniqueEmail } from "./helpers";
 
 test("learner can register, see the learning path, log out and log back in", async ({
   page,
@@ -25,7 +22,8 @@ test("learner can register, see the learning path, log out and log back in", asy
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page).toHaveURL(/\/home$/);
+  // New accounts go through onboarding before reaching the app.
+  await completeOnboarding(page);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("E2E Learner");
 
   await page.goto("/learn");

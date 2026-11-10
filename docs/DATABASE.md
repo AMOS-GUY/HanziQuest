@@ -16,7 +16,7 @@ PostgreSQL via Prisma 7. Schema: `prisma/schema.prisma`; migrations: `prisma/mig
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Auth                  | User, Profile, Account, Session, VerificationToken, Role, UserRole                                                                                                           | Account/Session/VerificationToken are the Auth.js adapter tables. Roles are rows (`RoleKey` enum) so assignments are auditable. |
 | Curriculum            | Curriculum, HSKLevel, Unit, Lesson, Character, CharacterStroke, CharacterAsset, Vocabulary, VocabularyCharacter, LessonVocabulary, LessonCharacter, Exercise, LessonExercise | See below.                                                                                                                      |
-| Learning              | LearningSession, ExerciseAttempt, CharacterMastery, ReviewSchedule, LearningGoal, PlacementAssessment, AssessmentResult                                                      | Attempts are append-only history; mastery and review schedules are derived from them.                                           |
+| Learning              | LearningSession, LessonProgress, ExerciseAttempt, CharacterMastery, ReviewSchedule, LearningGoal, PlacementAssessment, AssessmentResult                                      | Attempts are append-only history; mastery and review schedules are derived from them.                                           |
 | Gamification          | XPTransaction, Achievement, UserAchievement, DailyActivity, Streak                                                                                                           | XP is a ledger (`SUM(amount)`), each row with a unique `idempotencyKey`.                                                        |
 | Offline               | Device, SyncEvent, DownloadedContentVersion                                                                                                                                  |                                                                                                                                 |
 | Administration        | AuditLog, ContentRevision                                                                                                                                                    |                                                                                                                                 |
@@ -37,6 +37,16 @@ PostgreSQL via Prisma 7. Schema: `prisma/schema.prisma`; migrations: `prisma/mig
   compare against it.
 - `verification` (`PROVISIONAL` / `REVIEWED` / `VERIFIED`) and `licenseStatus` are stored on
   curricula, characters and vocabulary. Only `VERIFIED` content may be presented as official.
+
+### Lesson progress and attempts (M2)
+
+- `LessonProgress(userId, lessonId)` holds IN_PROGRESS, COMPLETED or TESTED_OUT (set by
+  placement). No row means not started. Locked/available is derived, never stored.
+- `LearningSession.completedAt` is set when every lesson exercise has an attempt in that
+  session and at least half were not skipped.
+- `ExerciseAttempt` stores the raw normalised strokes (`strokeData`), the server's evaluation
+  JSON (`evaluation`, including `engineVersion`), `mode` (GUIDED/INDEPENDENT), `result` and an
+  integer `score`. `clientEventId` (UUID) makes submission idempotent.
 
 ### Mastery vs vocabulary
 

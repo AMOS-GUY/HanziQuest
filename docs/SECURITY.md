@@ -18,9 +18,21 @@
 | Data exposure    | Admin queries `select` explicit fields and never return `passwordHash`. The Prisma client is `server-only`.                                                                                             |
 | Secrets          | `.env` is git-ignored. `.env.example` lists every variable with no real values. CI generates a throwaway `AUTH_SECRET`.                                                                                 |
 
+### Learning data (M2)
+
+- Handwriting results are **computed on the server** from raw strokes. Client-sent scores and
+  results are ignored.
+- Attempt replay is idempotent (`clientEventId` is unique). Reusing another user's id returns 409.
+- Attempts are accepted only for published exercises in published lessons, with a bounded
+  payload and timestamp. Locked lessons can't be started.
+- Placement answers are graded on the server from a question plan derived from the assessment
+  id. Correct answers are never sent to the browser.
+- Guided-practice mistake counts are client-reported and labelled as such. They never count
+  as independent recall and will only earn capped XP (M3).
+
 ## Known limitations / planned hardening
 
-1. **Rate limiter is in-memory, per instance.** On serverless or multi-instance hosting the
+1. **Rate limiter is in-memory, per instance.** `REGISTER_LIMIT_PER_HOUR` raises the registration limit for automated tests only. On serverless or multi-instance hosting the
    limits apply per instance. Before public launch, move the store to PostgreSQL or Redis.
 2. **CSP allows `'unsafe-inline'` scripts**, because the App Router bootstraps with inline
    scripts. Next step: a nonce-based CSP set from `proxy.ts`.

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Target } from "lucide-react";
+import { ArrowRight, PartyPopper, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { requireUser } from "@/lib/auth/session";
-import { getLearningPath } from "@/features/curriculum/queries";
+import { getLearnerPath } from "@/features/curriculum/queries";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -28,12 +29,7 @@ function greeting(timezone: string) {
 
 export default async function HomePage() {
   const user = await requireUser();
-  const path = await getLearningPath();
-  const firstLesson = path[0]?.levels[0]?.units[0]?.lessons[0];
-  const totalLessons = path
-    .flatMap((c) => c.levels)
-    .flatMap((l) => l.units)
-    .reduce((n, u) => n + u.lessons.length, 0);
+  const { next, completed, total } = await getLearnerPath(user.id);
   const name = user.profile?.displayName ?? user.name ?? "learner";
 
   return (
@@ -45,23 +41,43 @@ export default async function HomePage() {
         <p className="text-muted-foreground">Ready to write some characters?</p>
       </section>
 
-      <Card className="border-primary/30 bg-accent flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <CardTitle>Start learning</CardTitle>
-          <CardDescription className="text-accent-foreground/80">
-            {firstLesson
-              ? `${totalLessons} HSK 1 lessons are ready. Begin with “${firstLesson.title}”.`
-              : "No lessons are published yet. Check back soon."}
-          </CardDescription>
-        </div>
-        {firstLesson ? (
-          <Button asChild>
-            <Link href="/learn">
-              Open learning path <ArrowRight aria-hidden />
+      {total === 0 ? (
+        <Card>
+          <CardTitle>No lessons yet</CardTitle>
+          <CardDescription>No lessons are published yet. Check back soon.</CardDescription>
+        </Card>
+      ) : next ? (
+        <Card className="border-primary/30 bg-accent flex flex-col gap-4">
+          <div>
+            <CardTitle>{completed === 0 ? "Start learning" : "Continue learning"}</CardTitle>
+            <CardDescription className="text-accent-foreground/80">
+              Next up: “{next.title}”
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-3">
+            <ProgressBar value={completed} max={total} label="HSK 1 lessons completed" />
+            <span className="text-accent-foreground text-sm font-bold whitespace-nowrap">
+              {completed}/{total}
+            </span>
+          </div>
+          <Button asChild className="self-start">
+            <Link href={`/learn/${next.id}`}>
+              {completed === 0 ? "Start" : "Continue"} <ArrowRight aria-hidden />
             </Link>
           </Button>
-        ) : null}
-      </Card>
+        </Card>
+      ) : (
+        <Card className="border-primary/30 bg-accent flex items-start gap-3">
+          <PartyPopper className="text-primary mt-0.5 size-6 shrink-0" aria-hidden />
+          <div>
+            <CardTitle>All {total} lessons done</CardTitle>
+            <CardDescription className="text-accent-foreground/80">
+              You&apos;ve finished every published lesson. Practise any lesson again from the
+              learning path.
+            </CardDescription>
+          </div>
+        </Card>
+      )}
 
       <Card className="flex items-start gap-3">
         <Target className="text-primary mt-0.5 size-6 shrink-0" aria-hidden />
@@ -70,7 +86,7 @@ export default async function HomePage() {
             Daily goal: {user.profile?.dailyGoalXp ?? 30} XP
           </CardTitle>
           <CardDescription>
-            XP, streaks and review reminders start counting once writing practice is live.
+            XP, streaks and review reminders are coming in the next update.
           </CardDescription>
         </div>
       </Card>
