@@ -121,6 +121,82 @@ been done.**
 Re-purposing a marked database (rare, deliberate): only by hand, in SQL, after a backup.
 `db:environment` never changes a marker.
 
+## Connecting the Neon staging project (owner, read-only first)
+
+**Nothing on this machine can see the Neon account:** there is no Neon CLI, MCP tool or stored
+token. Neon's own onboarding text (project ids, a branch named `production`, `neon deploy`) is
+generic and **must not be followed**. Every identifier is checked in the Neon console by the owner.
+
+### 1. Verify in the Neon console (read-only)
+
+| Check                                                 | Expected                                                                                                                                                                                                                                                                              | Where                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Organization                                          | your personal or HanziQuest organization, and no other                                                                                                                                                                                                                                | top-left organization switcher |
+| Project name                                          | `hanziquest-staging`                                                                                                                                                                                                                                                                  | Projects list                  |
+| Project id                                            | note it, e.g. `xxx-xxx-12345678`; it identifies the project only, never paste it into the app                                                                                                                                                                                         | Project → Settings → General   |
+| Region                                                | AWS Europe Central 1 (Frankfurt), `aws-eu-central-1`                                                                                                                                                                                                                                  | Project → Settings → General   |
+| Branches                                              | Neon names a new project's default branch **`production`**. Here it is the default branch _of the staging project_ (staging data only), not the HanziQuest production database. Optionally rename it `staging` (a branch change: owner approval; the connection host stays the same). | Project → Branches             |
+| Database                                              | `hanziquest` on that default branch (create it if the project only has `neondb`: a change needing approval)                                                                                                                                                                           | Branch → Roles & Databases     |
+| Compute                                               | max 0.25 CU; scale-to-zero on                                                                                                                                                                                                                                                         | Branch → Compute               |
+| No production project in this organization is touched | —                                                                                                                                                                                                                                                                                     | —                              |
+
+### 2. The two connection strings
+
+Neon → project `hanziquest-staging` → **Connect** → branch = the default branch, database =
+`hanziquest`, role = the owner role:
+
+| Variable                        | Neon "Connection pooling" toggle | Host looks like                                       | Where it goes                                                                                                                   |
+| ------------------------------- | -------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` (app, pooled)    | **on**                           | `ep-<name>-pooler.eu-central-1.aws.neon.tech`         | Render → `hanziquest-staging` → Environment                                                                                     |
+| `MIGRATE_DATABASE_URL` (direct) | **off**                          | `ep-<name>.eu-central-1.aws.neon.tech` (no `-pooler`) | GitHub environment `staging` → secret `DIRECT_DATABASE_URL` (the workflows pass it to the Prisma CLI as `MIGRATE_DATABASE_URL`) |
+
+Both must name database `hanziquest` and keep `sslmode=require`. With the installed `pg`
+driver, `require` already verifies the certificate and hostname (it's treated as
+`verify-full`). Neon also appends `channel_binding=require`; `pg` ignores that parameter, so it
+can stay. The two strings differ **only** by `-pooler` in the host: the same endpoint `ep-<name>`
+means the same branch.
+
+Store both in the password manager, labelled STAGING. **Never** write them into `.env` or
+`.env.local`. Local `.env` keeps pointing at the local development database, and any command
+below gets the staging URL from the current shell only (`dotenv` never overrides a variable
+that is already set).
+
+### 3. Read-only verification from your machine
+
+```bash
+read -rs MIGRATE_DATABASE_URL && export MIGRATE_DATABASE_URL   # paste the DIRECT url; not echoed or saved to history
+npm run db:inspect                                             # read-only; prints no credentials
+read -rs DATABASE_URL && export DATABASE_URL                   # paste the POOLED url
+npm run db:inspect -- --pooled
+npm run db:environment -- --expect staging                     # read-only guard
+unset MIGRATE_DATABASE_URL DATABASE_URL
+```
+
+Expected output, before any migration:
+
+| Check              | Expected                                                       |
+| ------------------ | -------------------------------------------------------------- |
+| host kind          | `direct`, then `pooled`                                        |
+| endpoint           | the same `ep-…` both times, matching the branch in the console |
+| region             | `eu-central-1`                                                 |
+| database           | `hanziquest`                                                   |
+| TLS in use         | `yes`                                                          |
+| public tables      | 0                                                              |
+| applied migrations | none                                                           |
+| environment marker | none                                                           |
+| accounts           | none                                                           |
+| `db:environment`   | "Database is new and unmarked (no accounts)"                   |
+
+**Stop if anything differs.** That includes a different region, a different endpoint between
+the two URLs, any tables or accounts, or a marker saying `production`.
+
+### 4. After approval only
+
+The staging GitHub environment, its secrets and the first `deploy-staging.yml` run follow
+"Provisioning steps" above. Migrations run **only** through that workflow, after its database
+guard and encrypted backup. Never with `prisma migrate dev`, `db push`, `migrate reset` or
+`neon deploy`.
+
 ## Staging security review (Phase F)
 
 | Area                      | How it is protected                                                                                          | Evidence                                                                        |
