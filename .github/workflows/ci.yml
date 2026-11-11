@@ -98,11 +98,14 @@ jobs:
       # M11: disposable-database drills. Migrations: fresh, upgrade, pending, failure and
       # recovery, environment marker, database down. Backups: restore, verify, six
       # corrupted or tampered cases rejected, and an age encryption round trip.
-      - name: Migration and backup drills
-        run: |
-          sudo apt-get install -y -qq age >/dev/null
-          npm run drill:migrations
-          npm run drill:backup
+      - name: Install age (backup encryption)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age >/dev/null && age --version
+
+      - name: Migration drill
+        run: npm run drill:migrations
+
+      - name: Backup drill (restore, tampering, encryption)
+        run: npm run drill:backup
 
       - name: Production build
         run: npm run build
