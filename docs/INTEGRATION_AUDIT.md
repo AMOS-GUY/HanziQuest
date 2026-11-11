@@ -183,15 +183,15 @@ of any of these results.
   It is the owner's to review once CI has run on it.
 - Nothing was force-pushed or rewritten.
 
-| Ref                                   | Commit        | State                                            |
-| ------------------------------------- | ------------- | ------------------------------------------------ |
-| `main`                                | `925969a`     | Merge of PR #6. Contains M1–M9 and the audit     |
-| `feature/m6-quality`                  | `b2ee19c`     | In `main` (through PR #6)                        |
-| `feature/m7-curriculum`               | `d53776c`     | In `main` (through PR #6)                        |
-| `feature/m8-experience`               | `505bc57`     | In `main` (through PR #6)                        |
-| `feature/m9-production`               | `b53b11f`     | In `main` (through PR #6)                        |
-| `feature/integration-audit`           | `39188bf`     | In `main` (PR #6)                                |
-| `feature/reset-security-review` (new) | see `git log` | Built on `main` `925969a`, pushed, **no PR yet** |
+| Ref                                   | Commit    | State                                              |
+| ------------------------------------- | --------- | -------------------------------------------------- |
+| `main`                                | `925969a` | Merge of PR #6. Contains M1–M9 and the audit       |
+| `feature/m6-quality`                  | `b2ee19c` | In `main` (through PR #6)                          |
+| `feature/m7-curriculum`               | `d53776c` | In `main` (through PR #6)                          |
+| `feature/m8-experience`               | `505bc57` | In `main` (through PR #6)                          |
+| `feature/m9-production`               | `b53b11f` | In `main` (through PR #6)                          |
+| `feature/integration-audit`           | `39188bf` | In `main` (PR #6)                                  |
+| `feature/reset-security-review` (new) | `2b61811` | Merged by the owner as PR #14 (`main` = `7e1f43b`) |
 
 ### GitHub Actions: not observed
 
@@ -221,14 +221,15 @@ except Docker):
 The full table and the limitations are in SECURITY.md, "Password reset security review"
 (D-047). Findings:
 
-| ID    | Severity | Finding                                                                                                                                                                    | Status                                                                                             |
-| ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| RS-01 | medium   | Policy was checked only at creation. A moderator's link for a learner kept working after that learner was promoted to staff, which could lead to a staff account takeover. | **Fixed.** Re-checked in the atomic use. Promotion discards unused links. Tested.                  |
-| RS-02 | medium   | Links outlived a suspended or demoted issuer.                                                                                                                              | **Fixed.** The issuer must be an active moderator at use. Tested.                                  |
-| RS-03 | low      | Suspending and then reactivating an account revived its unused link.                                                                                                       | **Fixed.** Suspension discards links (audited). Tested.                                            |
-| RS-04 | low      | The token stayed in the address bar and browser history.                                                                                                                   | **Fixed** (best effort). The page removes it on load. Tested in e2e. The limitation is documented. |
-| RS-05 | policy   | `main` would enable reset links on any production deploy, before the owner approves the procedure.                                                                         | **Fixed.** `PASSWORD_RESET_LINKS` is off by default in production.                                 |
-| RS-06 | accepted | Whoever creates a link can use it, and the learner isn't notified.                                                                                                         | Documented. Needs email to improve. The owner reviews the audit entries.                           |
+| ID    | Severity | Finding                                                                                                                                                                    | Status                                                                                                             |
+| ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| RS-01 | medium   | Policy was checked only at creation. A moderator's link for a learner kept working after that learner was promoted to staff, which could lead to a staff account takeover. | **Fixed.** Re-checked in the atomic use. Promotion discards unused links. Tested.                                  |
+| RS-02 | medium   | Links outlived a suspended or demoted issuer.                                                                                                                              | **Fixed.** The issuer must be an active moderator at use. Tested.                                                  |
+| RS-03 | low      | Suspending and then reactivating an account revived its unused link.                                                                                                       | **Fixed.** Suspension discards links (audited). Tested.                                                            |
+| RS-04 | low      | The token stayed in the address bar and browser history.                                                                                                                   | **Fixed** (best effort). The page removes it on load. Tested in e2e. The limitation is documented.                 |
+| RS-05 | policy   | `main` would enable reset links on any production deploy, before the owner approves the procedure.                                                                         | **Fixed.** `PASSWORD_RESET_LINKS` is off by default in production.                                                 |
+| RS-07 | low      | Creating links in parallel for one account left several live links (6 of 6 in a probe), which broke the "one live link" rule.                                              | **Fixed** after PR #14: the account row is locked while a link is created. Tested; the test fails without the fix. |
+| RS-06 | accepted | Whoever creates a link can use it, and the learner isn't notified.                                                                                                         | Documented. Needs email to improve. The owner reviews the audit entries.                                           |
 
 Verified unchanged:
 
@@ -241,3 +242,23 @@ Verified unchanged:
 - query strings stripped from logs and error reports
 - `no-referrer`
 - the service worker never caches the page
+
+### Follow-up after PR #14 (2026-11-11)
+
+- The owner merged `feature/reset-security-review` (`2b61811`) as **PR #14**, so
+  `main` = `7e1f43b`. Dependabot PRs #7–#13 are open and not merged. Among them are major
+  upgrades (TypeScript 7, ESLint 10, `@types/node` 26), which need their own CI runs and
+  review.
+- A second review of the merged code found **RS-07**, fixed on the same branch (a new commit,
+  no history rewritten). It needs a new PR into `main`, because PR #14 is already merged.
+- SECURITY.md procedure rewritten to state explicitly:
+  - who may create links
+  - how the recipient is verified
+  - delivery
+  - expiry
+  - what happens after the password change
+  - what is missing without email
+
+  It is still marked **not approved**.
+
+- GitHub Actions results are still **not observed** from this machine.

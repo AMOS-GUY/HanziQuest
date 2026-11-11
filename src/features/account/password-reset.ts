@@ -108,6 +108,8 @@ export async function issuePasswordReset(
   const token = generateResetToken();
   const expiresAt = new Date(now.getTime() + RESET_TTL_HOURS * 3_600_000);
   await prisma.$transaction(async (tx) => {
+    // Serialise link creation per account, so concurrent requests can't leave two live links.
+    await tx.$queryRaw`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
     const user = await tx.user.findUnique({
       where: { id: userId },
       select: { status: true, roles: { select: { role: { select: { key: true } } } } },
