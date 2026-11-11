@@ -1,0 +1,41 @@
+# Render Blueprint: STAGING (M11). NOT applied: nothing is connected to Render.
+# In Render: New → Blueprint → this repository, with the Blueprint file path set to
+# render.staging.yaml. If the dashboard offers no path option, create the web service by hand
+# with exactly these settings (docs/M11_STAGING_CONFIGURATION.md).
+#
+# - Free plan: $0, spins down after 15 min idle, about 1 min to wake, 750 free instance hours a
+#   month per workspace, no pre-deploy command (so migrations run from the deploy workflow),
+#   one instance (render.com/docs/free, read 2026-11-11).
+# - Auto-deploy off: deploys only through .github/workflows/deploy-staging.yml.
+# - APP_ENV=staging: the start-up check refuses open registration, the interface shows a
+#   "Staging" banner, logs carry env=staging, and readiness refuses any database not marked
+#   "staging", including a restored production backup.
+# - Every secret here is staging-only and must differ from production.
+services:
+  - type: web
+    name: hanziquest-staging
+    runtime: docker
+    plan: free
+    # Same region as the staging Neon project. Can't be changed after creation.
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: "off"
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: staging
+      - key: AUTH_TRUST_HOST
+        value: "true"
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: DATABASE_POOL_MAX
+        value: "3"
+      # Invite-only (the default) and reset links off (the default): leave both unset.
+      - key: DATABASE_URL
+        sync: false # STAGING Neon *pooled* URL, sslmode=require
+      - key: AUTH_SECRET
+        sync: false # a NEW openssl rand -base64 32, never production's
+      - key: AUTH_URL
+        sync: false # https://hanziquest-staging.onrender.com (or the staging domain)

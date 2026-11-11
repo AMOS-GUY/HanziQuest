@@ -2,8 +2,9 @@
 # covers losing the provider account. Provider PITR stays the primary recovery path
 # (docs/DATABASE_BACKUP.md).
 #
-# Manual only until the owner has created the protected "production" environment and its
-# secrets (PRODUCTION_DIRECT_DATABASE_URL, BACKUP_AGE_RECIPIENT). Then uncomment the schedule.
+# Manual only until the owner has created the protected environment and its secrets
+# (DIRECT_DATABASE_URL, BACKUP_AGE_RECIPIENT: each environment has its own, and staging's key is
+# never production's). Then uncomment the schedule; scheduled runs back up production.
 # Every run restores the backup into a disposable database on the runner and verifies it
 # against the backup's own row counts and checksums before keeping it. Only the age-encrypted
 # file is stored; the private key never enters GitHub.
@@ -11,6 +12,12 @@ name: Off-site backup
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which deployment to back up"
+        type: choice
+        options: [staging, production]
+        default: staging
   # schedule:
   #   - cron: "17 3 * * 1" # Mondays 03:17 UTC
 
@@ -18,14 +25,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: backup-production
+  group: backup-${{ inputs.environment || 'production' }}
   cancel-in-progress: false
 
 jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    environment: production
+    environment: ${{ inputs.environment || 'production' }}
     services:
       postgres:
         image: postgres:17
@@ -38,14 +45,15 @@ jobs:
           --health-cmd "pg_isready -U drill"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
+      TARGET: ${{ inputs.environment || 'production' }}
       RESTORE_URL: postgresql://drill:drill@localhost:5432/drill
     steps:
       - name: Secrets are configured
         env:
-          DB: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
+          DB: ${{ secrets.DIRECT_DATABASE_URL }}
           AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
         run: |
-          [ -n "$DB" ] && [ -n "$AGE" ] || { echo "::error::Set PRODUCTION_DIRECT_DATABASE_URL and BACKUP_AGE_RECIPIENT on the production environment"; exit 1; }
+          [ -n "$DB" ] && [ -n "$AGE" ] || { echo "::error::Set DIRECT_DATABASE_URL and BACKUP_AGE_RECIPIENT on the $TARGET environment"; exit 1; }
 
       - uses: actions/checkout@v4
 
@@ -59,9 +67,14 @@ jobs:
           DATABASE_URL: postgresql://drill:drill@localhost:5432/drill
         run: npm ci
 
-      - name: Back up production (read-only snapshot)
+      - name: Database belongs to this environment
         env:
-          DB: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
+          MIGRATE_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+        run: npm run db:environment -- --expect "$TARGET"
+
+      - name: Back up (read-only snapshot)
+        env:
+          DB: ${{ secrets.DIRECT_DATABASE_URL }}
         run: |
           mkdir -p backup
           DATABASE_URL="$DB" npm run db:backup -- --source "$DB" --out backup/plain.ndjson.gz
@@ -84,14 +97,14 @@ jobs:
           AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
         run: |
           sudo apt-get install -y -qq age >/dev/null
-          name="hanziquest-$(date -u +%Y%m%dT%H%M%SZ).ndjson.gz.age"
+          name="hanziquest-$TARGET-$(date -u +%Y%m%dT%H%M%SZ).ndjson.gz.age"
           age -r "$AGE" -o "backup/$name" backup/plain.ndjson.gz
           shred -u backup/plain.ndjson.gz
           ls -l backup
 
       - uses: actions/upload-artifact@v4
         with:
-          name: offsite-backup-${{ github.run_id }}
+          name: offsite-backup-${{ inputs.environment || 'production' }}-${{ github.run_id }}
           path: backup/*.age
           retention-days: 30
           if-no-files-found: error

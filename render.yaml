@@ -1,29 +1,32 @@
-# Render Blueprint for HanziQuest (M10, docs/DEPLOYMENT_ARCHITECTURE.md). NOT applied: nothing
-# is connected to Render. When the owner creates the Blueprint, Render shows a preview with the
-# plan and price before creating anything. Check each value there.
+# Render Blueprint: PRODUCTION (M10, M11). NOT applied: nothing is connected to Render.
+# Staging has its own file, render.staging.yaml. Never put both services in one Blueprint: that
+# would create (and bill) production when only staging was intended.
 #
-# - Auto-deploy is OFF. Deploys happen only through .github/workflows/deploy.yml (owner
-#   approval, pre-migration backup).
-# - Migrations run in the pre-deploy step with the new image, before traffic switches. The
-#   health check is readiness (/api/health), so a release whose migrations didn't apply never
-#   takes traffic.
+# - Auto-deploy is off. Deploys only through .github/workflows/deploy.yml (owner approval,
+#   staging first, environment guard, pre-migration backup, migrations from the workflow).
+# - The health check is readiness (/api/health): a release whose migrations aren't applied, or
+#   whose database is marked for another environment, returns 503.
 # - Secrets are `sync: false`: Render asks for them in its dashboard. They never go in git.
-# - The database is Neon (outside Render), so no `databases:` section.
+# - Field names and values follow render.com/docs/blueprint-spec (read 2026-11-11). Render shows
+#   the plan and price in its Blueprint preview before creating anything.
 services:
   - type: web
     name: hanziquest
     runtime: docker
-    # 512 MB, under 1 CPU, $7/month at 2026-11-11 (render.com/pricing). Verify the plan name in
-    # the Blueprint preview.
-    plan: starter
-    # Same region as the Neon database (DEPLOYMENT_ARCHITECTURE.md). The owner chooses.
+    # 512 MB, under 1 CPU: $7/month (render.com/pricing, 2026-11-11). Also Render's default.
+    plan: 0.5c-512mb
+    # Same region as the production Neon project (DEPLOYMENT_ARCHITECTURE.md). Can't be
+    # changed after creation. Options: oregon, ohio, virginia, frankfurt, singapore.
     region: frankfurt
     branch: main
     autoDeployTrigger: "off"
     healthCheckPath: /api/health
-    preDeployCommand: node node_modules/prisma/build/index.js migrate deploy
+    # Let in-flight requests finish on deploys and restarts (default 30 s).
+    maxShutdownDelaySeconds: 30
     envVars:
       - key: NODE_ENV
+        value: production
+      - key: APP_ENV
         value: production
       - key: AUTH_TRUST_HOST
         value: "true"
@@ -31,13 +34,11 @@ services:
         value: "1"
       - key: DATABASE_POOL_MAX
         value: "5"
-      # Invite-only and no reset links: leave both unset (their production defaults).
+      # Invite-only and no reset links: leave REGISTRATION_MODE and PASSWORD_RESET_LINKS unset.
       - key: DATABASE_URL
-        sync: false # Neon *pooled* URL, sslmode=require
-      - key: MIGRATE_DATABASE_URL
-        sync: false # Neon *direct* URL, for the pre-deploy migration
+        sync: false # production Neon *pooled* URL, sslmode=require
       - key: AUTH_SECRET
-        sync: false # openssl rand -base64 32; unique to production
+        sync: false # openssl rand -base64 32; production only, never staging's
       - key: AUTH_URL
         sync: false # https://<the public origin>
       - key: SENTRY_DSN
