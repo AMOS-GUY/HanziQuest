@@ -2,6 +2,42 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-11 — M11 staging preparation
+
+**D-053 · Every deployment names itself (`APP_ENV`).** `staging` or `production`, fatal if
+missing or invalid on Render (`RENDER=true`). Local production builds (e2e, smoke) may leave it
+unset. It drives the health `environment`, `env` in every log line, a runtime "Staging"
+banner (read from `/api/health/live`, because the image is built once) and the database check.
+Staging with `REGISTRATION_MODE=open` is fatal. Values still holding `REPLACE_ME` are fatal.
+
+**D-054 · The database carries its environment (`DeploymentMarker`).** A single row, written once
+by `db:environment --mark` on a new, empty database during its first deploy. It is never
+changed by tooling. Readiness returns 503 when the marker is missing or differs from
+`APP_ENV`. The deploy and backup workflows check it before touching the database. This catches
+a mis-pasted URL (staging ↔ production) and production data restored into staging, because
+the backup carries the "production" marker. An additive migration with no FKs.
+
+**D-055 · One reviewed deploy workflow for both environments; staging before production.**
+`_deploy.yml` is called by `deploy-staging.yml` and `deploy.yml`. Each GitHub environment
+holds its own secrets under the same names, so a job only ever sees its own. The preflight
+checks:
+
+- the commit is on `main`
+- `verify` and `docker` are green for that SHA
+- for production, a successful staging deployment of the same SHA
+
+Migrations run from the workflow (direct URL) before the Render hook, which deploys the exact
+SHA (`?ref=`). Render's pre-deploy step isn't used: it isn't available on free instances, and
+one migration path is simpler. Readiness still blocks code on an old schema, as with a manual
+Render deploy.
+
+**D-056 · Staging is free and synthetic.** Render Free with Neon Free, $0
+(M11_STAGING_ARCHITECTURE.md). The accepted limits are cold starts, 6-hour history and 100
+CU-hours, which suspends compute rather than billing. Only synthetic accounts
+(`@example.test`) and the seeded staging admin exist there. The acceptance suite is HTTP-only
+and refuses a server reporting `production`. Restores now also compare per-table checksums
+before committing, so a tampered backup is rejected, not restored.
+
 ## 2026-11-11 — M10 production infrastructure
 
 **D-048 · Liveness and readiness are separate probes.** `/api/health/live` never touches the

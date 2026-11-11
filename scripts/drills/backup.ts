@@ -1,0 +1,230 @@
+/**
+ * Backup and disaster-recovery drill (M11, Phase G), on disposable local databases:
+ *   npm run drill:backup
+ *
+ * Source: a disposable database migrated and seeded with synthetic data. The drill never reads
+ * the development database's learners.
+ * 1. Backup, then restore into a new database. Verify against the source (checksums, FKs, app
+ *    reads) and against the backup alone.
+ * 2. Corruption and tampering, each against a fresh empty target. Each must be REJECTED and
+ *    leave the target empty:
+ *    a. truncated gzip;
+ *    b. a changed value (valid file, same row count): rejected by the checksum inside restore;
+ *    c. an orphaned foreign key: rejected by the enforced constraints;
+ *    d. a header row count that disagrees with the rows;
+ *    e. a backup from a different schema version;
+ *    f. a non-empty target.
+ * 3. Encryption round trip: only if the `age` CLI is installed (CI installs it). Otherwise it is
+ *    reported as skipped.
+ */
+import fs from "node:fs";
+import path from "node:path";
+import zlib from "node:zlib";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import pg from "pg";
+import { check, cli, createDb, finish, PRISMA, TSX } from "./lib";
+
+const work = path.resolve(".local", "drills", `backup-${process.pid}`);
+fs.mkdirSync(work, { recursive: true });
+const file = (name: string) => path.join(work, name);
+
+function readLines(f: string) {
+  return zlib.gunzipSync(fs.readFileSync(f)).toString("utf8").split("\n").filter(Boolean);
+}
+function writeLines(f: string, lines: string[]) {
+  fs.writeFileSync(f, zlib.gzipSync(`${lines.join("\n")}\n`));
+}
+
+/** Accounts in the target: zero means nothing was restored. */
+async function rowCount(url: string) {
+  const c = new pg.Client({ connectionString: url });
+  await c.connect();
+  try {
+    const users = await c.query<{ n: string }>(`SELECT count(*)::text AS n FROM "User"`);
+    const chars = await c.query<{ n: string }>(`SELECT count(*)::text AS n FROM "Character"`);
+    return Number(users.rows[0]!.n) + Number(chars.rows[0]!.n);
+  } finally {
+    await c.end();
+  }
+}
+
+const tsx = (script: string, args: string[], env: Record<string, string> = {}) =>
+  cli([TSX, script, ...args], env);
+
+async function freshTarget(name: string) {
+  const url = await createDb(name);
+  const m = cli([PRISMA, "migrate", "deploy"], { MIGRATE_DATABASE_URL: url });
+  if (!m.ok) throw new Error(`migrate failed for ${name}`);
+  return url;
+}
+
+async function main() {
+  console.log("Backup and recovery drill");
+
+  // Synthetic source: migrated, then seeded (roles, starter curriculum, a synthetic admin).
+  const source = await freshTarget("source");
+  const seeded = cli([PRISMA, "db", "seed"], {
+    MIGRATE_DATABASE_URL: source,
+    DATABASE_URL: source,
+    SEED_ADMIN_EMAIL: "drill-admin@example.test",
+    SEED_ADMIN_PASSWORD: "drill-only-password-1234",
+  });
+  check(
+    "synthetic source migrated and seeded",
+    seeded.ok,
+    seeded.ok ? "" : seeded.output.slice(-300),
+  );
+
+  console.log("1. Backup, restore, verify");
+  const backup = file("drill.ndjson.gz");
+  const b = tsx("scripts/db-backup.ts", ["--source", source, "--out", backup]);
+  check(
+    "backup written",
+    b.ok && fs.existsSync(backup),
+    `${fs.existsSync(backup) ? fs.statSync(backup).size : 0} bytes`,
+  );
+  const header = JSON.parse(readLines(backup)[0]!) as {
+    tables: { table: string; rows: number; checksum?: string }[];
+    migrations: string[];
+  };
+  check(
+    "header has per-table checksums",
+    header.tables.every((t) => typeof t.checksum === "string"),
+  );
+
+  const target = await freshTarget("restore");
+  const r = tsx("scripts/db-restore.ts", ["--in", backup, "--target", target]);
+  check("restore into a new database", r.ok, r.ok ? "" : r.output.slice(-300));
+  const vs = tsx("scripts/db-verify.ts", ["--source", source, "--target", target]);
+  check(
+    "verify against the source (checksums, FKs, app reads)",
+    vs.ok && /0 orphaned rows/.test(vs.output),
+    vs.ok ? "" : vs.output.slice(-400),
+  );
+  const vb = tsx("scripts/db-verify.ts", ["--backup", backup, "--target", target]);
+  check("verify against the backup alone", vb.ok, vb.ok ? "" : vb.output.slice(-400));
+
+  console.log("2. Corrupted or tampered backups are rejected");
+  const lines = readLines(backup);
+  const tableOf = (l: string) => (JSON.parse(l) as { t?: string }).t;
+
+  // a. truncated gzip
+  const truncated = file("truncated.ndjson.gz");
+  const raw = fs.readFileSync(backup);
+  fs.writeFileSync(truncated, raw.subarray(0, Math.floor(raw.length * 0.6)));
+  await expectRejected("a. truncated file", truncated, "trunc");
+
+  // b. changed value, same row count: alter one Character's free-text meaning
+  const meta = JSON.parse(lines[0]!) as {
+    tables: { table: string; columns: { name: string }[] }[];
+  };
+  const colIndex = (table: string, column: string) =>
+    meta.tables.find((t) => t.table === table)!.columns.findIndex((c) => c.name === column);
+  const changed = [...lines];
+  const ci = changed.findIndex((l) => tableOf(l) === "Character");
+  const row = JSON.parse(changed[ci]!) as { t: string; r: unknown[] };
+  row.r[colIndex("Character", "meaning")] =
+    `${String(row.r[colIndex("Character", "meaning")])} (tampered)`;
+  changed[ci] = JSON.stringify(row);
+  const tampered = file("tampered.ndjson.gz");
+  writeLines(tampered, changed);
+  await expectRejected("b. changed value (same row count)", tampered, "tamper", /checksum/);
+
+  // c. orphaned foreign key: point a LessonCharacter at a character that doesn't exist
+  const orphan = [...lines];
+  const li = orphan.findIndex((l) => tableOf(l) === "LessonCharacter");
+  const cols = header.tables.find((t) => t.table === "LessonCharacter");
+  const charCol = colIndex("LessonCharacter", "characterId");
+  const orow = JSON.parse(orphan[li]!) as { t: string; r: unknown[] };
+  orow.r[charCol] = "does-not-exist";
+  orphan[li] = JSON.stringify(orow);
+  const orphaned = file("orphan.ndjson.gz");
+  writeLines(orphaned, orphan);
+  await expectRejected(
+    `c. orphaned foreign key${cols ? "" : " (table missing!)"}`,
+    orphaned,
+    "orphan",
+  );
+
+  // d. header row count disagrees
+  const miscount = [...lines];
+  const h = JSON.parse(miscount[0]!) as typeof header;
+  h.tables.find((t) => t.table === "Character")!.rows += 1;
+  miscount[0] = JSON.stringify(h);
+  const counted = file("miscount.ndjson.gz");
+  writeLines(counted, miscount);
+  await expectRejected("d. header row count disagrees", counted, "count");
+
+  // e. different schema version
+  const version = [...lines];
+  const hv = JSON.parse(version[0]!) as typeof header;
+  hv.migrations = hv.migrations.slice(0, -1);
+  version[0] = JSON.stringify(hv);
+  const older = file("older.ndjson.gz");
+  writeLines(older, version);
+  await expectRejected(
+    "e. backup from another schema version",
+    older,
+    "version",
+    /Migrations differ/,
+  );
+
+  // f. non-empty target
+  const again = tsx("scripts/db-restore.ts", ["--in", backup, "--target", target]);
+  check("f. a non-empty target is refused", !again.ok && /not empty/i.test(again.output));
+
+  console.log("3. Encryption round trip (age)");
+  let age = false;
+  try {
+    execFileSync("age", ["--version"], { stdio: "ignore" });
+    age = true;
+  } catch {
+    console.log("  - skipped: the age CLI isn't installed here (CI installs it)");
+  }
+  if (age) {
+    const key = file("drill.key");
+    execFileSync("age-keygen", ["-o", key], { stdio: "ignore" });
+    const recipient = fs.readFileSync(key, "utf8").match(/age1[0-9a-z]+/)![0];
+    execFileSync("age", ["-r", recipient, "-o", `${backup}.age`, backup]);
+    execFileSync("age", ["-d", "-i", key, "-o", `${backup}.dec`, `${backup}.age`]);
+    const sha = (f: string) => createHash("sha256").update(fs.readFileSync(f)).digest("hex");
+    check("encrypt → decrypt gives the identical file", sha(backup) === sha(`${backup}.dec`));
+    check(
+      "the encrypted file isn't gzip/plain",
+      !fs
+        .readFileSync(`${backup}.age`)
+        .subarray(0, 2)
+        .equals(Buffer.from([0x1f, 0x8b])),
+    );
+    const wrong = file("wrong.key");
+    execFileSync("age-keygen", ["-o", wrong], { stdio: "ignore" });
+    let refused = false;
+    try {
+      execFileSync("age", ["-d", "-i", wrong, "-o", file("x"), `${backup}.age`], {
+        stdio: "ignore",
+      });
+    } catch {
+      refused = true;
+    }
+    check("a different key can't decrypt it", refused);
+  }
+}
+
+async function expectRejected(name: string, f: string, db: string, pattern?: RegExp) {
+  const t = await freshTarget(db);
+  const r = tsx("scripts/db-restore.ts", ["--in", f, "--target", t]);
+  const empty = (await rowCount(t)) === 0;
+  check(
+    `${name}: rejected, nothing restored`,
+    !r.ok && empty && (!pattern || pattern.test(r.output)),
+    r.ok ? "restore SUCCEEDED" : r.output.trim().split("\n").at(-1)!.slice(0, 160),
+  );
+}
+
+main()
+  .catch((e) => check("drill ran to completion", false, e instanceof Error ? e.message : String(e)))
+  .finally(async () => {
+    fs.rmSync(work, { recursive: true, force: true });
+    await finish("Backup drill");
+  });

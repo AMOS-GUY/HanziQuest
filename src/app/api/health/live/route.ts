@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { releaseId } from "@/lib/release";
+import { deploymentEnvironment } from "@/features/operations/environment";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
  */
 export function GET() {
   return NextResponse.json(
-    { status: "ok", release: releaseId() },
+    { status: "ok", release: releaseId(), environment: deploymentEnvironment() ?? "development" },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

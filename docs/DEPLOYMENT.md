@@ -1,6 +1,7 @@
 # Deployment
 
-**Status (2026-11-11, M10): prepared, not deployed.** The configuration, workflows and
+**Status (2026-11-11, M11): prepared, not deployed.** Staging comes first (M11_STAGING_*.md).
+Production deploys require the same commit to have passed on staging (D-055). The configuration, workflows and
 runbooks are in the repository and tested as far as possible without a real host. Nothing is
 connected to Render, Neon or any other service, and no production credentials exist. Every
 step marked **Owner** needs the owner's accounts, approval or money.
@@ -21,14 +22,15 @@ DEPLOYMENT_ARCHITECTURE.md). The app is a plain Docker image and standard Postgr
 container host with managed PostgreSQL and PITR works the same way.
 
 ```
-GitHub (CI: verify + docker) ──► owner runs deploy.yml ──► approval (environment "production")
+GitHub (CI: verify + docker) ──► owner runs deploy.yml ──► preflight (on main, CI green, ok on staging)
+        │                                                   ──► approval (environment "production")
         │                                                   │
-        │                                  encrypted pre-migration backup (artifact, 30 days)
+        │                 db:environment guard → encrypted backup (artifact, 30 days) → migrate (direct URL) → mark if new
         ▼                                                   ▼
-   main branch ──────────────────────────────► Render deploy hook (auto-deploy off)
-                                                            │ build image → pre-deploy: prisma migrate deploy (direct URL)
+   main branch ──────────────────────────────► Render deploy hook ?ref=<SHA> (auto-deploy off)
+                                                            │ build image
                                                             ▼
-                                   new instance ready on /api/health → traffic switches
+                                   new instance up (readiness: migrations, environment marker) → traffic switches
                                                             │
                                           deploy.yml waits for the new release → smoke test
 ```
@@ -51,29 +53,31 @@ machine or the protected workflows.
 fatal item is wrong (`src/lib/env.ts`, run by `src/instrumentation-node.ts`), so a
 misconfigured release never takes traffic.
 
-| Variable                                   | Production                                        | Notes                                                                                                                                   |
-| ------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                             | required, **fatal**                               | `postgresql://`. Neon's **pooled** URL with `sslmode=require`.                                                                          |
-| `MIGRATE_DATABASE_URL`                     | required with a pooled `DATABASE_URL`             | Neon's **direct** URL. Used only by the Prisma CLI (`prisma.config.ts`) for `migrate deploy` in the pre-deploy step.                    |
-| `DATABASE_POOL_MAX`                        | optional (default 10), **fatal** if outside 1–100 | Connections per instance. Use 5 with a pooled URL.                                                                                      |
-| `AUTH_SECRET`                              | required, **fatal**                               | At least 32 random characters (`openssl rand -base64 32`), unique to production. The Dockerfile's build placeholder is refused.         |
-| `AUTH_URL`                                 | required, **fatal**                               | The public `https://` origin.                                                                                                           |
-| `AUTH_TRUST_HOST`                          | `true`, **fatal** otherwise                       | Auth.js trusts the platform proxy's host header. Sign-in fails without it.                                                              |
-| `TRUSTED_PROXY_HOPS`                       | `1` on Render, **fatal** if not 0–5               | Proxies that append to `X-Forwarded-For`. Rate limits key on the client IP. Check it after the first deploy (PRODUCTION_OPERATIONS.md). |
-| `RATE_LIMIT_STORE`                         | leave unset                                       | PostgreSQL store, shared by every instance. `memory` gives a warning.                                                                   |
-| `SENTRY_DSN`                               | optional                                          | Sentry or GlitchTip. Without it, errors are JSON lines on stdout (a warning).                                                           |
-| `APP_RELEASE`                              | optional on Render                                | Falls back to `RENDER_GIT_COMMIT`. It is shown on `/api/health`; deploy.yml waits for it.                                               |
-| `REGISTRATION_MODE`                        | **leave unset**                                   | Invite-only. `open` gives a warning and needs owner approval.                                                                           |
-| `PASSWORD_RESET_LINKS`                     | **leave unset**                                   | Off. `on` gives a warning and needs the owner's approval of the procedure in SECURITY.md.                                               |
-| `REGISTER_LIMIT_PER_HOUR`                  | leave unset                                       | Default 5 per IP per hour. Above 50 gives a warning.                                                                                    |
-| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | first seed only                                   | Creates the first Super Admin. Remove them afterwards.                                                                                  |
+| Variable                                   | Production                                              | Notes                                                                                                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                             | required, **fatal**                                     | `postgresql://`. Neon's **pooled** URL with `sslmode=require`.                                                                                                             |
+| `APP_ENV`                                  | `production`, **fatal** if missing or invalid on Render | Names the deployment: health `environment`, `env` in logs, and the database marker check (D-053, D-054).                                                                   |
+| `MIGRATE_DATABASE_URL`                     | not on Render                                           | The **direct** URL for the Prisma CLI (`prisma.config.ts`). The deploy workflow sets it from the `DIRECT_DATABASE_URL` secret; set it yourself only for manual operations. |
+| `DATABASE_POOL_MAX`                        | optional (default 10), **fatal** if outside 1–100       | Connections per instance. Use 5 with a pooled URL.                                                                                                                         |
+| `AUTH_SECRET`                              | required, **fatal**                                     | At least 32 random characters (`openssl rand -base64 32`), unique to production. The Dockerfile's build placeholder is refused.                                            |
+| `AUTH_URL`                                 | required, **fatal**                                     | The public `https://` origin.                                                                                                                                              |
+| `AUTH_TRUST_HOST`                          | `true`, **fatal** otherwise                             | Auth.js trusts the platform proxy's host header. Sign-in fails without it.                                                                                                 |
+| `TRUSTED_PROXY_HOPS`                       | `1` on Render, **fatal** if not 0–5                     | Proxies that append to `X-Forwarded-For`. Rate limits key on the client IP. Check it after the first deploy (PRODUCTION_OPERATIONS.md).                                    |
+| `RATE_LIMIT_STORE`                         | leave unset                                             | PostgreSQL store, shared by every instance. `memory` gives a warning.                                                                                                      |
+| `SENTRY_DSN`                               | optional                                                | Sentry or GlitchTip. Without it, errors are JSON lines on stdout (a warning).                                                                                              |
+| `APP_RELEASE`                              | optional on Render                                      | Falls back to `RENDER_GIT_COMMIT`. It is shown on `/api/health`; deploy.yml waits for it.                                                                                  |
+| `REGISTRATION_MODE`                        | **leave unset**                                         | Invite-only. `open` gives a warning and needs owner approval.                                                                                                              |
+| `PASSWORD_RESET_LINKS`                     | **leave unset**                                         | Off. `on` gives a warning and needs the owner's approval of the procedure in SECURITY.md.                                                                                  |
+| `REGISTER_LIMIT_PER_HOUR`                  | leave unset                                             | Default 5 per IP per hour. Above 50 gives a warning.                                                                                                                       |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | first seed only                                         | Creates the first Super Admin. Remove them afterwards.                                                                                                                     |
 
-GitHub environment `production` secrets, used by deploy.yml and backup.yml:
+GitHub environment secrets, used by `_deploy.yml` and backup.yml. Each environment (`staging`,
+`production`) has its **own** values under the same names:
 
-- `RENDER_DEPLOY_HOOK_URL`
-- `PRODUCTION_URL`
-- `PRODUCTION_DIRECT_DATABASE_URL`
-- `BACKUP_AGE_RECIPIENT`: the public key only
+- `DEPLOY_HOOK_URL`
+- `APP_URL`
+- `DIRECT_DATABASE_URL`
+- `BACKUP_AGE_RECIPIENT`: the public key only, a different key per environment
 
 ## First deployment (Owner)
 
@@ -92,14 +96,15 @@ Each step that spends money or creates an account is marked **(paid)** or **(acc
 4. **GitHub environment:**
    - In repository settings, create the `production` environment.
    - Add yourself as a required reviewer and turn off administrator bypass.
-   - Then add its secrets. `PRODUCTION_URL` and `RENDER_DEPLOY_HOOK_URL` are added after step 5.
+   - Then add its secrets. `APP_URL` and `DEPLOY_HOOK_URL` are added after step 5.
 5. **App (paid, $7/month):**
    - In Render, choose New → Blueprint and select this repository. Render reads `render.yaml`
      and shows the plan and price before creating anything.
    - Check that the region matches Neon's, and that auto-deploy is **off**.
    - Enter the `sync: false` values when asked.
    - Copy the service's deploy hook URL into the GitHub secret.
-   - The Blueprint's first build applies the migrations (pre-deploy) to the empty database.
+   - The Blueprint's first build starts on the empty database and reports 503 until the first
+     deploy.yml run migrates and marks it.
 6. **Seed (once)**, from a trusted machine with the repository at the deployed commit:
    ```bash
    DATABASE_URL="<direct URL>" SEED_ADMIN_EMAIL=… SEED_ADMIN_PASSWORD=… npm run db:seed
@@ -149,8 +154,8 @@ new instance passes `/api/health`. Then follow ROLLBACK.md.
 Schema changes follow **expand, then contract**. The running app never breaks during a deploy,
 and a rollback never needs a schema rollback.
 
-1. **Expand** (release N): add nullable columns, new tables and indexes. The pre-deploy step
-   applies the migration before the new code takes traffic. The old code ignores new columns.
+1. **Expand** (release N): add nullable columns, new tables and indexes. The deploy workflow
+   applies the migration before the new code is deployed. The old code ignores new columns.
 2. **Migrate data** if needed, with an idempotent script or a migration that only adds.
 3. **Contract** (release N+1 or later, once nothing reads the old shape): drop or rename. This
    needs a `-- migration-safety: allow <rule> <reason>` line, a DECISIONS.md entry and a fresh
@@ -186,7 +191,8 @@ trade-off.
 - Node 24, multi-stage, runs as a non-root user.
 - Node is PID 1, so SIGTERM reaches Next.js and it shuts down cleanly.
 - The HEALTHCHECK uses liveness.
-- Migrations aren't run at container start; Render's pre-deploy step runs them.
+- Migrations aren't run at container start; the deploy workflow runs them before the deploy
+  hook (free instances have no pre-deploy step, and one path is simpler).
 
 Docker isn't installed on the development machine. The CI `docker` job builds the image and
 runs a start-up test:

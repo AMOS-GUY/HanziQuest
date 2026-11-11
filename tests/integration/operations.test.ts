@@ -5,6 +5,7 @@ import { registerUser } from "@/features/authentication/register";
 import { operationsStatus } from "@/features/operations/status";
 import { pruneOperationalData } from "@/features/operations/retention";
 import { checkReadiness, expectedMigrations } from "@/features/operations/health";
+import { guardDatabase, markerState } from "@/features/operations/environment";
 import { ensureRoles, testPrisma, uniqueEmail } from "./helpers";
 
 const prisma = testPrisma();
@@ -134,5 +135,21 @@ describe("readiness against a real database (M10-02)", () => {
       migrations: "pending",
       pendingMigrations: 1,
     });
+  });
+});
+
+describe("deployment environment marker (M11, D-054)", () => {
+  it("is not required locally and refuses an unmarked database with accounts", async () => {
+    // The shared test database has accounts and no marker, like an unknown database would.
+    expect(await markerState(prisma, null)).toBe("not-checked");
+    expect(await markerState(prisma, "staging")).toBe("unmarked");
+    expect(await guardDatabase(prisma, "staging")).toEqual({
+      ok: false,
+      reason: "unmarked-with-data",
+      marker: null,
+    });
+    const ready = await checkReadiness(prisma, expectedMigrations(), "staging");
+    expect(ready).toMatchObject({ ok: false, databaseEnvironment: "unmarked" });
+    expect((await checkReadiness(prisma, expectedMigrations())).ok).toBe(true);
   });
 });

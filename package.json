@@ -37,6 +37,10 @@
     "db:backup": "tsx scripts/db-backup.ts",
     "db:restore": "tsx scripts/db-restore.ts",
     "db:verify": "tsx scripts/db-verify.ts",
+    "db:environment": "tsx scripts/db-environment.ts",
+    "drill:migrations": "tsx scripts/drills/migrations.ts",
+    "drill:backup": "tsx scripts/drills/backup.ts",
+    "test:staging": "playwright test --config playwright.staging.config.ts",
     "ops:prune": "tsx scripts/ops-prune.ts",
     "postinstall": "prisma generate"
   },

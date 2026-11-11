@@ -1,6 +1,18 @@
 # Beta release package
 
-## Status (2026-11-11, M10 in review)
+## Status (2026-11-11, M11 staging preparation in review)
+
+- `main` = `0ec42f6` (M10 merged as PR #16).
+- **M11** is on `feature/m11-staging-deployment`, waiting for review. It adds:
+  - the staging architecture ($0) and the database environment guard
+  - staging and production deploys through one reviewed workflow (production only after
+    staging)
+  - drills and the staging acceptance suite
+  - runbooks
+- **Staging doesn't exist yet.** Creating it needs the owner's approval (M11_STAGING_ARCHITECTURE.md,
+  "Approvals the owner must give"). Nothing has been deployed anywhere.
+
+## Status (2026-11-11, M10 in review, superseded)
 
 - `main` = `9b83917` (PR #15 merged RS-07). It contains M1–M9, the integration audit and the
   reset reviews.

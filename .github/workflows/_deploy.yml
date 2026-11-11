@@ -1,0 +1,202 @@
+# Reusable deploy (M11, D-055). Called only by deploy-staging.yml and deploy.yml (production),
+# which are manual-dispatch only. Never triggered by a push or pull request.
+#
+# Each GitHub environment ("staging", "production") holds its OWN secrets under the same names,
+# so a job can only ever see the secrets of the environment it deploys to:
+#   DEPLOY_HOOK_URL       Render deploy hook of that environment's service (secret)
+#   APP_URL               public origin, e.g. https://hanziquest-staging.onrender.com
+#   DIRECT_DATABASE_URL   that environment's direct (unpooled) database URL
+#   BACKUP_AGE_RECIPIENT  that environment's age PUBLIC key (separate keys per environment)
+#
+# Order: preflight → (approval on the environment) → database environment guard → encrypted
+# backup → migrations → marker for a new database → Render deploy of the exact SHA → wait for
+# readiness on that release and environment → read-only smoke test → summary.
+name: Deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      sha:
+        type: string
+        required: true
+      confirm:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  checks: read
+  deployments: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inputs
+        env:
+          TARGET: ${{ inputs.environment }}
+          CONFIRM: ${{ inputs.confirm }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          case "$TARGET" in staging|production) ;; *) echo "::error::Unknown environment '$TARGET'"; exit 1;; esac
+          [ "$CONFIRM" = "deploy $TARGET" ] || { echo "::error::Type exactly: deploy $TARGET"; exit 1; }
+          echo "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "::error::Give the full 40-character commit SHA"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The commit is on main (reviewed and merged)
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          git cat-file -e "$SHA^{commit}" 2>/dev/null || { echo "::error::Commit $SHA not found"; exit 1; }
+          git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$SHA is not on main. Only reviewed, merged commits are deployed."; exit 1; }
+
+      - name: Required CI checks passed for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          for check in verify docker; do
+            conclusion=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs?check_name=$check" \
+              --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.completed_at) | last | .conclusion')
+            echo "$check: ${conclusion:-missing}"
+            [ "$conclusion" = "success" ] || { echo "::error::CI check '$check' has not passed for $SHA"; exit 1; }
+          done
+
+      - name: Production only after the same commit succeeded on staging
+        if: inputs.environment == 'production'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/deployments?environment=staging&sha=$SHA&per_page=20" --jq '.[].id')
+          for id in $ids; do
+            state=$(gh api "repos/${{ github.repository }}/deployments/$id/statuses?per_page=1" --jq '.[0].state')
+            if [ "$state" = "success" ]; then echo "Staging deployment $id of $SHA succeeded."; exit 0; fi
+          done
+          echo "::error::No successful staging deployment of $SHA. Deploy it to staging and run the acceptance suite first (docs/M11_STAGING_ACCEPTANCE.md)."
+          exit 1
+
+  deploy:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Approval: required reviewers on the environment (both staging and production).
+    environment: ${{ inputs.environment }}
+    env:
+      TARGET: ${{ inputs.environment }}
+      SHA: ${{ inputs.sha }}
+      APP_URL: ${{ secrets.APP_URL }}
+    steps:
+      - name: Secrets of this environment are configured
+        env:
+          HOOK: ${{ secrets.DEPLOY_HOOK_URL }}
+          DB: ${{ secrets.DIRECT_DATABASE_URL }}
+          AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          missing=""
+          [ -n "$HOOK" ] || missing="$missing DEPLOY_HOOK_URL"
+          [ -n "$DB" ] || missing="$missing DIRECT_DATABASE_URL"
+          [ -n "$AGE" ] || missing="$missing BACKUP_AGE_RECIPIENT"
+          [ -n "$APP_URL" ] || missing="$missing APP_URL"
+          [ -z "$missing" ] || { echo "::error::Missing secrets on the '$TARGET' environment:$missing (docs/M11_STAGING_CONFIGURATION.md)"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          DATABASE_URL: postgresql://build:build@localhost:5432/build
+        run: npm ci
+
+      - name: Migration safety (no destructive statements, applied migrations unchanged)
+        run: npm run db:check-migrations -- --base origin/main
+
+      - name: Database belongs to this environment (before anything touches it)
+        env:
+          MIGRATE_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+        run: npm run db:environment -- --expect "$TARGET"
+
+      - name: Pre-migration backup (encrypted with this environment's key)
+        env:
+          DB: ${{ secrets.DIRECT_DATABASE_URL }}
+          AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq age >/dev/null
+          mkdir -p backup
+          name="hanziquest-$TARGET-predeploy-$(date -u +%Y%m%dT%H%M%SZ)-${SHA:0:7}.ndjson.gz"
+          DATABASE_URL="$DB" npm run db:backup -- --source "$DB" --out backup/plain.ndjson.gz
+          age -r "$AGE" -o "backup/$name.age" backup/plain.ndjson.gz
+          shred -u backup/plain.ndjson.gz
+          echo "BACKUP_NAME=$name.age" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: predeploy-backup-${{ inputs.environment }}-${{ inputs.sha }}
+          path: backup/*.age
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Apply migrations (direct URL; additive only, checked above)
+        env:
+          MIGRATE_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+        run: node node_modules/prisma/build/index.js migrate deploy
+
+      - name: Mark a new database with this environment
+        env:
+          MIGRATE_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+        run: npm run db:environment -- --expect "$TARGET" --mark
+
+      - name: Deploy this exact commit on Render
+        env:
+          HOOK: ${{ secrets.DEPLOY_HOOK_URL }}
+        run: |
+          case "$HOOK" in *\?*) url="$HOOK&ref=$SHA";; *) url="$HOOK?ref=$SHA";; esac
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$url")
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || { echo "::error::Render refused the deploy hook (HTTP $code)"; exit 1; }
+          echo "Deploy of ${SHA:0:7} requested on $TARGET"
+
+      - name: Wait for the new release to be ready
+        run: |
+          # Free services can take about a minute to start; allow 20 minutes in all.
+          for i in $(seq 1 120); do
+            body=$(curl -fsS --max-time 20 "$APP_URL/api/health" || true)
+            release=$(echo "$body" | jq -r '.release // empty' 2>/dev/null)
+            status=$(echo "$body" | jq -r '.status // empty' 2>/dev/null)
+            envname=$(echo "$body" | jq -r '.environment // empty' 2>/dev/null)
+            if [ -n "$release" ] && [ "$status" = "ok" ] && [ "${SHA#"$release"}" != "$SHA" ]; then
+              [ "$envname" = "$TARGET" ] || { echo "::error::$APP_URL reports environment '$envname', not '$TARGET'. Check APP_URL and APP_ENV."; exit 1; }
+              echo "RELEASE=$release" >> "$GITHUB_ENV"
+              echo "Ready: $TARGET release $release"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::The new release didn't become ready in 20 minutes. Last health: $body. The previous release keeps serving (docs/ROLLBACK.md)."
+          exit 1
+
+      - name: Smoke test (read-only)
+        run: npm run smoke -- "$APP_URL"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy to $TARGET: ${{ job.status }}"
+            echo "- Commit: \`$SHA\`"
+            echo "- Release reported by /api/health: \`${RELEASE:-not reached}\`"
+            echo "- Pre-migration backup artifact: \`${BACKUP_NAME:-not taken}\`"
+            echo "- If this failed: the previous release keeps serving. See docs/ROLLBACK.md."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -3,19 +3,21 @@
  *   DATABASE_URL=<target> npx prisma migrate deploy
  *   npm run db:restore -- --in backups/x.ndjson.gz --target <url>
  * Refuses to touch a database that already contains data. Foreign keys stay enforced, so a
- * successful restore also proves every relationship in the backup is valid.
+ * successful restore also proves every relationship in the backup is valid. Row counts and
+ * (from M10 backups on) per-table content checksums are compared with the header before the
+ * single transaction commits; any mismatch rolls everything back.
  */
 import "dotenv/config";
 import fs from "node:fs";
 import readline from "node:readline";
 import zlib from "node:zlib";
-import { appliedMigrations, arg, client, type ColumnInfo } from "./lib/db-tools";
+import { appliedMigrations, arg, client, tableChecksum, type ColumnInfo } from "./lib/db-tools";
 
 interface Header {
   format: string;
   version: number;
   migrations: string[];
-  tables: { table: string; rows: number; columns: ColumnInfo[] }[];
+  tables: { table: string; rows: number; checksum?: string; columns: ColumnInfo[] }[];
 }
 
 function encode(value: unknown, col: ColumnInfo) {
@@ -98,6 +100,17 @@ async function main() {
     for (const t of header.tables) {
       if ((counts.get(t.table) ?? 0) !== t.rows)
         throw new Error(`${t.table}: restored ${counts.get(t.table) ?? 0} of ${t.rows} rows`);
+    }
+    // Content check before committing (M11, S-07): a value changed in the file after the backup
+    // was taken (corruption or tampering) rolls the whole restore back. Pre-M10 backups have no
+    // checksums and get the row-count check only.
+    for (const t of header.tables) {
+      if (!t.checksum) continue;
+      const restored = await tableChecksum(db, t.table);
+      if (restored.checksum !== t.checksum)
+        throw new Error(
+          `${t.table}: content checksum doesn't match the backup header. The file is corrupted or was changed. Nothing was restored.`,
+        );
     }
     await db.query("COMMIT");
     for (const t of header.tables) console.log(`  ${t.table}: ${t.rows}`);

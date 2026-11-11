@@ -1080,6 +1080,15 @@ model HandwritingSample {
   @@index([participantCode])
 }
 
+/// Which deployment this database belongs to ("staging" or "production"), written once when a
+/// new database is first deployed (M11, D-054). Readiness refuses to serve when it doesn't match
+/// APP_ENV, so staging can't run against production data or the reverse. A single row, no FKs.
+model DeploymentMarker {
+  id          Int      @id @default(1)
+  environment String
+  createdAt   DateTime @default(now())
+}
+
 /// Fixed-window counters for the shared rate limiter (multi-instance safe).
 model RateLimitBucket {
   key     String   @id

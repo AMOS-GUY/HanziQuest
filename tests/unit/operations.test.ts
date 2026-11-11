@@ -53,6 +53,28 @@ describe("environment check", () => {
         .map((i) => i.name),
     ).toEqual([]);
   });
+  it("requires a named environment on Render and keeps staging invite-only (M11)", async () => {
+    const fatal = (env: Record<string, string | undefined>) =>
+      checkEnvironment(env)
+        .filter((i) => i.fatal)
+        .map((i) => i.name);
+    expect(fatal({ ...prod, RENDER: "true" })).toContain("APP_ENV");
+    expect(fatal({ ...prod, RENDER: "true", APP_ENV: "staging" })).toEqual([]);
+    expect(fatal({ ...prod, APP_ENV: "qa" })).toContain("APP_ENV");
+    expect(fatal(prod)).toEqual([]); // local production builds (e2e, smoke)
+    expect(fatal({ ...prod, APP_ENV: "staging", REGISTRATION_MODE: "open" })).toContain(
+      "REGISTRATION_MODE",
+    );
+    expect(fatal({ ...prod, APP_ENV: "production", REGISTRATION_MODE: "open" })).not.toContain(
+      "REGISTRATION_MODE",
+    );
+    for (const name of ["DATABASE_URL", "AUTH_SECRET", "AUTH_URL", "MIGRATE_DATABASE_URL"])
+      expect(fatal({ ...prod, [name]: "postgresql://REPLACE_ME_with_the_value" })).toContain(name);
+    const { deploymentEnvironment } = await import("@/features/operations/environment");
+    expect(deploymentEnvironment({ APP_ENV: " Staging " })).toBe("staging");
+    expect(deploymentEnvironment({ APP_ENV: "dev" })).toBeNull();
+    expect(deploymentEnvironment({})).toBeNull();
+  });
   it("names the running release from APP_RELEASE or Render's commit", async () => {
     const { releaseId } = await import("@/lib/release");
     expect(releaseId({ APP_RELEASE: "v1.2.0", RENDER_GIT_COMMIT: "abc" })).toBe("v1.2.0");

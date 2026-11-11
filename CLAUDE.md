@@ -84,8 +84,15 @@ npm run content:validate
   (503 while a shipped migration is unapplied). Logic in `features/operations/health.ts` (D-048).
 - Start-up config check runs in `instrumentation-node.ts` and **exits** on a fatal problem; a
   throwing `register()` doesn't stop Next.js (D-049). New production env vars go in `lib/env.ts`.
-- Deploys are manual only (`deploy.yml`, owner-approved `production` environment). Never add an
-  automatic production deploy or turn on Render auto-deploy (D-050). `MIGRATE_DATABASE_URL`
-  (direct) overrides `DATABASE_URL` for the Prisma CLI.
+- Deploys are manual only: `deploy-staging.yml` and `deploy.yml` both call `_deploy.yml`
+  (owner-approved GitHub environments, same secret names per environment). Production needs the
+  same SHA to have succeeded on staging. Never add an automatic deploy or turn on Render auto-deploy
+  (D-050, D-055). The workflow migrates (direct URL) before the deploy hook; there is no Render
+  pre-deploy step. `MIGRATE_DATABASE_URL` overrides `DATABASE_URL` for the Prisma CLI.
+- `APP_ENV` (`staging`/`production`) must match the database's `DeploymentMarker`, or readiness
+  returns 503 (D-054). `npm run db:environment` guards and marks; it never changes a marker.
+  Never copy production data into staging.
+- Drills: `npm run drill:migrations` and `npm run drill:backup` (local databases only; CI runs
+  both). The staging acceptance suite (`npm run test:staging`) is HTTP-only and refuses production.
 - The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it
   when caching rules change. Test offline flows with `npm run build` + Playwright.

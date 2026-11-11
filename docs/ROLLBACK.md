@@ -35,9 +35,13 @@ Special case: **reverting M9 or anything that sets registration defaults** must 
 
 ## Failed migration
 
-`prisma migrate deploy` runs in Render's pre-deploy step. If it fails, Render cancels the
-deploy and the previous release keeps serving. The database may hold a partly applied
-migration.
+`prisma migrate deploy` runs in the deploy workflow, before the Render deploy hook. If it fails,
+the workflow stops, nothing is deployed, and the previous release keeps serving. The pre-migration
+backup artifact exists.
+
+**The database may hold a partly applied migration.** `npm run drill:migrations` confirmed that
+Prisma doesn't wrap a PostgreSQL migration in one transaction: a migration failing on its
+second statement left its first statement's table behind.
 
 1. Connect with the **direct** URL and read `_prisma_migrations` for the failed row
    (`finished_at IS NULL`). Check which statements were applied.
@@ -48,7 +52,7 @@ migration.
 3. Fix the migration **in a new commit**, before it is ever applied successfully anywhere
    shared. If it was already applied anywhere, write a new forward migration instead. Never
    edit or delete an applied migration.
-4. Deploy again through deploy.yml.
+4. Deploy again through the deploy workflow (staging first).
 
 Never run `migrate reset` or `db push` against production.
 

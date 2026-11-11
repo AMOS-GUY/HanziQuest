@@ -1,0 +1,33 @@
+# Staging deploy: manual and approved (M11). Staging uses only the "staging" environment's
+# secrets and database (docs/M11_STAGING_CONFIGURATION.md). Never triggered by a push.
+name: Deploy staging (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full commit SHA on main to deploy (CI green)"
+        required: true
+        type: string
+      confirm:
+        description: 'Type "deploy staging" to confirm'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+  deployments: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: staging
+      sha: ${{ inputs.sha }}
+      confirm: ${{ inputs.confirm }}
+    secrets: inherit
