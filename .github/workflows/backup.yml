@@ -55,7 +55,7 @@ jobs:
         run: |
           [ -n "$DB" ] && [ -n "$AGE" ] || { echo "::error::Set DIRECT_DATABASE_URL and BACKUP_AGE_RECIPIENT on the $TARGET environment"; exit 1; }
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
