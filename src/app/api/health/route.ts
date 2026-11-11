@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/database/prisma";
 import { checkReadiness, expectedMigrations } from "@/features/operations/health";
+import { releaseId } from "@/lib/release";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function GET() {
       database: readiness.database,
       migrations: readiness.migrations,
       ...(readiness.pendingMigrations ? { pendingMigrations: readiness.pendingMigrations } : {}),
-      release: process.env.APP_RELEASE ?? "dev",
+      release: releaseId(),
       latencyMs: Date.now() - started,
     },
     { status: readiness.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } },

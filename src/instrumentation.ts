@@ -3,14 +3,7 @@
  * server errors (pages, server actions, route handlers).
  */
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const { checkEnvironment } = await import("@/lib/env");
-  const issues = checkEnvironment();
-  for (const i of issues) console[i.fatal ? "error" : "warn"](`[config] ${i.name} ${i.problem}`);
-  const fatal = issues.filter((i) => i.fatal);
-  if (fatal.length > 0 && process.env.SKIP_ENV_CHECK !== "true") {
-    throw new Error(`Invalid configuration: ${fatal.map((i) => i.name).join(", ")}`);
-  }
+  if (process.env.NEXT_RUNTIME === "nodejs") await import("./instrumentation-node");
 }
 
 export async function onRequestError(

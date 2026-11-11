@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { releaseId } from "@/lib/release";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
  */
 export function GET() {
   return NextResponse.json(
-    { status: "ok", release: process.env.APP_RELEASE ?? "dev" },
+    { status: "ok", release: releaseId() },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

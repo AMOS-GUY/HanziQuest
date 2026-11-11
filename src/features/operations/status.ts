@@ -5,6 +5,7 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { checkEnvironment, type EnvIssue } from "@/lib/env";
 import { registrationMode, type RegistrationMode } from "@/features/invites/invites";
+import { releaseId } from "@/lib/release";
 
 export interface OperationsStatus {
   generatedAt: string;
@@ -106,7 +107,7 @@ export async function operationsStatus(
 
   return {
     generatedAt: now.toISOString(),
-    release: process.env.APP_RELEASE ?? "dev",
+    release: releaseId(),
     database: { latencyMs },
     migrations: {
       applied: migrationRows.length,

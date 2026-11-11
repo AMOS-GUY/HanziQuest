@@ -6,6 +6,8 @@
  * No personal data is attached: only the error, a source label, a request path and the release.
  */
 
+import { releaseId } from "@/lib/release";
+
 export interface ErrorContext {
   source: "api" | "server" | "client" | "action" | "worker";
   path?: string;
@@ -97,7 +99,7 @@ export async function reportError(error: unknown, context: ErrorContext) {
       },
       body: buildEnvelope(error, context, {
         dsn,
-        release: process.env.APP_RELEASE,
+        release: releaseId(),
         environment: process.env.APP_ENV ?? process.env.NODE_ENV,
       }),
       signal: AbortSignal.timeout(2500),

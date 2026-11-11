@@ -64,10 +64,11 @@ export function checkEnvironment(
         problem: "must be 'true' behind the platform proxy, or sign-in fails (UntrustedHost)",
         fatal: true,
       });
-    if (!env.APP_RELEASE)
+    if (!env.APP_RELEASE && !env.RENDER_GIT_COMMIT)
       issues.push({
         name: "APP_RELEASE",
-        problem: "is not set; health checks and error reports can't name the running release",
+        problem:
+          "is not set (and no RENDER_GIT_COMMIT); health checks and error reports can't name the running release",
         fatal: false,
       });
     need("AUTH_URL", "must be the public origin, e.g. https://app.example.com");

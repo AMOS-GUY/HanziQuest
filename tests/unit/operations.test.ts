@@ -53,6 +53,17 @@ describe("environment check", () => {
         .map((i) => i.name),
     ).toEqual([]);
   });
+  it("names the running release from APP_RELEASE or Render's commit", async () => {
+    const { releaseId } = await import("@/lib/release");
+    expect(releaseId({ APP_RELEASE: "v1.2.0", RENDER_GIT_COMMIT: "abc" })).toBe("v1.2.0");
+    expect(releaseId({ RENDER_GIT_COMMIT: "0123456789abcdef0123" })).toBe("0123456789ab");
+    expect(releaseId({})).toBe("dev");
+    expect(
+      checkEnvironment({ ...prod, APP_RELEASE: undefined, RENDER_GIT_COMMIT: "abc" }).map(
+        (i) => i.name,
+      ),
+    ).not.toContain("APP_RELEASE");
+  });
   it("sizes the connection pool from DATABASE_POOL_MAX, with safe defaults", async () => {
     const { poolSettings } = await import("@/lib/database/client");
     expect(poolSettings({}).max).toBe(10);
