@@ -15,6 +15,8 @@ const { handleApi, readJson } = await import("@/lib/api/respond");
 const { AuthorizationError } = await import("@/lib/auth/session");
 const { DomainError } = await import("@/features/administration/services");
 const { GET: health } = await import("@/app/api/health/route");
+const { GET: liveness } = await import("@/app/api/health/live/route");
+const { expectedMigrations } = await import("@/features/operations/health");
 
 function post(body: string, headers: Record<string, string> = {}) {
   return new Request("http://app.test/api/x", {
@@ -103,17 +105,35 @@ describe("handleApi error mapping", () => {
   });
 });
 
-describe("GET /api/health", () => {
-  it("reports ok when the database answers", async () => {
-    queryRaw.mockResolvedValue([{ "?column?": 1 }]);
+describe("GET /api/health (readiness)", () => {
+  const shipped = expectedMigrations()!;
+  const applied = (names: readonly string[], unfinished = false) =>
+    names.map((migration_name) => ({ migration_name, unfinished }));
+
+  it("ships with the build's migration list", () => {
+    expect(shipped.length).toBeGreaterThan(0);
+    expect(shipped).toEqual([...shipped].sort());
+  });
+
+  it("reports ok when the database answers and every migration is applied", async () => {
+    queryRaw.mockResolvedValueOnce([{ "?column?": 1 }]).mockResolvedValueOnce(applied(shipped));
     const response = await health();
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toMatchObject({ status: "ok", database: "ok" });
+    expect(await response.json()).toMatchObject({
+      status: "ok",
+      database: "ok",
+      migrations: "ok",
+    });
   });
 
   it("returns 503 while a migration is unfinished or failed", async () => {
-    queryRaw.mockResolvedValueOnce([{ "?column?": 1 }]).mockResolvedValueOnce([{ count: 1n }]);
+    queryRaw
+      .mockResolvedValueOnce([{ "?column?": 1 }])
+      .mockResolvedValueOnce([
+        ...applied(shipped.slice(0, -1)),
+        ...applied(shipped.slice(-1), true),
+      ]);
     const response = await health();
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({
@@ -123,6 +143,26 @@ describe("GET /api/health", () => {
     });
   });
 
+  it("returns 503 when this build's migrations aren't applied yet (M10-02)", async () => {
+    queryRaw
+      .mockResolvedValueOnce([{ "?column?": 1 }])
+      .mockResolvedValueOnce(applied(shipped.slice(0, -2)));
+    const response = await health();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      status: "degraded",
+      migrations: "pending",
+      pendingMigrations: 2,
+    });
+  });
+
+  it("stays ready when the database is ahead of the code (after a rollback)", async () => {
+    queryRaw
+      .mockResolvedValueOnce([{ "?column?": 1 }])
+      .mockResolvedValueOnce(applied([...shipped, "29991231000000_future"]));
+    expect((await health()).status).toBe(200);
+  });
+
   it("returns 503 without details when the database is down", async () => {
     queryRaw.mockRejectedValue(new Error("password authentication failed for user hanziquest"));
     const response = await health();
@@ -130,6 +170,20 @@ describe("GET /api/health", () => {
     const text = await response.text();
     expect(JSON.parse(text)).toMatchObject({ status: "degraded", database: "unavailable" });
     expect(text).not.toContain("password");
+    queryRaw.mockReset();
+  });
+});
+
+describe("GET /api/health/live (liveness)", () => {
+  it("answers without touching the database (M10-01)", async () => {
+    queryRaw.mockReset();
+    queryRaw.mockRejectedValue(new Error("database down"));
+    const response = liveness();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ status: "ok" });
+    expect(queryRaw).not.toHaveBeenCalled();
+    queryRaw.mockReset();
   });
 });
 

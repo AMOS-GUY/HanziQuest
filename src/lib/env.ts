@@ -2,6 +2,9 @@
  * Production configuration check, run once at server start (instrumentation.ts). It fails fast
  * with a readable list instead of letting the app start half-configured.
  */
+/** Values that are public placeholders and must never be the production secret (M10-05). */
+export const PLACEHOLDER_SECRETS = ["build-time-placeholder-secret-not-used-at-runtime"];
+
 export interface EnvIssue {
   name: string;
   problem: string;
@@ -24,7 +27,49 @@ export function checkEnvironment(
       problem: "should be at least 32 characters",
       fatal: production,
     });
+  if (env.DATABASE_URL && !/^postgres(ql)?:\/\//.test(env.DATABASE_URL))
+    issues.push({
+      name: "DATABASE_URL",
+      problem: "must be a postgresql:// connection string",
+      fatal: production,
+    });
+  if (env.DATABASE_POOL_MAX !== undefined && env.DATABASE_POOL_MAX !== "") {
+    const max = Number(env.DATABASE_POOL_MAX);
+    if (!Number.isInteger(max) || max < 1 || max > 100)
+      issues.push({
+        name: "DATABASE_POOL_MAX",
+        problem: "must be a whole number from 1 to 100",
+        fatal: production,
+      });
+  }
+  if (env.TRUSTED_PROXY_HOPS !== undefined && env.TRUSTED_PROXY_HOPS !== "") {
+    const hops = Number(env.TRUSTED_PROXY_HOPS);
+    if (!Number.isInteger(hops) || hops < 0 || hops > 5)
+      issues.push({
+        name: "TRUSTED_PROXY_HOPS",
+        problem: "must be a whole number from 0 to 5 (rate limits key on the client IP)",
+        fatal: production,
+      });
+  }
   if (production) {
+    if (env.AUTH_SECRET && PLACEHOLDER_SECRETS.includes(env.AUTH_SECRET))
+      issues.push({
+        name: "AUTH_SECRET",
+        problem: "is a public placeholder; generate a real secret",
+        fatal: true,
+      });
+    if (env.AUTH_TRUST_HOST !== "true")
+      issues.push({
+        name: "AUTH_TRUST_HOST",
+        problem: "must be 'true' behind the platform proxy, or sign-in fails (UntrustedHost)",
+        fatal: true,
+      });
+    if (!env.APP_RELEASE)
+      issues.push({
+        name: "APP_RELEASE",
+        problem: "is not set; health checks and error reports can't name the running release",
+        fatal: false,
+      });
     need("AUTH_URL", "must be the public origin, e.g. https://app.example.com");
     if (env.AUTH_URL) {
       try {

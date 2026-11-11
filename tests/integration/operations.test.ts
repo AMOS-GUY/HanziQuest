@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerUser } from "@/features/authentication/register";
 import { operationsStatus } from "@/features/operations/status";
 import { pruneOperationalData } from "@/features/operations/retention";
+import { checkReadiness, expectedMigrations } from "@/features/operations/health";
 import { ensureRoles, testPrisma, uniqueEmail } from "./helpers";
 
 const prisma = testPrisma();
@@ -115,5 +116,23 @@ describe("retention", () => {
     // Rejected or unprocessed events are kept for investigation.
     expect(await prisma.syncEvent.count({ where: { userId, status: "RECEIVED" } })).toBe(1);
     expect(await prisma.auditLog.count({ where: { action: "ops.prune" } })).toBeGreaterThan(0);
+  });
+});
+
+describe("readiness against a real database (M10-02)", () => {
+  it("is ready when every shipped migration is applied, and not when one is missing", async () => {
+    const shipped = expectedMigrations();
+    expect(shipped).not.toBeNull();
+    expect(await checkReadiness(prisma, shipped)).toEqual({
+      ok: true,
+      database: "ok",
+      migrations: "ok",
+    });
+    expect(await checkReadiness(prisma, [...shipped!, "29991231000000_not_applied"])).toEqual({
+      ok: false,
+      database: "ok",
+      migrations: "pending",
+      pendingMigrations: 1,
+    });
   });
 });
