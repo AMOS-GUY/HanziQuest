@@ -8,13 +8,13 @@
 
 ## Layers
 
-| Layer                      | What                                                                                               | Retention                                           | Protects against                                          |
-| -------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
-| 1. Provider PITR (primary) | Neon Launch history, restorable to any second                                                      | 7 days (set the project's history window to 7 days) | bad deploys, bad scripts, accidental deletes              |
-| 2. Pre-deploy backup       | deploy.yml: a logical backup taken just before every production deploy, `age`-encrypted            | 30 days (GitHub artifact)                           | a migration that damages data, even after the PITR window |
-| 3. Off-site weekly backup  | backup.yml: a logical backup, restored and verified on a disposable database, then `age`-encrypted | 30 days (GitHub artifact)                           | provider incident, account loss, PITR misconfiguration    |
-| 4. Curriculum source       | `content/*.json` in git; imports are idempotent                                                    | git history                                         | content loss                                              |
-| 5. Configuration           | environment variables in the owner's password manager                                              | on change                                           | lost settings                                             |
+| Layer                      | What                                                                                                     | Retention                                           | Protects against                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
+| 1. Provider PITR (primary) | Neon Launch history, restorable to any second                                                            | 7 days (set the project's history window to 7 days) | bad deploys, bad scripts, accidental deletes              |
+| 2. Pre-deploy backup       | `_deploy.yml`: a logical backup taken just before every deploy (staging and production), `age`-encrypted | 30 days (GitHub artifact)                           | a migration that damages data, even after the PITR window |
+| 3. Off-site weekly backup  | backup.yml: a logical backup, restored and verified on a disposable database, then `age`-encrypted       | 30 days (GitHub artifact)                           | provider incident, account loss, PITR misconfiguration    |
+| 4. Curriculum source       | `content/*.json` in git; imports are idempotent                                                          | git history                                         | content loss                                              |
+| 5. Configuration           | environment variables in the owner's password manager                                                    | on change                                           | lost settings                                             |
 
 Backups contain personal data: emails, password hashes, handwriting, IPs in audit entries.
 
@@ -38,7 +38,8 @@ Backups contain personal data: emails, password hashes, handwriting, IPs in audi
 
 ## Automation
 
-- **Pre-deploy:** automatic in deploy.yml, after the owner approves the deploy.
+- **Pre-deploy:** automatic in `_deploy.yml`, after the owner approves the deploy and the
+  database guard passes.
 - **Weekly off-site:** backup.yml.
   1. Run it manually once (Actions → Off-site backup → Run workflow).
   2. Download the artifact and decrypt it on your machine (below).
@@ -94,6 +95,58 @@ encrypted file only if verification passes.
 | Pre-deploy and weekly encrypted backups | 30 days (artifact expiry deletes them automatically)                         |
 | Decrypted copies                        | Deleted the same day                                                         |
 | Audit log, sync events                  | Pruned by `ops:prune` per LEGAL_REVIEW.md periods (PRODUCTION_OPERATIONS.md) |
+
+## Recovery objectives and responsibilities (M11, proposal for the owner)
+
+|                             | Staging                                              | Production                                                                                                               |
+| --------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Backup frequency            | before every deploy; `backup.yml` manually or weekly | continuous PITR; before every deploy; `backup.yml` weekly                                                                |
+| Retention                   | Neon Free history 6 h; artifacts 30 days             | PITR 7 days; artifacts 30 days                                                                                           |
+| Encryption                  | `age`, **staging** key pair                          | `age`, **production** key pair                                                                                           |
+| **RPO** (data you can lose) | up to 6 h (history), else since the last artifact    | seconds within 7 days (PITR); up to 1 week from off-site backups if Neon is lost                                         |
+| **RTO** (time to restore)   | about 30 min (recreate and re-seed, synthetic data)  | about 1 h with PITR to a branch plus a switch (_estimate, unmeasured_); about 2–4 h from an off-site backup (_estimate_) |
+
+The owner is responsible for:
+
+- keeping both private `age` keys offline in two places;
+- running the quarterly drills and recording them here;
+- enabling the weekly schedule after the first verified manual run;
+- deciding on retention beyond 30 days (LEGAL_REVIEW.md).
+
+**Status:**
+
+- **Off-site backup readiness is not claimed.** `backup.yml` has never run against a real
+  provider, and the `age` encryption step has only been written. It will be exercised by the
+  CI drill (when CI runs) and by the first staging backup after approval.
+- The RTO figures are estimates until a real drill is timed.
+
+## Restore safety (M11)
+
+`db:restore` refuses or rolls back, leaving the target empty, in every case below.
+`npm run drill:backup` rehearses each one on disposable databases:
+
+| Case                                               | Rejected by                                       |
+| -------------------------------------------------- | ------------------------------------------------- |
+| a. Truncated or corrupt gzip                       | the decompressor ("unexpected end of file")       |
+| b. A changed value with the row count unchanged    | **per-table checksum before COMMIT** (new in M11) |
+| c. A row referencing a missing parent              | the enforced foreign key                          |
+| d. A header row count that disagrees with the rows | the row-count check                               |
+| e. A backup from another schema version            | the migration list check                          |
+| f. A non-empty target                              | the pre-check                                     |
+
+A production backup restored into staging restores, but staging won't serve it: its
+`DeploymentMarker` says "production" (D-054).
+
+**M11 drill (2026-11-11, local, synthetic seeded source):**
+
+- every check passed;
+- `db:verify` matched by source and by backup;
+- cases a–f were all rejected with nothing restored;
+- the `age` round trip was **skipped**: the CLI isn't installed on the development machine. CI
+  installs it.
+
+The app-read comparison covered 0 learners, because the synthetic source has no attempts. The
+M10 drill on development data covered 5.
 
 ## Drill log
 

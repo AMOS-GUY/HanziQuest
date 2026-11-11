@@ -69,3 +69,46 @@ No secrets, credentials or database URLs were found in the repository (scan of t
    - Run a backup and restore drill.
    - Run a deliberate failed-deploy drill.
 4. **Beta readiness assessment** with real staging results.
+
+## 5. Implementation status (end of M11 preparation)
+
+| ID         | Status                                                                                                                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S-01       | **Done.** `_deploy.yml` with `deploy-staging.yml` and `deploy.yml`; per-environment secrets under the same names; `backup.yml` with an environment choice; `render.staging.yaml`. |
+| S-02       | **Done.** `DeploymentMarker` (migration `20261111095949_deployment_marker`, additive, no FKs); readiness `databaseEnvironment`; `npm run db:environment`.                         |
+| S-03       | **Done.** `APP_ENV` start-up rules; `environment` in health; `env` in logs; the Staging banner.                                                                                   |
+| S-04       | **Done.** `plan: 0.5c-512mb`.                                                                                                                                                     |
+| S-05       | **Done.** Migrations run from the workflow; `preDeployCommand` removed.                                                                                                           |
+| S-06       | **Done.** `?ref=<sha>`; "on main" instead of "head of main"; production requires a successful staging deployment of the SHA.                                                      |
+| S-07       | **Done.** Checksums compared inside the restore transaction.                                                                                                                      |
+| S-08       | **Written, not executed.** The `age` round trip is in `drill:backup` (skipped locally: no CLI) and runs in CI.                                                                    |
+| S-09       | **Done.** `drill:migrations` and `drill:backup`, local and in CI.                                                                                                                 |
+| S-10       | **Done.** `npm run test:staging`: 12/12 against a local staging rehearsal.                                                                                                        |
+| S-11       | **Done.** `REPLACE_ME` values are fatal.                                                                                                                                          |
+| S-12, S-13 | Checks prepared (suite and manual checks); **need a real https deploy**.                                                                                                          |
+| S-14       | The owner checks the Neon region at creation.                                                                                                                                     |
+
+Finding from the drills: **a failing migration can leave partial changes.** Prisma doesn't
+wrap PostgreSQL migrations in one transaction; the drill's failing migration left its first
+statement's table behind. ROLLBACK.md now says so.
+
+## 6. Test results (local; no CI, no real infrastructure)
+
+| Check                                                                                                                             | Result                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Format, lint, typecheck                                                                                                           | pass                                                                                                                                                         |
+| Unit                                                                                                                              | **159 / 159** (158 before M11)                                                                                                                               |
+| Integration                                                                                                                       | **94 / 94** (93 before)                                                                                                                                      |
+| Migration safety (`--base origin/main`)                                                                                           | pass (12 migrations; the new one is additive)                                                                                                                |
+| Schema drift (development database)                                                                                               | none                                                                                                                                                         |
+| Content validation; production dependency audit                                                                                   | pass; 0 vulnerabilities                                                                                                                                      |
+| Production build                                                                                                                  | pass, no warnings                                                                                                                                            |
+| `npm run drill:migrations`                                                                                                        | all 22 checks pass                                                                                                                                           |
+| `npm run drill:backup`                                                                                                            | all checks pass; 6 corruption and tamper cases rejected; `age` round trip **skipped** (no CLI)                                                               |
+| Playwright Chromium, full e2e                                                                                                     | **36 passed, 18 skipped, 0 failed**                                                                                                                          |
+| Playwright WebKit (auth, session, offline accounts, invites)                                                                      | 7 passed, 1 skipped                                                                                                                                          |
+| Smoke test (local production server)                                                                                              | 9 / 9                                                                                                                                                        |
+| **Staging acceptance suite against a local staging rehearsal** (`APP_ENV=staging`, a marked and seeded disposable database, http) | **12 / 12**; HSTS and secure-cookie assertions skipped (http)                                                                                                |
+| Guard rehearsals                                                                                                                  | production app on a staging-marked database: 503 `mismatch`; staging with open registration: exit 1; `db:environment` refuses the wrong environment (exit 1) |
+| GitHub Actions (including the new drills step and the M10 docker start-up test)                                                   | **not observed**: no GitHub access from this machine                                                                                                         |
+| Docker build, Render, Neon, real https                                                                                            | **not done**: no Docker here; external resources need approval                                                                                               |

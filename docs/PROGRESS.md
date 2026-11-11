@@ -167,6 +167,17 @@ Target public beta: **2026-12-08**.
 - [ ] **Not observed:** GitHub Actions (including the new docker start-up test), Docker locally, Firefox
 - [ ] **Owner:** review and merge the M10 PR; accounts, environment, secrets and first deployment (DEPLOYMENT.md)
 
+### M11 — Supervised staging deployment: preparation (2026-11-11, `feature/m11-staging-deployment`)
+
+- [x] M10 integration verified (PR #16, `main` `0ec42f6`); every referenced file and command exists
+- [x] Staging audit, architecture ($0: Render Free + Neon Free), configuration, operations and acceptance docs; `.env.staging.example`
+- [x] `APP_ENV` identity, `DeploymentMarker` guard, Staging banner (D-053, D-054)
+- [x] One reviewed deploy workflow for staging and production; production only after staging (D-055)
+- [x] Restore rejects tampered content; migration and backup drills (local and CI)
+- [x] Staging acceptance suite: 12/12 against a local staging rehearsal
+- [ ] **Not done:** any real staging resource, deploy or acceptance run (owner approval); GitHub Actions results; Docker; `age` round trip
+- [ ] **Owner:** review and merge the M11 PR; approve provisioning steps 1–7 (M11_STAGING_ARCHITECTURE.md)
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -575,3 +586,25 @@ See `docs/M10_INFRASTRUCTURE_AUDIT.md`.
   - backup drill: 70 FKs, 0 orphans; tamper detected
 - Not done: GitHub Actions, Docker, Firefox, any real host. Nothing purchased, connected or
   deployed. Invite-only and reset links off are unchanged.
+
+### 2026-11-11 — Session 11 (M11 staging preparation)
+
+See `docs/M11_STAGING_AUDIT.md`.
+
+- Started from `main` `0ec42f6` (M10 merged as PR #16). GitHub Actions are still not visible from
+  here.
+- Built:
+  - environment identity and the database marker guard
+  - restore checksum enforcement
+  - migration and backup drills
+  - staging and production deploys through one reviewed workflow
+  - Render Blueprint fixes (plan ID, no pre-deploy) and a staging Blueprint
+  - the staging acceptance suite
+  - staging docs and the env template
+- Checks:
+  - unit **159**, integration **94**
+  - both drills pass; build clean
+  - Chromium e2e **36/18/0**; WebKit subset 7/1/0; smoke 9/9
+  - staging suite **12/12 on a local rehearsal**
+- **Nothing external was created, connected or deployed.** Staging needs the owner's approval
+  of 7 provisioning steps ($0).

@@ -39,7 +39,7 @@ These can't be verified locally over plain http, so check them on the real servi
 | Errors        | Sentry or GlitchTip if `SENTRY_DSN` is set; otherwise Render logs (`"level":"error"` JSON lines). Query strings and secrets are stripped. | new issue → owner                                          |
 | Request log   | `api.request` lines: method, path without query, status and ms. No bodies or user ids; emails and tokens are masked.                      | —                                                          |
 | App state     | Admin → Operations: DB latency, migrations, config warnings, sync backlog, feedback backlog                                               | daily glance during the beta                               |
-| Workflows     | GitHub emails on a failed deploy.yml or backup.yml run                                                                                    | —                                                          |
+| Workflows     | GitHub emails on a failed deploy (staging or production) or backup.yml run                                                                | —                                                          |
 | Spend         | Render and Neon billing pages                                                                                                             | set spending alerts where offered; check the first invoice |
 
 ## Incident response
@@ -67,7 +67,7 @@ These can't be verified locally over plain http, so check them on the real servi
 | Secret             | How                                                                                                                                      | Effect                                      |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `AUTH_SECRET`      | New value in Render, then redeploy                                                                                                       | Every session ends; everyone signs in again |
-| Database password  | Reset it in Neon, update `DATABASE_URL`, `MIGRATE_DATABASE_URL` and the GitHub secret, then redeploy                                     | Short reconnect                             |
+| Database password  | Reset it in Neon, update `DATABASE_URL` (Render) and `DIRECT_DATABASE_URL` (GitHub environment), then redeploy                           | Short reconnect                             |
 | Render deploy hook | Regenerate it in Render, update the GitHub secret                                                                                        | None                                        |
 | Backup key         | New `age-keygen`, update `BACKUP_AGE_RECIPIENT`; **keep the old private key** until all backups encrypted with it have expired (30 days) | None                                        |
 | `SENTRY_DSN`       | Rotate it in Sentry                                                                                                                      | None                                        |

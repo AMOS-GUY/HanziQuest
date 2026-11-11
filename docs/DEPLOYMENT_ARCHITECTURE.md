@@ -110,7 +110,7 @@ database is reachable and every migration is applied), so a broken release never
 traffic. That check queries the database every few seconds, so **Neon won't scale to zero:
 budget the always-on figure, about $28/month.** To cut that to about $14, the owner can point
 the health check at `/api/health/live` instead. It skips the database, so a release on a
-broken schema could take traffic; `deploy.yml` still runs a readiness check and smoke test
+broken schema could take traffic; the deploy workflow still waits for readiness and runs the smoke test
 after every deploy. Recommended: start with `/api/health`, and review it after the first
 invoice.
 
