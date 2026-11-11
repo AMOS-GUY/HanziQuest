@@ -6,11 +6,13 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.staging.example
 *.log
 .DS_Store
 Thumbs.db
 .vercel/
 playwright-report/
+playwright-report-staging/
 test-results/
 # local embedded postgres data
 .local/
