@@ -36,6 +36,7 @@ export function logEvent(level: Level, event: string, fields: Fields = {}) {
     level,
     event,
     release: releaseId(),
+    env: process.env.APP_ENV ?? "development",
     ...clean,
   });
   if (level === "error") console.error(line);

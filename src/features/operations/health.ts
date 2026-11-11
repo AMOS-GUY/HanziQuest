@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { PrismaClient } from "@/generated/prisma/client";
+import { markerState, type DeploymentEnvironment, type MarkerState } from "./environment";
 
 export type MigrationState = "ok" | "incomplete" | "pending" | "unknown";
 
@@ -21,6 +22,8 @@ export interface Readiness {
   database: "ok" | "unavailable";
   migrations: MigrationState;
   pendingMigrations?: number;
+  /** Whether the database belongs to this deployment (M11, D-054). */
+  databaseEnvironment?: MarkerState;
 }
 
 let cached: string[] | null | undefined;
@@ -44,6 +47,18 @@ export function expectedMigrations(
 }
 
 export async function checkReadiness(
+  prisma: Pick<PrismaClient, "$queryRaw">,
+  expected: readonly string[] | null,
+  environment: DeploymentEnvironment | null = null,
+): Promise<Readiness> {
+  const base = await checkSchema(prisma, expected);
+  if (!environment || base.database !== "ok") return base;
+  // A staging app must never serve a production database, or the reverse.
+  const databaseEnvironment = await markerState(prisma, environment);
+  return { ...base, ok: base.ok && databaseEnvironment === "ok", databaseEnvironment };
+}
+
+async function checkSchema(
   prisma: Pick<PrismaClient, "$queryRaw">,
   expected: readonly string[] | null,
 ): Promise<Readiness> {

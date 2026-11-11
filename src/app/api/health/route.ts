@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/database/prisma";
 import { checkReadiness, expectedMigrations } from "@/features/operations/health";
+import { deploymentEnvironment } from "@/features/operations/environment";
 import { releaseId } from "@/lib/release";
 
 export const dynamic = "force-dynamic";
@@ -12,13 +13,18 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   const started = Date.now();
-  const readiness = await checkReadiness(prisma, expectedMigrations());
+  const environment = deploymentEnvironment();
+  const readiness = await checkReadiness(prisma, expectedMigrations(), environment);
   return NextResponse.json(
     {
       status: readiness.ok ? "ok" : "degraded",
       database: readiness.database,
       migrations: readiness.migrations,
       ...(readiness.pendingMigrations ? { pendingMigrations: readiness.pendingMigrations } : {}),
+      environment: environment ?? "development",
+      ...(readiness.databaseEnvironment
+        ? { databaseEnvironment: readiness.databaseEnvironment }
+        : {}),
       release: releaseId(),
       latencyMs: Date.now() - started,
     },

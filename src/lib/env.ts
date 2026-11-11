@@ -52,6 +52,27 @@ export function checkEnvironment(
       });
   }
   if (production) {
+    // Values pasted from .env.staging.example / .env.example unchanged (M11, S-11).
+    for (const name of ["DATABASE_URL", "MIGRATE_DATABASE_URL", "AUTH_SECRET", "AUTH_URL"])
+      if (env[name]?.includes("REPLACE_ME"))
+        issues.push({ name, problem: "still holds the template placeholder", fatal: true });
+    // Every deployment names itself (M11, D-053). Fatal on Render, where it is always deployed;
+    // local production builds (e2e, smoke) may leave it unset.
+    const appEnv = env.APP_ENV?.trim().toLowerCase();
+    if (appEnv && appEnv !== "staging" && appEnv !== "production")
+      issues.push({ name: "APP_ENV", problem: "must be 'staging' or 'production'", fatal: true });
+    else if (!appEnv && env.RENDER === "true")
+      issues.push({
+        name: "APP_ENV",
+        problem: "must be set to 'staging' or 'production' on a deployed service",
+        fatal: true,
+      });
+    if (appEnv === "staging" && env.REGISTRATION_MODE?.trim().toLowerCase() === "open")
+      issues.push({
+        name: "REGISTRATION_MODE",
+        problem: "can't be 'open' on staging: staging is invite-only (synthetic accounts only)",
+        fatal: true,
+      });
     if (env.AUTH_SECRET && PLACEHOLDER_SECRETS.includes(env.AUTH_SECRET))
       issues.push({
         name: "AUTH_SECRET",
