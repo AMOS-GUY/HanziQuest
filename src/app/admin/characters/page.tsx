@@ -38,7 +38,12 @@ export default async function AdminCharactersPage({
           </Button>
         ) : null}
       </div>
-      <div className="border-border bg-surface overflow-x-auto rounded-[var(--radius-card)] border-2">
+      <div
+        role="region"
+        aria-label="Characters (scrolls sideways)"
+        tabIndex={0}
+        className="border-border bg-surface overflow-x-auto rounded-[var(--radius-card)] border-2"
+      >
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="border-border text-muted-foreground border-b-2">
             <tr>

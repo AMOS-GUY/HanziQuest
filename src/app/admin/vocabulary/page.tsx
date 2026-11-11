@@ -65,7 +65,12 @@ export default async function VocabularyPage({
           Search
         </Button>
       </form>
-      <div className="border-border bg-surface overflow-x-auto rounded-[var(--radius-card)] border-2">
+      <div
+        role="region"
+        aria-label="Vocabulary (scrolls sideways)"
+        tabIndex={0}
+        className="border-border bg-surface overflow-x-auto rounded-[var(--radius-card)] border-2"
+      >
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="border-border text-muted-foreground border-b-2">
             <tr>

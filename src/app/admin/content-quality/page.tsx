@@ -65,7 +65,12 @@ export default async function ContentQualityPage() {
 
       <Card>
         <CardTitle className="mb-3">Curricula</CardTitle>
-        <div className="overflow-x-auto">
+        <div
+          role="region"
+          aria-label="Curricula quality (scrolls sideways)"
+          tabIndex={0}
+          className="overflow-x-auto"
+        >
           <table className="w-full text-left text-sm">
             <thead className="text-muted-foreground">
               <tr>

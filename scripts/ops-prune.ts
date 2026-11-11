@@ -28,7 +28,8 @@ async function main() {
     console.log(
       `${result.applied ? "Deleted" : "Would delete (dry run; add --apply)"}: ` +
         `${result.counts.auditLog} audit entries, ${result.counts.syncEvents} processed sync events, ` +
-        `${result.counts.rateLimitBuckets} expired rate-limit buckets.`,
+        `${result.counts.rateLimitBuckets} expired rate-limit buckets, ` +
+        `${result.counts.passwordResetLinks} expired or used reset links.`,
     );
   } finally {
     await prisma.$disconnect();

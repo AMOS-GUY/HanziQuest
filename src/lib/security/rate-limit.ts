@@ -148,6 +148,8 @@ export const learningWriteLimiter = createLimit("learning", 120, 60 * 1000);
 export const adminMutationLimiter = createLimit("admin", 60, 60 * 1000);
 /** 5 password changes per hour per user. */
 export const passwordChangeLimiter = createLimit("password", 5, 60 * 60 * 1000);
+/** 10 password resets with a reset link per hour per IP (the tokens are 256-bit anyway). */
+export const passwordResetLimiter = createLimit("password-reset", 10, 60 * 60 * 1000);
 /** 10 feedback messages per hour per user. */
 export const feedbackLimiter = createLimit("feedback", 10, 60 * 60 * 1000);
 /** 600 public stroke-data reads per minute per IP (the data is cacheable, so this is generous). */

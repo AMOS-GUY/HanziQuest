@@ -5,7 +5,7 @@
  * - Audit log entries older than `auditDays` (they contain IP addresses and user agents).
  * - Processed offline sync events older than `syncDays` (their payloads duplicate attempts,
  *   which are kept; rejected and unprocessed events are kept for investigation).
- * - Expired rate-limit buckets (always safe).
+ * - Expired rate-limit buckets and expired or used password reset links (always safe).
  * An applied prune writes its own audit entry with the counts.
  */
 import type { PrismaClient } from "@/generated/prisma/client";
@@ -39,11 +39,13 @@ export async function pruneOperationalData(prisma: PrismaClient, options: Retent
         }
       : null;
   const bucketWhere = { resetAt: { lt: now } };
+  const resetWhere = { OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }] };
 
   const counts = {
     auditLog: auditWhere ? await prisma.auditLog.count({ where: auditWhere }) : 0,
     syncEvents: syncWhere ? await prisma.syncEvent.count({ where: syncWhere }) : 0,
     rateLimitBuckets: await prisma.rateLimitBucket.count({ where: bucketWhere }),
+    passwordResetLinks: await prisma.passwordResetToken.count({ where: resetWhere }),
   };
   if (!options.apply) return { applied: false, counts };
 
@@ -51,6 +53,7 @@ export async function pruneOperationalData(prisma: PrismaClient, options: Retent
     if (auditWhere) await tx.auditLog.deleteMany({ where: auditWhere });
     if (syncWhere) await tx.syncEvent.deleteMany({ where: syncWhere });
     await tx.rateLimitBucket.deleteMany({ where: bucketWhere });
+    await tx.passwordResetToken.deleteMany({ where: resetWhere });
     await recordAudit(tx, {
       actorId: null,
       action: "ops.prune",

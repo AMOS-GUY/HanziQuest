@@ -2,6 +2,33 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-11 — Integration audit (M6–M9)
+
+**D-046 · The CSP keeps `'unsafe-inline'` scripts for the beta, and lint enforces the
+mitigation.** A nonce-based policy needs every page rendered per request (Next.js reads the
+nonce from the request), which removes static rendering and changes what the service worker
+caches for offline use. That is a performance and offline-behaviour change that needs its own
+measured release, not an audit fix. Instead, ESLint now fails on `dangerouslySetInnerHTML`,
+on `innerHTML`/`outerHTML` assignments and on creating `script` elements, so the claim "the app
+never injects HTML or scripts" is checked on every commit. Plan for later: nonce in `proxy.ts`,
+`'strict-dynamic'`, then measure page timings and offline flows before enabling it.
+
+**D-045 · Password recovery without email: staff-issued reset links.** A moderator (a Super
+Admin for staff accounts) creates a single-use link that expires after 24 hours. Only its
+SHA-256 hash is stored, it is consumed by a guarded `UPDATE` in the reset transaction (safe
+under concurrency), a new link discards older ones, and using it signs out every session.
+Creation and use are both audited. The identity check is a draft for the owner to approve
+(SECURITY.md): send the link only to the account's own email address. When an email provider
+is configured, the same tokens can be emailed directly; email verification still needs one.
+
+**D-044 · Tested-out characters are confirmed by writing, not given a schedule.** Placement
+only checks recognition (meaning), so it can't create mastery or a spaced-repetition schedule.
+The new characters of tested-out lessons now appear in Review as "placement checks", due now,
+after any scheduled reviews and in curriculum order. Writing one creates its schedule through
+the normal replay of attempts, which removes it from the list. Nothing writes `ReviewSchedule`
+or `CharacterMastery` directly. Home's count, Review and the review session use the same rules,
+including curriculum visibility (`LEARNER_REVIEWABLE_CHARACTER`).
+
 ## 2026-11-11 — M9 production readiness
 
 **D-043 · Structured logs carry no personal data.** Route handlers log method, path (no

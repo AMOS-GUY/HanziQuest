@@ -90,9 +90,9 @@ The infrastructure is ready. The content is not, and **it must not be generated*
 - A teacher review of all existing pinyin and glosses. Everything is PROVISIONAL.
 - A distinguishing note for 朋 and 友, and possibly splitting the two 9-character lessons.
   This is an editorial choice for the owner.
-- Tested-out characters are not scheduled for writing review: testing out is recognition-only.
-  Learners can still open tested-out lessons. A "check your writing" round for them is a
-  possible M8+ follow-up.
+- ~~Tested-out characters are not scheduled for writing review~~ (testing out is
+  recognition-only). **Resolved in the integration audit (D-044):** they now appear in Review as
+  one-time writing checks, and learners can still open tested-out lessons.
 
 ## Tests
 

@@ -12,7 +12,9 @@ import { DomainError } from "@/features/administration/services";
  * Guessing (M7, D-040): with 3 four-option questions per unit, guessing a unit succeeds with
  * probability 1/64 (it was 1/16 with 2). A completed check can't be retaken for
  * PLACEMENT_RETAKE_HOURS, so repeated guessing can't skip the path either. Testing out never
- * creates mastery or review history: it only opens lessons, which stay practicable.
+ * creates mastery or review history: it only opens lessons, which stay practicable. Their new
+ * characters then appear in Review as one-time writing checks until written (D-044,
+ * `getPlacementChecks` in features/learning/sessions.ts).
  */
 export const QUESTIONS_PER_UNIT = 3;
 export const PLACEMENT_RETAKE_HOURS = 24;

@@ -84,8 +84,12 @@ what is ready, what was verified locally, and what still needs the owner.
 
 - Handwriting accuracy on real learners is unmeasured, so there is no accuracy claim.
 - CSP allows inline scripts (documented trade-off).
-- There is no email verification, password reset or staff 2FA; these need an email provider.
+- There is no email verification or staff 2FA. Password reset is staff-issued links (fixed
+  in the integration audit, D-045); emailed resets need an email provider.
 - A moderate advisory remains in a lint-only dev dependency.
-- Firefox, physical devices and real screen readers are untested.
-- Testing out by placement opens lessons without scheduling writing reviews for their
-  characters (M7 doc).
+- Firefox, physical devices and real screen readers are untested. CI now has an advisory
+  Firefox step (integration audit).
+- ~~Testing out by placement opens lessons without scheduling writing reviews~~: fixed in the
+  integration audit (D-044).
+
+See `docs/INTEGRATION_AUDIT.md` for the state after the integration audit.

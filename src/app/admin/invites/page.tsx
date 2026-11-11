@@ -52,7 +52,12 @@ export default async function InvitesPage() {
         {invites.length === 0 ? (
           <p className="text-muted-foreground">No invites yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div
+            role="region"
+            aria-label="Invites (scrolls sideways)"
+            tabIndex={0}
+            className="overflow-x-auto"
+          >
             <table className="w-full text-left text-sm">
               <thead className="text-muted-foreground">
                 <tr>

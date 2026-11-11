@@ -1,11 +1,14 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { MasteryLevel } from "@/generated/prisma/enums";
+import { LEARNER_REVIEWABLE_CHARACTER } from "@/features/curriculum/visibility";
+import { countPlacementChecks } from "@/features/learning/sessions";
 import { addDays, dateToDay, dayToDate, liveStreak, localDay } from "./calendar";
 
 export interface ProgressSummary {
   xpTotal: number;
   today: { day: string; xp: number; goal: number; goalMet: boolean };
   streak: { current: number; longest: number };
+  /** Scheduled reviews due now plus placement checks (see `getPlacementChecks`). */
   dueNow: number;
   dueNext: Date | null;
   mastery: Record<MasteryLevel, number>;
@@ -27,9 +30,14 @@ export async function getProgressSummary(
     prisma.xPTransaction.aggregate({ where: { userId }, _sum: { amount: true } }),
     prisma.dailyActivity.findUnique({ where: { userId_date: { userId, date: dayToDate(day) } } }),
     prisma.streak.findUnique({ where: { userId } }),
-    prisma.reviewSchedule.count({ where: { userId, dueAt: { lte: now } } }),
+    Promise.all([
+      prisma.reviewSchedule.count({
+        where: { userId, dueAt: { lte: now }, character: LEARNER_REVIEWABLE_CHARACTER },
+      }),
+      countPlacementChecks(prisma, userId),
+    ]).then(([scheduled, placement]) => scheduled + placement),
     prisma.reviewSchedule.findFirst({
-      where: { userId, dueAt: { gt: now } },
+      where: { userId, dueAt: { gt: now }, character: LEARNER_REVIEWABLE_CHARACTER },
       orderBy: { dueAt: "asc" },
       select: { dueAt: true },
     }),
@@ -130,7 +138,7 @@ export async function getReviewForecast(
 ) {
   const horizon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const rows = await prisma.reviewSchedule.findMany({
-    where: { userId, dueAt: { gt: now, lte: horizon } },
+    where: { userId, dueAt: { gt: now, lte: horizon }, character: LEARNER_REVIEWABLE_CHARACTER },
     select: { dueAt: true },
   });
   const today = localDay(now, timezone);

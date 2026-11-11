@@ -76,6 +76,14 @@ describe("retention", () => {
       },
     });
 
+    // Reset links: an expired one is pruned, a live one is kept.
+    const expiredLink = await prisma.passwordResetToken.create({
+      data: { userId, tokenHash: `expired-${marker}`, expiresAt: ancient },
+    });
+    const liveLink = await prisma.passwordResetToken.create({
+      data: { userId, tokenHash: `live-${marker}`, expiresAt: new Date(now.getTime() + 3_600_000) },
+    });
+
     await expect(pruneOperationalData(prisma, { auditDays: 5, apply: false })).rejects.toThrow();
 
     const dry = await pruneOperationalData(prisma, { auditDays: 365, syncDays: 90, apply: false });
@@ -87,6 +95,12 @@ describe("retention", () => {
     const noPeriod = await pruneOperationalData(prisma, { apply: true });
     expect(noPeriod.counts.auditLog).toBe(0);
     expect(await prisma.auditLog.count({ where: { action: marker } })).toBe(1);
+    expect(
+      await prisma.passwordResetToken.findUnique({ where: { id: expiredLink.id } }),
+    ).toBeNull();
+    expect(
+      await prisma.passwordResetToken.findUnique({ where: { id: liveLink.id } }),
+    ).not.toBeNull();
 
     const applied = await pruneOperationalData(prisma, {
       auditDays: 365,

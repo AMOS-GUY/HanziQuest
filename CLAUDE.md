@@ -73,5 +73,11 @@ npm run content:validate
   acyclic (the backup/restore tools depend on it).
 - Registration is invite-only in production (`REGISTRATION_MODE`). Playwright starts two
   servers: :3100 (open) and :3101 (invite-only).
+- Review queries use `LEARNER_REVIEWABLE_CHARACTER`. Placement checks (tested-out characters
+  never written) come from `getPlacementChecks`; they never write schedules (D-044).
+- Password reset links are staff-issued (D-045, `features/account/password-reset.ts`); only token
+  hashes are stored.
+- ESLint forbids `dangerouslySetInnerHTML`, `innerHTML` and created scripts: the CSP relies on
+  it (D-046).
 - The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it
   when caching rules change. Test offline flows with `npm run build` + Playwright.

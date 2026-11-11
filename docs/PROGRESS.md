@@ -129,6 +129,18 @@ Target public beta: **2026-12-08**.
 - [x] `docs/M9_PRODUCTION_READINESS.md`: checklist and the owner's external actions
 - [ ] **Deployment, production drill, production verification** (owner accounts and secrets)
 
+### Integration audit (2026-11-11, `feature/integration-audit`)
+
+- [x] Git history verified: linear stack on `main` `01d128e`; no PRs or merges for M6–M9 yet
+- [x] Each milestone re-verified on its own commit and a fresh database (types, lint, unit, integration, schema drift, content)
+- [x] Secrets and personal-data scan of every line added in M6–M9: test values only
+- [x] Tested-out characters reach Review as one-time writing checks (D-044); Home's count respects curriculum visibility
+- [x] Admin accessibility: 23 admin pages audited; table regions keyboard-reachable on phones
+- [x] Password recovery without email: staff-issued single-use reset links (D-045)
+- [x] CSP mitigation enforced by lint (D-046); advisory Firefox e2e in CI
+- [x] `docs/INTEGRATION_AUDIT.md`: verification, merge plan, rollback, owner actions
+- [ ] **Owner:** merge PRs 1–5 in order; approve the reset identity check; GitHub CI, Firefox, devices
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -440,3 +452,25 @@ without the fix (checked by reverting the fix for M6-01 and M6-02). See
 - Four stacked branches, each pushed: `feature/m6-quality` → `feature/m7-curriculum` →
   `feature/m8-experience` → `feature/m9-production`.
 - Nothing was deployed, purchased or published. No real users or samples are involved.
+
+### 2026-11-11 — Session 7 (M6–M9 integration audit)
+
+See `docs/INTEGRATION_AUDIT.md`.
+
+- Verified: linear history on `main` `01d128e` (PRs #1–#5 merged; **no PR exists for M6–M9**).
+  Each milestone re-checked at its own commit on a fresh database: M6 126/66, M7 144/72,
+  M8 144/72, M9 150/79 (unit/integration), no schema drift, content valid. No secrets or
+  personal data in the M6–M9 diffs.
+- Fixed on `feature/integration-audit` (built on M9):
+  - placement checks in Review (D-044);
+  - due counts respect curriculum visibility;
+  - admin accessibility (23 pages; phone table regions);
+  - staff-issued password reset links (D-045, migration `password_reset_tokens`);
+  - lint-enforced CSP mitigation (D-046);
+  - advisory Firefox e2e in CI;
+  - reset links pruned by `ops:prune`.
+- Checks: format, lint, typecheck clean; unit **150**; integration **85**; migration check;
+  production build; smoke **8/8**; drill: 70 FKs, 0 orphans.
+- Playwright Chromium: **36 passed, 18 skipped**. WebKit: **40 passed, 14 skipped, 0 failed**.
+- Not done: GitHub CI, Firefox (fails to start locally with a Windows side-by-side error),
+  physical devices, screen readers. Nothing merged or deployed.

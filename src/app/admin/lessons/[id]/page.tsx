@@ -150,7 +150,12 @@ export default async function AdminLessonPage({ params }: { params: Promise<{ id
 
       <Card>
         <CardTitle className="mb-3">Exercises ({lesson.exercises.length})</CardTitle>
-        <div className="overflow-x-auto">
+        <div
+          role="region"
+          aria-label="Exercises (scrolls sideways)"
+          tabIndex={0}
+          className="overflow-x-auto"
+        >
           <table className="w-full min-w-[560px] text-left text-sm">
             <thead className="text-muted-foreground border-border border-b-2">
               <tr>

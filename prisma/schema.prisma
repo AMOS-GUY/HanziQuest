@@ -217,6 +217,7 @@ model User {
   handwritingSamples  HandwritingSample[]
   feedback            Feedback[]
   invite              BetaInvite?                @relation("InviteRedemptions", fields: [inviteId], references: [id], onDelete: SetNull)
+  passwordResets      PasswordResetToken[]
 
   @@index([status])
 }
@@ -1143,4 +1144,23 @@ model BetaInvite {
   users       User[]    @relation("InviteRedemptions")
 
   @@index([createdAt])
+}
+
+/// Staff-issued, single-use password reset link (integration audit, D-045). There is no email
+/// provider yet, so staff hand the link to the learner themselves. Only a SHA-256 hash of the
+/// token is stored; the link is shown once.
+model PasswordResetToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  /// Issuer's user id. Not a foreign key (like BetaInvite.createdById); the audit log records it.
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

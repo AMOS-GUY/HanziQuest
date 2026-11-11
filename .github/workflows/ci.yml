@@ -104,6 +104,15 @@ jobs:
       - name: End-to-end tests
         run: npm run test:e2e
 
+      # Firefox has never been run for this project (the development machine can't start it).
+      # Advisory until its first green run on CI; then remove continue-on-error (INTEGRATION_AUDIT.md).
+      - name: End-to-end tests (Firefox, advisory)
+        id: firefox
+        continue-on-error: true
+        run: |
+          npx playwright install --with-deps firefox
+          E2E_ALL_BROWSERS=1 npx playwright test --project=firefox
+
       - name: Smoke test (production server)
         run: |
           AUTH_URL=http://localhost:3200 npx next start -p 3200 &
@@ -111,7 +120,7 @@ jobs:
           npm run smoke -- http://localhost:3200
 
       - name: Upload Playwright report
-        if: failure()
+        if: failure() || steps.firefox.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report

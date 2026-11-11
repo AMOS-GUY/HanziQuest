@@ -2,6 +2,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { DomainError } from "@/features/administration/services";
 import {
   isLearnerVisible,
+  LEARNER_REVIEWABLE_CHARACTER,
   LEARNER_VISIBLE_LESSON,
   VISIBILITY_SELECT,
 } from "@/features/curriculum/visibility";
@@ -127,57 +128,124 @@ export async function completeLessonSession(
 
 export const REVIEW_BATCH_SIZE = 10;
 
+const REVIEW_EXERCISE_SELECT = {
+  where: {
+    type: "FREEHAND_WRITING",
+    status: "PUBLISHED",
+    lessons: { some: { lesson: LEARNER_VISIBLE_LESSON } },
+  },
+  take: 1,
+  select: { id: true },
+} as const;
+
+export interface DueReview {
+  characterId: string;
+  hanzi: string;
+  /** For a placement check: when it became due (now). */
+  dueAt: Date;
+  exerciseId: string;
+  /**
+   * "scheduled": the spaced-repetition schedule says it is due.
+   * "placement": introduced in a lesson the learner tested out of by placement and never
+   * written yet. Placement only checked recognition, so recall is confirmed here once.
+   */
+  kind: "scheduled" | "placement";
+}
+
 /**
- * Characters whose review is due, each with the free-writing exercise used to review it.
- * Only characters taught in a published lesson are included.
+ * Characters from lessons the learner tested out of by placement that they have never written
+ * (no review schedule yet), in curriculum order. They are due now. Writing one creates its
+ * schedule through the normal replay (`recomputeCharacter`), which removes it from this list;
+ * nothing here writes mastery or schedules (D-044).
+ */
+function placementCheckWhere(userId: string) {
+  return {
+    ...LEARNER_REVIEWABLE_CHARACTER,
+    reviewSchedules: { none: { userId } },
+    lessons: {
+      some: {
+        isNew: true,
+        lesson: { ...LEARNER_VISIBLE_LESSON, progress: { some: { userId, status: "TESTED_OUT" } } },
+      },
+    },
+  } as const;
+}
+
+export async function countPlacementChecks(prisma: PrismaClient, userId: string) {
+  return prisma.character.count({ where: placementCheckWhere(userId) });
+}
+
+export async function getPlacementChecks(
+  prisma: PrismaClient,
+  userId: string,
+  now: Date,
+  limit: number,
+): Promise<DueReview[]> {
+  if (limit <= 0) return [];
+  const rows = await prisma.lessonCharacter.findMany({
+    where: {
+      isNew: true,
+      lesson: { ...LEARNER_VISIBLE_LESSON, progress: { some: { userId, status: "TESTED_OUT" } } },
+      character: placementCheckWhere(userId),
+    },
+    orderBy: [
+      { lesson: { unit: { level: { level: "asc" } } } },
+      { lesson: { unit: { position: "asc" } } },
+      { lesson: { position: "asc" } },
+      { position: "asc" },
+    ],
+    select: {
+      character: { select: { id: true, hanzi: true, exercises: REVIEW_EXERCISE_SELECT } },
+    },
+  });
+  const seen = new Set<string>();
+  const checks: DueReview[] = [];
+  for (const { character } of rows) {
+    if (seen.has(character.id) || !character.exercises[0]) continue;
+    seen.add(character.id);
+    checks.push({
+      characterId: character.id,
+      hanzi: character.hanzi,
+      dueAt: now,
+      exerciseId: character.exercises[0].id,
+      kind: "placement",
+    });
+    if (checks.length >= limit) break;
+  }
+  return checks;
+}
+
+/**
+ * What to review now, each with the free-writing exercise used to review it: scheduled reviews
+ * that are due (most overdue first), then placement checks. Only characters taught in a lesson
+ * the learner can see are included.
  */
 export async function getDueReviews(
   prisma: PrismaClient,
   userId: string,
   now: Date = new Date(),
   limit = REVIEW_BATCH_SIZE,
-) {
+): Promise<DueReview[]> {
   const due = await prisma.reviewSchedule.findMany({
-    where: {
-      userId,
-      dueAt: { lte: now },
-      character: {
-        exercises: {
-          some: {
-            type: "FREEHAND_WRITING",
-            status: "PUBLISHED",
-            lessons: { some: { lesson: LEARNER_VISIBLE_LESSON } },
-          },
-        },
-      },
-    },
+    where: { userId, dueAt: { lte: now }, character: LEARNER_REVIEWABLE_CHARACTER },
     orderBy: { dueAt: "asc" },
     take: limit,
     select: {
       dueAt: true,
-      character: {
-        select: {
-          id: true,
-          hanzi: true,
-          exercises: {
-            where: {
-              type: "FREEHAND_WRITING",
-              status: "PUBLISHED",
-              lessons: { some: { lesson: LEARNER_VISIBLE_LESSON } },
-            },
-            take: 1,
-            select: { id: true },
-          },
-        },
-      },
+      character: { select: { id: true, hanzi: true, exercises: REVIEW_EXERCISE_SELECT } },
     },
   });
-  return due.map((d) => ({
+  const scheduled = due.map<DueReview>((d) => ({
     characterId: d.character.id,
     hanzi: d.character.hanzi,
     dueAt: d.dueAt,
     exerciseId: d.character.exercises[0]!.id,
+    kind: "scheduled",
   }));
+  return [
+    ...scheduled,
+    ...(await getPlacementChecks(prisma, userId, now, limit - scheduled.length)),
+  ];
 }
 
 /** Starts a review session. Refused when nothing is due. */
