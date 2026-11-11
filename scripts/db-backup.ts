@@ -13,6 +13,7 @@ import {
   client,
   columns,
   listTables,
+  tableChecksum,
   topologicalOrder,
 } from "./lib/db-tools";
 
@@ -38,8 +39,10 @@ async function main() {
     const tables = await topologicalOrder(db, await listTables(db));
     const meta = [];
     for (const t of tables) {
-      const n = await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM "${t}"`);
-      meta.push({ table: t, rows: Number(n.rows[0]!.n), columns: await columns(db, t) });
+      // Row count and content checksum in the same snapshot, so a restore can be verified
+      // against the backup alone (`db:verify -- --backup`), without the source database.
+      const { rows, checksum } = await tableChecksum(db, t);
+      meta.push({ table: t, rows, checksum, columns: await columns(db, t) });
     }
     await write({
       format: "hanziquest-backup",

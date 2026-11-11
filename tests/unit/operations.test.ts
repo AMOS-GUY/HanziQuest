@@ -12,6 +12,8 @@ describe("environment check", () => {
     DATABASE_URL: "postgresql://x",
     AUTH_SECRET: "a".repeat(40),
     AUTH_URL: "https://app.example.com",
+    AUTH_TRUST_HOST: "true",
+    APP_RELEASE: "abc1234",
     SENTRY_DSN: "https://k@o1.ingest.sentry.io/2",
   };
   it("accepts a complete production configuration", () => {
@@ -25,6 +27,49 @@ describe("environment check", () => {
     expect(fatal({ ...prod, AUTH_SECRET: "short" })).toContain("AUTH_SECRET");
     expect(fatal({ ...prod, AUTH_URL: "http://app.example.com" })).toContain("AUTH_URL");
     expect(fatal({ ...prod, DATABASE_URL: undefined })).toContain("DATABASE_URL");
+  });
+  it("refuses placeholder secrets and unsafe deployment settings (M10-05)", async () => {
+    const { PLACEHOLDER_SECRETS } = await import("@/lib/env");
+    const fatal = (env: Record<string, string | undefined>) =>
+      checkEnvironment(env)
+        .filter((i) => i.fatal)
+        .map((i) => i.name);
+    expect(fatal({ ...prod, AUTH_SECRET: PLACEHOLDER_SECRETS[0] })).toContain("AUTH_SECRET");
+    expect(fatal({ ...prod, AUTH_TRUST_HOST: undefined })).toContain("AUTH_TRUST_HOST");
+    expect(fatal({ ...prod, DATABASE_URL: "mysql://x" })).toContain("DATABASE_URL");
+    for (const v of ["0", "101", "ten", "2.5"])
+      expect(fatal({ ...prod, DATABASE_POOL_MAX: v })).toContain("DATABASE_POOL_MAX");
+    expect(fatal({ ...prod, DATABASE_POOL_MAX: "5" })).toEqual([]);
+    for (const v of ["-1", "6", "one"])
+      expect(fatal({ ...prod, TRUSTED_PROXY_HOPS: v })).toContain("TRUSTED_PROXY_HOPS");
+    expect(fatal({ ...prod, TRUSTED_PROXY_HOPS: "0" })).toEqual([]);
+    expect(
+      checkEnvironment({ ...prod, APP_RELEASE: undefined }).map((i) => [i.name, i.fatal]),
+    ).toContainEqual(["APP_RELEASE", false]);
+    // Development stays permissive.
+    expect(
+      checkEnvironment({ NODE_ENV: "development", DATABASE_URL: "x", DATABASE_POOL_MAX: "0" })
+        .filter((i) => i.fatal)
+        .map((i) => i.name),
+    ).toEqual([]);
+  });
+  it("names the running release from APP_RELEASE or Render's commit", async () => {
+    const { releaseId } = await import("@/lib/release");
+    expect(releaseId({ APP_RELEASE: "v1.2.0", RENDER_GIT_COMMIT: "abc" })).toBe("v1.2.0");
+    expect(releaseId({ RENDER_GIT_COMMIT: "0123456789abcdef0123" })).toBe("0123456789ab");
+    expect(releaseId({})).toBe("dev");
+    expect(
+      checkEnvironment({ ...prod, APP_RELEASE: undefined, RENDER_GIT_COMMIT: "abc" }).map(
+        (i) => i.name,
+      ),
+    ).not.toContain("APP_RELEASE");
+  });
+  it("sizes the connection pool from DATABASE_POOL_MAX, with safe defaults", async () => {
+    const { poolSettings } = await import("@/lib/database/client");
+    expect(poolSettings({}).max).toBe(10);
+    expect(poolSettings({ DATABASE_POOL_MAX: "4" }).max).toBe(4);
+    expect(poolSettings({ DATABASE_POOL_MAX: "0" }).max).toBe(10);
+    expect(poolSettings({}).connectionTimeoutMillis).toBeGreaterThan(0);
   });
   it("only warns in development", () => {
     expect(

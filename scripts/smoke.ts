@@ -23,12 +23,26 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const checks: Check[] = [
   {
-    name: "health endpoint reports the database as ok",
+    name: "liveness endpoint answers",
+    run: async () => {
+      const r = await get("/api/health/live");
+      const body = (await r.json()) as { status: string };
+      assert(r.status === 200 && body.status === "ok", `status ${r.status}`);
+      return "ok";
+    },
+  },
+  {
+    name: "readiness: database ok and every migration applied",
     run: async () => {
       const r = await get("/api/health");
-      const body = (await r.json()) as { status: string; database: string; release: string };
+      const body = (await r.json()) as {
+        status: string;
+        database: string;
+        migrations: string;
+        release: string;
+      };
       assert(
-        r.status === 200 && body.database === "ok",
+        r.status === 200 && body.database === "ok" && body.migrations === "ok",
         `status ${r.status}, ${JSON.stringify(body)}`,
       );
       return `release ${body.release}`;

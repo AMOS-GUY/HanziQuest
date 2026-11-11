@@ -2,7 +2,8 @@
 # Build:  docker build -t hanziquest .
 # Run:    docker run -p 3000:3000 --env-file .env.production hanziquest
 # Migrations run separately as a release step (see docs/DEPLOYMENT.md), never on container start.
-# NOTE: not built on the development machine (no Docker there); CI builds it on every push.
+# NOTE: not built on the development machine (no Docker there). CI builds it and runs a
+# start-up test (migrate, start, liveness, readiness) on every push.
 
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
@@ -40,6 +41,11 @@ COPY --from=build --chown=hanziquest /app/prisma.config.ts ./prisma.config.ts
 COPY --from=build --chown=hanziquest /app/tsconfig.json ./tsconfig.json
 USER hanziquest
 EXPOSE 3000
+# Liveness only (M10-01): a database outage must not get healthy containers restarted.
+# The platform's deploy check should use readiness, /api/health (DEPLOYMENT.md).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-  CMD node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["npx", "next", "start", "-p", "3000"]
+  CMD node -e "fetch('http://localhost:3000/api/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# Node is PID 1 (not npx), so the platform's SIGTERM reaches Next.js directly and the server
+# stops accepting connections and drains instead of being killed after a timeout (M10-03).
+STOPSIGNAL SIGTERM
+CMD ["node", "node_modules/next/dist/bin/next", "start", "-p", "3000"]

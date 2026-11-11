@@ -1,0 +1,97 @@
+# Off-site logical backup (M10-07): a second copy outside the database provider, which also
+# covers losing the provider account. Provider PITR stays the primary recovery path
+# (docs/DATABASE_BACKUP.md).
+#
+# Manual only until the owner has created the protected "production" environment and its
+# secrets (PRODUCTION_DIRECT_DATABASE_URL, BACKUP_AGE_RECIPIENT). Then uncomment the schedule.
+# Every run restores the backup into a disposable database on the runner and verifies it
+# against the backup's own row counts and checksums before keeping it. Only the age-encrypted
+# file is stored; the private key never enters GitHub.
+name: Off-site backup
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "17 3 * * 1" # Mondays 03:17 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-production
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: drill
+          POSTGRES_PASSWORD: drill
+          POSTGRES_DB: drill
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U drill"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      RESTORE_URL: postgresql://drill:drill@localhost:5432/drill
+    steps:
+      - name: Secrets are configured
+        env:
+          DB: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
+          AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          [ -n "$DB" ] && [ -n "$AGE" ] || { echo "::error::Set PRODUCTION_DIRECT_DATABASE_URL and BACKUP_AGE_RECIPIENT on the production environment"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          DATABASE_URL: postgresql://drill:drill@localhost:5432/drill
+        run: npm ci
+
+      - name: Back up production (read-only snapshot)
+        env:
+          DB: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
+        run: |
+          mkdir -p backup
+          DATABASE_URL="$DB" npm run db:backup -- --source "$DB" --out backup/plain.ndjson.gz
+
+      - name: Restore into a disposable database and verify
+        run: |
+          # Apply exactly the migrations the backup was taken at (main may be ahead of production).
+          node -e '
+            const fs=require("fs"),zlib=require("zlib");
+            const first=zlib.gunzipSync(fs.readFileSync("backup/plain.ndjson.gz")).toString().split("\n",1)[0];
+            const keep=new Set(JSON.parse(first).migrations);
+            for (const d of fs.readdirSync("prisma/migrations",{withFileTypes:true}))
+              if (d.isDirectory() && !keep.has(d.name)) fs.rmSync("prisma/migrations/"+d.name,{recursive:true});'
+          DATABASE_URL="$RESTORE_URL" npx prisma migrate deploy
+          DATABASE_URL="$RESTORE_URL" npm run db:restore -- --in backup/plain.ndjson.gz --target "$RESTORE_URL"
+          DATABASE_URL="$RESTORE_URL" npm run db:verify -- --backup backup/plain.ndjson.gz --target "$RESTORE_URL"
+
+      - name: Encrypt and remove the plain copy
+        env:
+          AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          sudo apt-get install -y -qq age >/dev/null
+          name="hanziquest-$(date -u +%Y%m%dT%H%M%SZ).ndjson.gz.age"
+          age -r "$AGE" -o "backup/$name" backup/plain.ndjson.gz
+          shred -u backup/plain.ndjson.gz
+          ls -l backup
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offsite-backup-${{ github.run_id }}
+          path: backup/*.age
+          retention-days: 30
+          if-no-files-found: error

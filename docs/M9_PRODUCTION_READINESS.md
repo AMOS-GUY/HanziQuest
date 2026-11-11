@@ -1,5 +1,8 @@
 # M9 production and beta readiness (2026-11-11)
 
+> M10 (2026-11-11) adds the deployment architecture, workflows and runbooks: see
+> DEPLOYMENT.md, DEPLOYMENT_ARCHITECTURE.md and M10_INFRASTRUCTURE_AUDIT.md.
+
 Branch: `feature/m9-production` (built on M8). **Nothing was deployed, purchased or
 provisioned.** No real users were invited and no credentials were used. This document records
 what is ready, what was verified locally, and what still needs the owner.

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { recordAudit } from "@/lib/audit";
 import { DomainError, type Actor } from "@/features/administration/services";
+import { releaseId } from "@/lib/release";
 
 export const FEEDBACK_KINDS = ["BUG", "IDEA", "CONTENT", "HANDWRITING", "OTHER"] as const;
 export const FEEDBACK_LABEL: Record<(typeof FEEDBACK_KINDS)[number], string> = {
@@ -75,7 +76,7 @@ export async function submitFeedback(
       message: input.message,
       pagePath: input.pagePath?.split("?")[0] ?? null,
       allowContact: input.allowContact,
-      appRelease: process.env.APP_RELEASE ?? null,
+      appRelease: releaseId() === "dev" ? null : releaseId(),
       userAgent: browserFamily(meta.userAgent),
     },
   });

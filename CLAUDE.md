@@ -80,5 +80,12 @@ npm run content:validate
   in production until the owner approves (D-047). Playwright's :3100 server turns it on.
 - ESLint forbids `dangerouslySetInnerHTML`, `innerHTML` and created scripts: the CSP relies on
   it (D-046).
+- Health: `/api/health/live` is liveness (no DB, Docker HEALTHCHECK); `/api/health` is readiness
+  (503 while a shipped migration is unapplied). Logic in `features/operations/health.ts` (D-048).
+- Start-up config check runs in `instrumentation-node.ts` and **exits** on a fatal problem; a
+  throwing `register()` doesn't stop Next.js (D-049). New production env vars go in `lib/env.ts`.
+- Deploys are manual only (`deploy.yml`, owner-approved `production` environment). Never add an
+  automatic production deploy or turn on Render auto-deploy (D-050). `MIGRATE_DATABASE_URL`
+  (direct) overrides `DATABASE_URL` for the Prisma CLI.
 - The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it
   when caching rules change. Test offline flows with `npm run build` + Playwright.

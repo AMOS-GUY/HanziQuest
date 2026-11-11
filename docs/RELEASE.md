@@ -1,6 +1,23 @@
 # Beta release package
 
-## Status (2026-11-11, after PR #14)
+## Status (2026-11-11, M10 in review)
+
+- `main` = `9b83917` (PR #15 merged RS-07). It contains M1–M9, the integration audit and the
+  reset reviews.
+- **M10 (production infrastructure)** is on `feature/m10-production-infrastructure`, waiting for
+  review. It adds:
+  - the hosting recommendation and costs
+  - liveness and readiness probes
+  - a stricter start-up check that exits
+  - a manual, owner-approved deploy workflow and an off-site backup workflow
+  - a Render Blueprint (auto-deploy off)
+  - runbooks: DEPLOYMENT, ROLLBACK, DATABASE_BACKUP, PRODUCTION_OPERATIONS
+- **Not deployed, and nothing connected or purchased.** The first deployment steps are owner
+  actions (DEPLOYMENT.md, "First deployment").
+- Still: invite-only, reset links off, the reset procedure not approved, the legal review
+  pending.
+
+## Status (2026-11-11, after PR #14, superseded)
 
 - `main` (`7e1f43b`) contains M1–M9, the integration audit (PR #6) and the reset review (PR #14). The owner merged
   `feature/integration-audit` as PR #6, and because the branches are stacked this brought in

@@ -2,6 +2,50 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-11 — M10 production infrastructure
+
+**D-048 · Liveness and readiness are separate probes.** `/api/health/live` never touches the
+database and is the container HEALTHCHECK, so a database outage doesn't get healthy instances
+restarted. `/api/health` is readiness: it returns 503 while any migration shipped with the
+build is unapplied, unfinished or failed. The platform's deploy check uses it, so new code
+never serves on an old schema. A database ahead of the code, as after a rollback, stays ready
+(migrations are additive).
+
+**D-049 · A fatal configuration exits the process.** A throwing `register()` is only logged by
+Next.js ("Failed to prepare server") and the process keeps running. The check now lives in
+`instrumentation-node.ts` and calls `process.exit(1)`. New fatal checks in production:
+
+- a placeholder `AUTH_SECRET`
+- `AUTH_TRUST_HOST` not `true`
+- a non-PostgreSQL `DATABASE_URL`
+- an out-of-range `TRUSTED_PROXY_HOPS` or `DATABASE_POOL_MAX`
+
+Security impact: stricter only; no authentication policy changed.
+
+**D-050 · Deploys are manual and owner-approved; verification and deployment are separate.**
+CI (`verify`, `docker`) never deploys. `deploy.yml` runs only on manual dispatch:
+
+1. A preflight checks the confirmation phrase, that the SHA is `main`'s head, and that
+   `verify` and `docker` are green for that SHA.
+2. The owner approves the protected `production` environment.
+3. An encrypted pre-migration backup is taken.
+4. The Render deploy hook is called (auto-deploy is off in `render.yaml`).
+5. The workflow waits for readiness on the new release, then runs the read-only smoke test.
+
+Migrations run in Render's pre-deploy step with `MIGRATE_DATABASE_URL` (direct). Nothing is
+connected until the owner creates the accounts, the environment and its secrets.
+
+**D-051 · Hosting recommendation: Render web service with Neon Launch.** It is the only compared
+option with 7-day PITR under $30/month, at an estimated $14–28/month
+(DEPLOYMENT_ARCHITECTURE.md). Render Postgres on Hobby has a 3-day PITR window. Fly Managed
+Postgres starts at $38/month. Not purchased.
+
+**D-052 · Off-site backups are verified and encrypted before they're kept.** `backup.yml`
+restores every backup into a disposable database, verifies it against the backup's own row
+counts and per-table checksums (`db:verify --backup`), then encrypts it with the owner's `age`
+public key and keeps it for 30 days. The private key never enters GitHub. Provider PITR stays
+the primary recovery path.
+
 ## 2026-11-11 — Password reset security review
 
 **D-047 · Reset links are re-checked when used, and off in production until approved.** The

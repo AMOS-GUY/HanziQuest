@@ -62,11 +62,12 @@ email exists.
 
 ### Operational and admin endpoints (M4)
 
-| Method | Path                             | Auth                       | Purpose                                                                                                              |
-| ------ | -------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/health`                    | public                     | `{status, database, release, latencyMs}`; 503 when the database is down. No configuration details.                   |
-| POST   | `/api/client-errors`             | public, 30 / 10 min per IP | Error boundaries report `{message, name?, digest?, path?}` (8 KB max). Logged and forwarded to Sentry if configured. |
-| GET    | `/api/admin/handwriting/samples` | `handwriting:validate`     | Validation samples re-scored with the current engine, plus metrics. `?strokes=1` adds raw ink.                       |
+| Method | Path                             | Auth                       | Purpose                                                                                                                                                                                  |
+| ------ | -------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/health`                    | public                     | Readiness: `{status, database, migrations, release, latencyMs}`. 503 when the database is down or a migration in the build is unapplied, unfinished or failed. No configuration details. |
+| GET    | `/api/health/live`               | public                     | Liveness: `{status, release}`. Never queries the database (M10).                                                                                                                         |
+| POST   | `/api/client-errors`             | public, 30 / 10 min per IP | Error boundaries report `{message, name?, digest?, path?}` (8 KB max). Logged and forwarded to Sentry if configured.                                                                     |
+| GET    | `/api/admin/handwriting/samples` | `handwriting:validate`     | Validation samples re-scored with the current engine, plus metrics. `?strokes=1` adds raw ink.                                                                                           |
 
 All JSON route handlers cap the request body (413 `payload_too_large`) and reject cross-site
 writes whose `Origin` doesn't match the app (403). Admin pages are additionally gated by

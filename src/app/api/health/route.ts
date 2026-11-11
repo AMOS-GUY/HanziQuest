@@ -1,41 +1,27 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/database/prisma";
+import { checkReadiness, expectedMigrations } from "@/features/operations/health";
+import { releaseId } from "@/lib/release";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/health — liveness and readiness for uptime monitors and load balancers.
- * - database: can we query it?
- * - migrations: has any migration failed or not finished? (A deploy must not serve traffic on a
- *   half-migrated database.)
- * Reveals no configuration or personal data.
+ * GET /api/health — readiness, for the platform's deploy health check and uptime monitors.
+ * 200 only when the database answers and every migration in this build is applied
+ * (features/operations/health.ts). Liveness without the database: /api/health/live.
  */
 export async function GET() {
   const started = Date.now();
-  let database: "ok" | "unavailable" = "ok";
-  let migrations: "ok" | "incomplete" | "unknown" = "unknown";
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    try {
-      const rows = await prisma.$queryRaw<{ count: bigint | number }[]>`
-        SELECT count(*) AS count FROM "_prisma_migrations"
-        WHERE finished_at IS NULL AND rolled_back_at IS NULL`;
-      migrations = Number(rows[0]?.count ?? 0) === 0 ? "ok" : "incomplete";
-    } catch {
-      migrations = "unknown";
-    }
-  } catch {
-    database = "unavailable";
-  }
-  const ok = database === "ok" && migrations !== "incomplete";
+  const readiness = await checkReadiness(prisma, expectedMigrations());
   return NextResponse.json(
     {
-      status: ok ? "ok" : "degraded",
-      database,
-      migrations,
-      release: process.env.APP_RELEASE ?? "dev",
+      status: readiness.ok ? "ok" : "degraded",
+      database: readiness.database,
+      migrations: readiness.migrations,
+      ...(readiness.pendingMigrations ? { pendingMigrations: readiness.pendingMigrations } : {}),
+      release: releaseId(),
       latencyMs: Date.now() - started,
     },
-    { status: ok ? 200 : 503, headers: { "Cache-Control": "no-store" } },
+    { status: readiness.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } },
   );
 }

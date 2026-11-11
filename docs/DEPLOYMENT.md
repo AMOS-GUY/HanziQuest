@@ -1,228 +1,214 @@
 # Deployment
 
-**Status (2026-11-10): ready to deploy, not deployed.** Everything that needs no external
-account is done and tested locally: production build, migrations, environment check, health
-endpoint, smoke test, error reporting, Dockerfile and CI. Choosing a host, creating accounts,
-buying a domain and entering production secrets are owner actions. Nothing has been purchased,
-registered or deployed.
+**Status (2026-11-11, M10): prepared, not deployed.** The configuration, workflows and
+runbooks are in the repository and tested as far as possible without a real host. Nothing is
+connected to Render, Neon or any other service, and no production credentials exist. Every
+step marked **Owner** needs the owner's accounts, approval or money.
 
-## Hosting choice
+Related runbooks:
 
-The researched comparison with pricing, limits and sources is in `docs/HOSTING.md`. The
-recommendation is a Render web service (Starter) with Neon Launch for PostgreSQL (7-day PITR),
-estimated at roughly $10–30/month. Verify prices before signing up.
+- DEPLOYMENT_ARCHITECTURE.md: the hosting choice and its costs
+- ROLLBACK.md
+- DATABASE_BACKUP.md
+- PRODUCTION_OPERATIONS.md: monitoring, incidents, retention
+- SECURITY.md
 
-## Recommended low-cost setup
+## Architecture
 
-Any Node.js 20.19+ host that runs `next start` behind HTTPS works. Two paths fit a small beta:
+The recommendation is one Render web service (Docker, $7/month) with Neon Launch PostgreSQL in
+the same region. Neon gives 7-day point-in-time recovery. The estimate is $14–28/month (see
+DEPLOYMENT_ARCHITECTURE.md). The app is a plain Docker image and standard PostgreSQL, so any
+container host with managed PostgreSQL and PITR works the same way.
 
-| Option                         | App                                                                                                    | Database                                                                                | Notes                                                                                                                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Container host** (simple) | Render, Railway, Fly.io or similar, smallest always-on instance, using the `Dockerfile` or `npm start` | Managed PostgreSQL 15+ (Neon, Supabase, the host's own) with **point-in-time recovery** | One long-running process; easy to reason about. Recommended.                                                                                                            |
-| **B. Vercel**                  | Vercel project (Pro plan for commercial use; Hobby is for non-commercial projects)                     | Neon or Supabase, using the **pooled** connection string                                | The admin gate (`proxy.ts`) uses Prisma, so it must run on the Node.js runtime, which is the Next 16 default for `proxy.ts`. Serverless functions need a pooled DB URL. |
-
-Check the current prices and terms of the chosen providers before signing up. The app needs no
-other paid services: email is not used yet, and error reporting works with Sentry's free tier,
-a self-hosted GlitchTip, or with no reporting service at all (JSON logs only).
+```
+GitHub (CI: verify + docker) ──► owner runs deploy.yml ──► approval (environment "production")
+        │                                                   │
+        │                                  encrypted pre-migration backup (artifact, 30 days)
+        ▼                                                   ▼
+   main branch ──────────────────────────────► Render deploy hook (auto-deploy off)
+                                                            │ build image → pre-deploy: prisma migrate deploy (direct URL)
+                                                            ▼
+                                   new instance ready on /api/health → traffic switches
+                                                            │
+                                          deploy.yml waits for the new release → smoke test
+```
 
 ## Environments
 
-| Environment | Database                                                                                                                                  | Registration                                | Secrets                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------- |
-| Development | local `hanziquest` on :5433 (`npm run db:local`)                                                                                          | open (the default outside production)       | `.env` (git-ignored), development values only |
-| Tests       | `hanziquest_test` (integration tests refuse a database whose name lacks "test"); e2e uses the development database with two local servers | e2e: one open server, one invite-only       | generated for each CI run                     |
-| Production  | managed PostgreSQL with point-in-time recovery                                                                                            | **invite-only** (the default in production) | the host's secret store only; never in git    |
+| Environment | Database                                                                                                                                     | Registration                                                  | Reset links                                                                       | Secrets                                                                         |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Development | local `hanziquest` on :5433 (`npm run db:local`)                                                                                             | open (the default outside production)                         | on (the default outside production)                                               | `.env` (git-ignored), development values only                                   |
+| Test        | `hanziquest_test`; integration tests refuse a database without "test" in its name. e2e uses the development database with two local servers. | e2e: one open server, one invite-only                         | on (the :3100 test server)                                                        | generated for each CI run                                                       |
+| Production  | Neon, with 7-day PITR                                                                                                                        | **invite-only** (the default; keep `REGISTRATION_MODE` unset) | **off** (the default; keep `PASSWORD_RESET_LINKS` unset until the owner approves) | Render's environment settings and GitHub environment secrets only, never in git |
 
-Never point development or test tools at the production database. The exceptions are
-`db:deploy`, `db:backup` and `db:verify`, run deliberately from a trusted machine. `.env` is
-git-ignored, and CI generates its `AUTH_SECRET` for each run.
+Never point development or test tools at the production database. The only exceptions are the
+deliberate operations in DATABASE_BACKUP.md, which use the **direct** URL from a trusted
+machine or the protected workflows.
 
 ## Environment variables
 
-`.env.example` documents every variable. The app refuses to start in production when a fatal
-item is wrong (`src/lib/env.ts`, checked from `src/instrumentation.ts`).
+`.env.example` documents every variable. In production the server **exits** (status 1) when a
+fatal item is wrong (`src/lib/env.ts`, run by `src/instrumentation-node.ts`), so a
+misconfigured release never takes traffic.
 
-| Variable                                   | Required | Notes                                                                                                                                                                                                                                     |
-| ------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                             | yes      | Pooled connection string for the app. For migrations, use the direct (non-pooled) URL if the provider has one.                                                                                                                            |
-| `AUTH_SECRET`                              | yes      | 32+ random characters (`npx auth secret`). Unique per environment; never the development value.                                                                                                                                           |
-| `AUTH_URL`                                 | yes      | Public `https://` origin.                                                                                                                                                                                                                 |
-| `AUTH_TRUST_HOST`                          | yes      | `true` behind the platform's proxy.                                                                                                                                                                                                       |
-| `TRUSTED_PROXY_HOPS`                       | yes      | Number of proxies that append to `X-Forwarded-For`; usually `1`. Don't expose the app without a proxy (see SECURITY.md).                                                                                                                  |
-| `RATE_LIMIT_STORE`                         | no       | Defaults to `postgres` in production (shared across instances).                                                                                                                                                                           |
-| `SENTRY_DSN`                               | no       | Sentry or GlitchTip DSN. Without it, errors are JSON lines on stdout.                                                                                                                                                                     |
-| `APP_RELEASE` / `APP_ENV`                  | no       | Commit SHA and environment label for health checks and error reports.                                                                                                                                                                     |
-| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | once     | Only for the first seed, to create the first Super Admin. Remove them afterwards and change the password at first sign-in.                                                                                                                |
-| `REGISTER_LIMIT_PER_HOUR`                  | no       | Leave unset in production (default 5 per IP per hour).                                                                                                                                                                                    |
-| `PASSWORD_RESET_LINKS`                     | no       | Staff-issued password reset links (D-045, D-047). Off by default in production; set `on` only after the owner approves the reset procedure in SECURITY.md. `off` disables them anywhere. The start-up check warns when it is `on`.        |
-| `REGISTRATION_MODE`                        | no       | `invite` (the default in production): sign-up needs a code from Admin → Invites. `open`: anyone can register. Keep `invite` until the owner approves the legal and operational prerequisites. The start-up check warns when it is `open`. |
+| Variable                                   | Production                                        | Notes                                                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                             | required, **fatal**                               | `postgresql://`. Neon's **pooled** URL with `sslmode=require`.                                                                          |
+| `MIGRATE_DATABASE_URL`                     | required with a pooled `DATABASE_URL`             | Neon's **direct** URL. Used only by the Prisma CLI (`prisma.config.ts`) for `migrate deploy` in the pre-deploy step.                    |
+| `DATABASE_POOL_MAX`                        | optional (default 10), **fatal** if outside 1–100 | Connections per instance. Use 5 with a pooled URL.                                                                                      |
+| `AUTH_SECRET`                              | required, **fatal**                               | At least 32 random characters (`openssl rand -base64 32`), unique to production. The Dockerfile's build placeholder is refused.         |
+| `AUTH_URL`                                 | required, **fatal**                               | The public `https://` origin.                                                                                                           |
+| `AUTH_TRUST_HOST`                          | `true`, **fatal** otherwise                       | Auth.js trusts the platform proxy's host header. Sign-in fails without it.                                                              |
+| `TRUSTED_PROXY_HOPS`                       | `1` on Render, **fatal** if not 0–5               | Proxies that append to `X-Forwarded-For`. Rate limits key on the client IP. Check it after the first deploy (PRODUCTION_OPERATIONS.md). |
+| `RATE_LIMIT_STORE`                         | leave unset                                       | PostgreSQL store, shared by every instance. `memory` gives a warning.                                                                   |
+| `SENTRY_DSN`                               | optional                                          | Sentry or GlitchTip. Without it, errors are JSON lines on stdout (a warning).                                                           |
+| `APP_RELEASE`                              | optional on Render                                | Falls back to `RENDER_GIT_COMMIT`. It is shown on `/api/health`; deploy.yml waits for it.                                               |
+| `REGISTRATION_MODE`                        | **leave unset**                                   | Invite-only. `open` gives a warning and needs owner approval.                                                                           |
+| `PASSWORD_RESET_LINKS`                     | **leave unset**                                   | Off. `on` gives a warning and needs the owner's approval of the procedure in SECURITY.md.                                               |
+| `REGISTER_LIMIT_PER_HOUR`                  | leave unset                                       | Default 5 per IP per hour. Above 50 gives a warning.                                                                                    |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | first seed only                                   | Creates the first Super Admin. Remove them afterwards.                                                                                  |
 
-## First deployment
+GitHub environment `production` secrets, used by deploy.yml and backup.yml:
 
-1. Create the PostgreSQL database and enable automated backups with point-in-time recovery.
-2. Set the environment variables on the host.
-3. From a trusted machine with the repository checked out and `DATABASE_URL` pointing at the
-   **direct** production URL:
+- `RENDER_DEPLOY_HOOK_URL`
+- `PRODUCTION_URL`
+- `PRODUCTION_DIRECT_DATABASE_URL`
+- `BACKUP_AGE_RECIPIENT`: the public key only
+
+## First deployment (Owner)
+
+Each step that spends money or creates an account is marked **(paid)** or **(account)**.
+
+1. **Accounts (account):** create Render (Hobby workspace) and Neon accounts. Read the current
+   prices on their pages first (DEPLOYMENT_ARCHITECTURE.md).
+2. **Database (paid, usage-based):**
+   - Create a Neon project on the Launch plan, in the chosen region.
+   - Set the history window to 7 days.
+   - Copy the **pooled** and **direct** connection strings into a password manager.
+3. **Backup key:**
+   - On the owner's own machine, run `age-keygen -o hanziquest-backup.key`.
+   - Store the key file offline, in the password manager **and** a second safe place.
+   - The printed public key (`age1…`) is `BACKUP_AGE_RECIPIENT`.
+4. **GitHub environment:**
+   - In repository settings, create the `production` environment.
+   - Add yourself as a required reviewer and turn off administrator bypass.
+   - Then add its secrets. `PRODUCTION_URL` and `RENDER_DEPLOY_HOOK_URL` are added after step 5.
+5. **App (paid, $7/month):**
+   - In Render, choose New → Blueprint and select this repository. Render reads `render.yaml`
+     and shows the plan and price before creating anything.
+   - Check that the region matches Neon's, and that auto-deploy is **off**.
+   - Enter the `sync: false` values when asked.
+   - Copy the service's deploy hook URL into the GitHub secret.
+   - The Blueprint's first build applies the migrations (pre-deploy) to the empty database.
+6. **Seed (once)**, from a trusted machine with the repository at the deployed commit:
    ```bash
-   npm ci
-   npm run db:deploy      # applies committed migrations only
-   npm run db:seed        # idempotent: roles, achievements, starter curriculum, first admin
+   DATABASE_URL="<direct URL>" SEED_ADMIN_EMAIL=… SEED_ADMIN_PASSWORD=… npm run db:seed
    ```
-4. Deploy the app (push to the host or build the image).
-5. Run the smoke test against the public URL:
-   ```bash
-   npm run smoke -- https://your-domain.example
-   ```
-6. Sign in as the seeded admin, change the password (Profile → Change password), and assign
-   staff roles under Admin → Users.
-7. Add an uptime monitor (any free HTTP monitor) on `GET /api/health`, alerting on non-200.
-8. Create invite codes for the first testers in Admin → Invites (the beta is invite-only).
-   Admin → Operations shows configuration warnings, migrations, and the sync and feedback
-   backlogs.
-
-## Migration workflow
-
-Schema changes follow **expand, then contract**. The running app version never breaks during a
-deploy, and a rollback never needs a schema rollback.
-
-1. **Expand** (release N): add nullable columns, new tables and indexes. Deploy the migration
-   **before** the app that uses it. Old code ignores new columns.
-2. **Migrate data** if needed, with an idempotent script or a migration that only adds.
-3. **Contract** (release N+1 or later, once nothing reads the old shape): drop or rename. This
-   needs a `-- migration-safety: allow <rule> <reason>` line in the migration, a DECISIONS.md
-   entry and a fresh backup.
-
-`npm run db:check-migrations` runs in CI against the PR's base branch. It fails on DROP
-TABLE/COLUMN, TRUNCATE, DELETE, type changes, renames and SET NOT NULL unless they are
-explicitly allowed. It also fails on any edit to a migration already on the base branch.
-`prisma migrate deploy` only applies committed migrations; it never resets.
-
-Keep the foreign-key graph acyclic. The backup and restore tools depend on it; this is why
-`BetaInvite.createdById` is not a foreign key.
+   It is idempotent: roles, achievements, the starter curriculum and the first Super Admin.
+   Then clear the two seed variables from your shell history.
+7. **Verify:**
+   - `npm run smoke -- https://<origin>`.
+   - Work through the post-deploy checklist in PRODUCTION_OPERATIONS.md: secure cookies, the
+     proxy IP and headers.
+   - Sign in as the seeded admin and change the password.
+8. **Backups:**
+   - Run `backup.yml` manually once, download the artifact and decrypt it locally to prove the
+     key works (DATABASE_BACKUP.md).
+   - Run the first PITR restore drill to a Neon branch.
+   - Then enable the weekly schedule.
+9. **Monitoring:** add a free external uptime monitor on `GET /api/health`. Optionally create
+   a Sentry project and set `SENTRY_DSN`.
+10. **Invites:** only after the legal documents are approved (LEGAL_REVIEW.md), create invite
+    codes in Admin → Invites.
 
 ## Regular release
 
-1. CI must be green: dependency audit, migration safety, lint, format, types, unit,
-   integration, e2e, smoke and Docker build.
-2. **Take a manual database snapshot** (provider console) if the release contains a migration.
-3. Apply migrations: `npm run db:deploy` (direct URL). Migrations are additive. Never use
-   `migrate reset` or `db push` on shared databases.
-4. Deploy the app with `APP_RELEASE=<commit SHA>`.
-5. Run `npm run smoke -- <url>` and check the error dashboard or logs for 15 minutes.
-6. If the service-worker caching rules changed, bump `VERSION` in `public/sw.js` in the same
+1. The change is merged to `main` through a PR, and CI's `verify` and `docker` jobs are green
+   for the merge commit.
+2. If the release has a migration, check that it is additive (`db:check-migrations` passes in
+   CI). A contract step needs its own DECISIONS entry and a fresh backup (see "Migration
+   workflow").
+3. **Owner:** Actions → **Deploy (manual)** → Run workflow, with the full SHA of `main`'s head
+   and the phrase `deploy production`.
+4. The preflight job checks the phrase, that the SHA is `main`'s head, and that `verify` and
+   `docker` succeeded for it.
+5. **Owner approves** the `production` environment job. It:
+   - takes an encrypted pre-migration backup (artifact, 30 days)
+   - triggers the Render deploy hook
+   - waits up to 15 minutes for `/api/health` to report the new release with status `ok`
+   - runs the read-only smoke test
+6. Watch the logs and error reports for 15 minutes (PRODUCTION_OPERATIONS.md). If the service
+   worker's caching rules changed, `VERSION` in `public/sw.js` must already be bumped in the
    release.
 
-## Rollback
+If any step fails, the previous release keeps serving. Render switches traffic only once the
+new instance passes `/api/health`. Then follow ROLLBACK.md.
 
-- **App:** redeploy the previous image or deployment. Every migration so far only adds tables
-  and columns (expand, then contract, enforced by `db:check-migrations`), so the previous app
-  version keeps working on the newer schema.
-- **Health after a rollback:** `/api/health` must report `"migrations": "ok"`. If a migration
-  failed part-way, it reports `incomplete` and returns 503. Check the database state, run
-  `npx prisma migrate resolve --rolled-back <name>`, then redeploy. Never edit the migration.
-- **Schema:** write a forward-fixing migration. Never edit or delete an applied migration.
-- **Data:** restore with point-in-time recovery to a **new** database (just before the bad
-  change), check it with the smoke test, then switch `DATABASE_URL`. Learners' offline queues
-  re-sync safely, because event ids make uploads idempotent.
-- **Service worker:** a release with a bumped `VERSION` replaces old caches. In an emergency,
-  ship a `sw.js` that calls `self.registration.unregister()`.
+## Migration workflow
 
-## Backups and recovery
+Schema changes follow **expand, then contract**. The running app never breaks during a deploy,
+and a rollback never needs a schema rollback.
 
-| What                        | How                                                                                                                 | Frequency                            |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| Database (primary)          | Provider-managed point-in-time recovery, retention ≥ 7 days                                                         | continuous                           |
-| Database (independent copy) | `npm run db:backup -- --source "$DIRECT_URL" --out hanziquest-$(date +%F).ndjson.gz` (or `pg_dump --format=custom`) | weekly, encrypted, kept off-provider |
-| Curriculum source           | `content/*.json` in git (imports are idempotent)                                                                    | every change                         |
-| Configuration               | Environment variables recorded in the team password manager                                                         | on change                            |
+1. **Expand** (release N): add nullable columns, new tables and indexes. The pre-deploy step
+   applies the migration before the new code takes traffic. The old code ignores new columns.
+2. **Migrate data** if needed, with an idempotent script or a migration that only adds.
+3. **Contract** (release N+1 or later, once nothing reads the old shape): drop or rename. This
+   needs a `-- migration-safety: allow <rule> <reason>` line, a DECISIONS.md entry and a fresh
+   backup taken just before.
 
-**Recovery drill (do it before public launch, then every quarter):**
+Safety nets:
 
-1. Restore the latest backup into a new scratch database:
-   `pg_restore --no-owner --dbname "$SCRATCH_URL" hanziquest-YYYY-MM-DD.dump`, or use the
-   provider's "restore to new branch/database".
-2. Run `DATABASE_URL=$SCRATCH_URL npx prisma migrate status`. It should say "up to date".
-3. Start the app against it (`AUTH_URL=http://localhost:3000 npm start`) and run
-   `npm run smoke -- http://localhost:3000`.
-4. Record the date, backup age and time to restore in `docs/PROGRESS.md`.
+- `npm run db:check-migrations` (CI and deploy.yml) fails on DROP, TRUNCATE, DELETE, type
+  changes, renames and SET NOT NULL unless explicitly allowed, and on any edit to a migration
+  already on `main`.
+- `prisma migrate deploy` only applies committed migrations; it never resets.
+- Readiness (`/api/health`) returns 503 while any migration in the build is unapplied,
+  unfinished or failed, so the new code never serves on an old schema.
+- **Never** run `migrate reset`, `migrate dev` or `db push` against production.
 
-With the portable tools the drill is:
+Keep the foreign-key graph acyclic: the backup and restore tools depend on it.
 
-```bash
-npm run db:backup -- --source "$PROD_DIRECT_URL" --out backup.ndjson.gz
-DATABASE_URL="$SCRATCH_URL" npx prisma migrate deploy     # same release as production
-npm run db:restore -- --in backup.ndjson.gz --target "$SCRATCH_URL"
-npm run db:verify -- --source "$PROD_DIRECT_URL" --target "$SCRATCH_URL"
-DATABASE_URL="$SCRATCH_URL" AUTH_URL=http://localhost:3300 npx next start -p 3300 &
-npm run smoke -- http://localhost:3300
-```
+## Health endpoints
 
-**Local drill repeated (2026-11-11, M9, development database):** after the `beta_invites`
-migrations, a 928 KB gzip backup was restored into a fresh migrated database. Every table
-matched, 69 foreign keys were checked with 0 orphaned rows, and the app-level reads for 5
-learners matched.
+| Endpoint               | Meaning                                                                                                                                                        | Used by                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `GET /api/health/live` | The process is up. No database query.                                                                                                                          | Docker `HEALTHCHECK`                                                           |
+| `GET /api/health`      | Readiness: the database answers, no migration is unfinished or failed, and every migration in this build is applied. Returns 503 otherwise. Reports `release`. | Render's health check (`render.yaml`), deploy.yml, uptime monitors, smoke test |
 
-**Local drill (2026-11-10, development database):** backup of every table (38 contain data, about 3,500 rows)
-(389 KB gzip), into a new migrated database. Restore took 2.6 s. Verify: every table identical
-by row count and content checksum, 68 foreign keys checked with 0 orphaned rows, and progress
-summaries and lesson states identical for 5 learners. Smoke test 8/8 against the production
-build running on the restored database. A second restore into the non-empty database was
-refused. The drill found and fixed a hang in the restore tool. **The production drill is still
-pending: there is no production database yet.** CI runs the same drill on every push.
-
-## Monitoring
-
-- **Errors:** `src/lib/monitoring/report.ts` writes every unhandled server error (pages, server
-  actions, route handlers, through `onRequestError`) and every crash caught by an error
-  boundary (via `/api/client-errors`, rate limited) as one JSON line. With `SENTRY_DSN` set it
-  also sends them to Sentry or GlitchTip. Messages and stack traces have secrets redacted; no
-  user identifiers are attached.
-- **Health:** `GET /api/health` returns `{status, database, migrations, release, latencyMs}`.
-  It returns 503 when the database is unreachable or a migration is unfinished or failed. The
-  Dockerfile has a `HEALTHCHECK` on it.
-- **Request logs:** route handlers write one JSON line per request (`api.request`: method,
-  path without the query, status and ms). There are no bodies and no user identifiers; emails
-  and tokens are masked (`src/lib/monitoring/log.ts`).
-- **Admin → Operations** (needs `analytics:read`):
-  - database latency, migration state and configuration warnings (names only)
-  - registration mode and active invites
-  - stuck and rejected offline syncs, with the most common rejection reasons
-  - the untriaged feedback backlog
-  - pilot sample counts and the age of the audit log
-
-## Retention
-
-`npm run ops:prune -- --audit-days <n> --sync-days <n>` is a dry run that shows what would be
-deleted. Add `--apply` to delete:
-
-- audit entries older than `n` days (they hold IP addresses and user agents)
-- processed offline sync events older than `n` days (their attempts are kept)
-- expired rate-limit buckets
-
-The owner decides the periods (LEGAL_REVIEW.md). The minimums are 30 days for audit entries and
-7 for sync events, and an applied prune is itself audited. Once the periods are decided,
-schedule it with the host's cron.
-
-- **Product signals:** Admin → Overview shows 7-day aggregate counts (active learners,
-  attempts, pass rate, lesson completions, rejected offline events).
-
-## PWA checklist (verified locally on a production build)
-
-- The manifest has a name, `start_url`, `display: standalone`, theme colours, and 192 and 512 px
-  icons that are reachable (smoke test).
-- `public/sw.js` is served with `Cache-Control: no-cache` (smoke test). It registers in
-  production builds only.
-- Offline: download a lesson, go offline, practise, and the result syncs on reconnect
-  (Playwright `offline-progress.spec.ts`). Account isolation across sign-out and switching
-  (`offline-accounts.spec.ts`).
-- HTTPS is required for installation and service workers in production. The host provides it.
+Neither reveals configuration, connection details or personal data. Render's health check on
+readiness keeps Neon from scaling to zero; see DEPLOYMENT_ARCHITECTURE.md for the cost
+trade-off.
 
 ## Container image
 
-`Dockerfile` builds a Node 24 image that runs as a non-root user and has a health check. It
-hasn't been built on the development machine (Docker isn't installed there); the CI `docker`
-job builds it on every push. Migrations are a separate release step:
+`Dockerfile`:
+
+- Node 24, multi-stage, runs as a non-root user.
+- Node is PID 1, so SIGTERM reaches Next.js and it shuts down cleanly.
+- The HEALTHCHECK uses liveness.
+- Migrations aren't run at container start; Render's pre-deploy step runs them.
+
+Docker isn't installed on the development machine. The CI `docker` job builds the image and
+runs a start-up test:
+
+- migrate, start, liveness and readiness
+- not running as root
+- stopping on SIGTERM within 15 seconds
+- refusing to start with a placeholder secret
+
+Run the image locally where Docker is available:
 
 ```bash
-docker run --rm --env-file .env.production hanziquest npx prisma migrate deploy
+docker build -t hanziquest .
+docker run --rm --env-file .env.production hanziquest node node_modules/prisma/build/index.js migrate deploy
+docker run -p 3000:3000 --env-file .env.production hanziquest
 ```
+
+## PWA
+
+- The manifest, service worker headers and offline pages are checked by the smoke test.
+- `public/sw.js` registers in production builds only. It caches only the static offline pages
+  and hashed build assets, never signed-in pages or `/api`.
+- IndexedDB data is per account and is cleared or handed over on sign-out and account switch
+  (OFFLINE.md, `offline-accounts.spec.ts`).
+- HTTPS is required for installation and service workers. Render provides it.

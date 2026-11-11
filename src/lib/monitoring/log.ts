@@ -7,6 +7,8 @@
  * Quiet under tests unless LOG_IN_TESTS=1.
  */
 
+import { releaseId } from "@/lib/release";
+
 type Level = "debug" | "info" | "warn" | "error";
 type Fields = Record<string, string | number | boolean | null | undefined>;
 
@@ -33,7 +35,7 @@ export function logEvent(level: Level, event: string, fields: Fields = {}) {
     ts: new Date().toISOString(),
     level,
     event,
-    release: process.env.APP_RELEASE ?? "dev",
+    release: releaseId(),
     ...clean,
   });
   if (level === "error") console.error(line);

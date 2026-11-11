@@ -129,8 +129,57 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: hanziquest
+          POSTGRES_PASSWORD: hanziquest
+          POSTGRES_DB: hanziquest
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hanziquest"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - name: Build production image
         run: docker build -t hanziquest:ci .
+
+      # M10-08: prove the image migrates, starts, answers both probes, runs as non-root and
+      # stops cleanly on SIGTERM.
+      - name: Start-up test (migrate, liveness, readiness, graceful stop)
+        run: |
+          DB=postgresql://hanziquest:hanziquest@localhost:5432/hanziquest
+          docker run --rm --network host -e DATABASE_URL="$DB" hanziquest:ci \
+            node node_modules/prisma/build/index.js migrate deploy
+          secret=$(openssl rand -base64 32)
+          docker run -d --name hq --network host \
+            -e DATABASE_URL="$DB" -e AUTH_SECRET="$secret" -e AUTH_URL=http://localhost:3000 \
+            -e AUTH_TRUST_HOST=true -e APP_RELEASE=ci-${GITHUB_SHA::7} hanziquest:ci
+          for i in $(seq 1 40); do curl -sf http://localhost:3000/api/health/live >/dev/null && break; sleep 1; done
+          curl -sf http://localhost:3000/api/health/live | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -sf http://localhost:3000/api/health | tee /dev/stderr | grep -q '"migrations":"ok"'
+          [ "$(docker exec hq id -u)" != "0" ] || { echo "::error::container runs as root"; exit 1; }
+          start=$(date +%s); docker stop -t 20 hq >/dev/null; took=$(( $(date +%s) - start ))
+          code=$(docker inspect hq --format '{{.State.ExitCode}}')
+          echo "stopped in ${took}s, exit code $code"
+          [ "$took" -lt 15 ] || { echo "::error::SIGTERM was not handled (took ${took}s)"; exit 1; }
+          docker logs hq 2>&1 | tail -20
+          docker rm hq >/dev/null
+
+      - name: Refuses to start with a placeholder secret
+        run: |
+          set +e
+          docker run --rm --network host \
+            -e DATABASE_URL=postgresql://hanziquest:hanziquest@localhost:5432/hanziquest \
+            -e AUTH_SECRET=build-time-placeholder-secret-not-used-at-runtime \
+            -e AUTH_URL=https://app.example.com -e AUTH_TRUST_HOST=true \
+            hanziquest:ci timeout 25 node node_modules/next/dist/bin/next start -p 3001
+          code=$?
+          set -e
+          # 124 = still running when the timeout hit; 0 = exited cleanly. Both mean it didn't refuse.
+          if [ "$code" = 124 ] || [ "$code" = 0 ]; then
+            echo "::error::the server didn't refuse a placeholder AUTH_SECRET (exit $code)"; exit 1
+          fi
+          echo "refused as expected (exit $code)"
