@@ -2,6 +2,76 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-11 — Integration audit (M6–M9)
+
+**D-046 · The CSP keeps `'unsafe-inline'` scripts for the beta, and lint enforces the
+mitigation.** A nonce-based policy needs every page rendered per request (Next.js reads the
+nonce from the request), which removes static rendering and changes what the service worker
+caches for offline use. That is a performance and offline-behaviour change that needs its own
+measured release, not an audit fix. Instead, ESLint now fails on `dangerouslySetInnerHTML`,
+on `innerHTML`/`outerHTML` assignments and on creating `script` elements, so the claim "the app
+never injects HTML or scripts" is checked on every commit. Plan for later: nonce in `proxy.ts`,
+`'strict-dynamic'`, then measure page timings and offline flows before enabling it.
+
+**D-045 · Password recovery without email: staff-issued reset links.** A moderator (a Super
+Admin for staff accounts) creates a single-use link that expires after 24 hours. Only its
+SHA-256 hash is stored, it is consumed by a guarded `UPDATE` in the reset transaction (safe
+under concurrency), a new link discards older ones, and using it signs out every session.
+Creation and use are both audited. The identity check is a draft for the owner to approve
+(SECURITY.md): send the link only to the account's own email address. When an email provider
+is configured, the same tokens can be emailed directly; email verification still needs one.
+
+**D-044 · Tested-out characters are confirmed by writing, not given a schedule.** Placement
+only checks recognition (meaning), so it can't create mastery or a spaced-repetition schedule.
+The new characters of tested-out lessons now appear in Review as "placement checks", due now,
+after any scheduled reviews and in curriculum order. Writing one creates its schedule through
+the normal replay of attempts, which removes it from the list. Nothing writes `ReviewSchedule`
+or `CharacterMastery` directly. Home's count, Review and the review session use the same rules,
+including curriculum visibility (`LEARNER_REVIEWABLE_CHARACTER`).
+
+## 2026-11-11 — M9 production readiness
+
+**D-043 · Structured logs carry no personal data.** Route handlers log method, path (no
+query), status and duration only. Values that look like emails, tokens or URL credentials are
+masked, and fields named like credentials are dropped. Errors keep going through
+`monitoring/report.ts` (stdout plus optional Sentry/GlitchTip).
+
+**D-042 · Migrations are expand, then contract, and checked in CI.** `db:check-migrations`
+refuses destructive or rollout-breaking SQL unless the migration carries
+`-- migration-safety: allow <rule> <reason>`. It also refuses edits to migrations already on
+the base branch. The foreign-key graph stays acyclic, because the backup and restore tools
+insert tables in dependency order. This is why `BetaInvite.createdById` is a plain column
+(the follow-up migration `beta_invites_acyclic` dropped the constraint; the earlier migration
+was already applied and is not edited).
+
+**D-041 · The beta is invite-only by default.** `REGISTRATION_MODE` defaults to `invite` in
+production and `open` elsewhere. Invite codes are 50-bit random codes and only their SHA-256
+hash is stored. A code is redeemed by a guarded `UPDATE` inside the registration transaction,
+so it can't be over-used under concurrency, and a failed sign-up doesn't consume it. Only
+Super Admins (`invites:manage`) create and revoke invites, and each change is audited.
+
+## 2026-11-11 — M6 and M7
+
+**D-040 · Placement: 3 questions per unit and a 24-hour retake cooldown.** This cuts the chance
+of guessing a unit from 1/16 to 1/64 and stops repeated guessing. Testing out only opens
+lessons; it never creates mastery or review history.
+
+**D-039 · Levels are sequential.** A level's first lesson unlocks when the last
+learner-visible lesson of the closest lower level is COMPLETED or TESTED_OUT. The first level
+is always open. Lessons with progress stay open.
+
+**D-038 · Reviewed shared content is protected.** Characters and words are shared between
+curricula. An import may change a record's reading or gloss only if its verification level is
+at least the record's (`curriculum/provenance.ts`). Otherwise the existing values are kept and
+reported (`protectedKept`). Every import change writes a ContentRevision with the old values.
+The import preview shows the same decisions before anything is written.
+
+**D-037 · A curriculum is the unit of release (M6).** Learners see a lesson only if both the
+lesson and its curriculum are PUBLISHED (`curriculum/visibility.ts`). This applies everywhere,
+including direct links, downloads, attempts and reviews. Admins publish, unpublish or archive
+a curriculum with a revision and an audit entry. Publishing needs at least one published
+lesson. Withdrawing a curriculum never deletes learner history.
+
 ## 2026-11-10 — M5 release integration
 
 **D-036 · Logical backup tool in addition to provider PITR.** `db:backup`, `db:restore` and

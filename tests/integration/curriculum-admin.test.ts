@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerUser } from "@/features/authentication/register";
 import { loadStrokeData } from "@/features/curriculum/stroke-data";
 import * as admin from "@/features/administration/curriculum-admin";
-import { setLessonStatus } from "@/features/administration/services";
+import { setCurriculumStatus, setLessonStatus } from "@/features/administration/services";
 import { completeLessonSession, startLessonSession } from "@/features/learning/sessions";
 import { submitAttempt } from "@/features/exercises/attempts";
 import type { Actor } from "@/features/administration/services";
@@ -213,6 +213,24 @@ describe("curriculum editing", () => {
       password: "password-1234",
     });
     if (!learner.ok) throw new Error("setup");
+    // A new curriculum is a draft: its lessons stay hidden until the curriculum is published.
+    await expect(startLessonSession(prisma, learner.userId, lesson.id)).rejects.toMatchObject({
+      code: "not_found",
+    });
+    const curriculumId = (
+      await prisma.curriculum.findUniqueOrThrow({ where: { slug: `admin-${RUN}` } })
+    ).id;
+    await setCurriculumStatus(prisma, actor, curriculumId, "PUBLISHED");
+    expect(
+      await prisma.auditLog.count({
+        where: { action: "curriculum.publish", entityId: curriculumId },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.contentRevision.count({
+        where: { entityType: "Curriculum", entityId: curriculumId },
+      }),
+    ).toBeGreaterThan(0);
     const session = await startLessonSession(prisma, learner.userId, lesson.id);
     for (const { exercise } of lesson.exercises) {
       if (exercise.id === hidden.exerciseId) continue;

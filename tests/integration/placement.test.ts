@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerUser } from "@/features/authentication/register";
 import {
@@ -7,6 +8,18 @@ import {
   startPlacement,
   submitPlacement,
 } from "@/features/assessment/placement";
+import { LEARNER_VISIBLE_LESSON } from "@/features/curriculum/visibility";
+import { loadStrokeData } from "@/features/curriculum/stroke-data";
+import { submitAttempt } from "@/features/exercises/attempts";
+import { fromMakeMeAHanzi } from "@/features/handwriting/reference";
+import {
+  countPlacementChecks,
+  getDueReviews,
+  REVIEW_BATCH_SIZE,
+  startReviewSession,
+} from "@/features/learning/sessions";
+import { getProgressSummary } from "@/features/progress/queries";
+import { toInk } from "../support/handwriting-fixtures";
 import { ensureRoles, testPrisma, uniqueEmail } from "./helpers";
 
 const prisma = testPrisma();
@@ -88,6 +101,76 @@ describe("placement assessment", () => {
     const summary = await submitPlacement(prisma, user, assessmentId, answers);
     expect(summary.unitsTestedOut).toBe(0);
     expect(await prisma.lessonProgress.count({ where: { userId: user } })).toBe(0);
+  });
+
+  it("puts tested-out characters into Review as one-time writing checks (D-044)", async () => {
+    const user = await newUser();
+    const { assessmentId } = await startPlacement(prisma, user);
+    const level = (await getPlacementLevel(prisma))!;
+    const units = await loadLevelUnits(prisma, level.id);
+    const questions = generateQuestions(assessmentId, units);
+    const firstUnit = units[0]!.unitId;
+    // Before placement there is nothing to review.
+    expect(await getDueReviews(prisma, user)).toEqual([]);
+    await submitPlacement(
+      prisma,
+      user,
+      assessmentId,
+      questions.map((q) => (q.unitId === firstUnit ? q.correctIndex : null)),
+    );
+
+    // Expected: new characters of the tested-out lessons that have a free-writing exercise.
+    const expected = await prisma.character.findMany({
+      where: {
+        lessons: {
+          some: { isNew: true, lesson: { ...LEARNER_VISIBLE_LESSON, unitId: firstUnit } },
+        },
+        exercises: {
+          some: {
+            type: "FREEHAND_WRITING",
+            status: "PUBLISHED",
+            lessons: { some: { lesson: LEARNER_VISIBLE_LESSON } },
+          },
+        },
+      },
+      select: { id: true, hanzi: true },
+    });
+    expect(expected.length).toBeGreaterThan(0);
+    expect(await countPlacementChecks(prisma, user)).toBe(expected.length);
+    const due = await getDueReviews(prisma, user, new Date(), 500);
+    expect(due.every((d) => d.kind === "placement")).toBe(true);
+    expect(due.map((d) => d.characterId).sort()).toEqual(expected.map((c) => c.id).sort());
+    // Rounds stay small, Home's count includes the checks, and a review session can start.
+    expect((await getDueReviews(prisma, user)).length).toBe(
+      Math.min(REVIEW_BATCH_SIZE, expected.length),
+    );
+    expect((await getProgressSummary(prisma, user)).dueNow).toBe(expected.length);
+    const { session } = await startReviewSession(prisma, user);
+    // Listing checks writes nothing: mastery and schedules only come from replayed attempts.
+    expect(await prisma.reviewSchedule.count({ where: { userId: user } })).toBe(0);
+    expect(await prisma.characterMastery.count({ where: { userId: user } })).toBe(0);
+
+    // Writing the first one from memory gives it a normal schedule and removes the check.
+    const first = due[0]!;
+    await submitAttempt(prisma, user, {
+      clientEventId: randomUUID(),
+      exerciseId: first.exerciseId,
+      sessionId: session.id,
+      occurredAt: new Date().toISOString(),
+      kind: "writing" as const,
+      drawings: [
+        toInk(fromMakeMeAHanzi(first.hanzi, loadStrokeData(first.hanzi)!.medians).medians, {
+          seed: 3,
+        }),
+      ],
+    });
+    const schedule = await prisma.reviewSchedule.findUniqueOrThrow({
+      where: { userId_characterId: { userId: user, characterId: first.characterId } },
+    });
+    expect(schedule.dueAt.getTime()).toBeGreaterThan(Date.now());
+    expect(await countPlacementChecks(prisma, user)).toBe(expected.length - 1);
+    const after = await getDueReviews(prisma, user, new Date(), 500);
+    expect(after.map((d) => d.characterId)).not.toContain(first.characterId);
   });
 
   it("rejects another user's assessment", async () => {

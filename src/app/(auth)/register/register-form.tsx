@@ -12,12 +12,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/forms/form-field";
 
-export function RegisterForm() {
+export function RegisterForm({
+  inviteRequired = false,
+  defaultInvite = "",
+}: {
+  inviteRequired?: boolean;
+  defaultInvite?: string;
+}) {
   const [serverError, setServerError] = useState<string>();
   const [pending, startTransition] = useTransition();
   const form = useForm<RegisterFormInput>({
     resolver: zodResolver(registerFormSchema),
-    defaultValues: { displayName: "", email: "", password: "", acceptTerms: false as true },
+    defaultValues: {
+      displayName: "",
+      email: "",
+      password: "",
+      acceptTerms: false as true,
+      inviteCode: defaultInvite,
+    },
   });
 
   const onSubmit = form.handleSubmit((values) => {
@@ -36,6 +48,21 @@ export function RegisterForm() {
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       {serverError ? <Alert variant="error">{serverError}</Alert> : null}
+      {inviteRequired ? (
+        <FormField
+          id="inviteCode"
+          label="Invite code"
+          hint="For example HQ-7K2QD-M4XRW. Upper or lower case both work."
+          error={errors.inviteCode?.message}
+        >
+          <Input
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            {...form.register("inviteCode")}
+          />
+        </FormField>
+      ) : null}
       <FormField id="displayName" label="Your name" error={errors.displayName?.message}>
         <Input autoComplete="name" {...form.register("displayName")} />
       </FormField>

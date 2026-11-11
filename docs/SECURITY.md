@@ -75,16 +75,63 @@ idempotency (`clientEventId`, `SyncEvent.id`, `XPTransaction.idempotencyKey`). H
 samples store a pseudonymous participant code only. Prisma queries are parameterised; the only
 raw SQL uses tagged templates.
 
+## M6–M9 review (2026-11-11)
+
+**Fixed:**
+
+- M6-01: lessons of unpublished curricula were reachable by direct link, download and the API.
+- M6-02: concurrent sync uploads caused a 500.
+- M6-03: four learner actions had no rate limit.
+- M7-01: a provisional import could rewrite verified content.
+- M7-02: the import audit entry was written outside the import transaction.
+
+**Added in M9:**
+
+- **Invite-only registration** (the default in production, D-041). Only hashes of the codes
+  are stored, redemption is atomic, and a failed sign-up doesn't consume a code. Tested under
+  concurrency and end to end on an invite-only server.
+- **Headers:** `Cross-Origin-Opener-Policy: same-origin` and
+  `Cross-Origin-Resource-Policy: same-origin`, in addition to CSP, HSTS, `nosniff`,
+  frame-ancestors/`X-Frame-Options`, Referrer-Policy and Permissions-Policy.
+- **Rate limit on the public stroke-data route:** 600 per minute per IP.
+- **Structured request logs** with redaction of emails, tokens and URL credentials. Fields
+  named like credentials are dropped.
+- **CI:** `npm audit --omit=dev --audit-level=high`, and the migration safety check. Dependabot
+  sends weekly update PRs.
+- **Dependencies (2026-11-11):** 0 known vulnerabilities in production dependencies. 7
+  moderate advisories in a lint-only dependency (`minimatch` via typescript-eslint, a ReDoS on
+  glob patterns we write ourselves). Accepted until typescript-eslint releases a fix;
+  `npm audit fix` without `--force` can't resolve it.
+
+### Rate limits (abuse review)
+
+| Limit                             | Key             | Applies to                                                                 |
+| --------------------------------- | --------------- | -------------------------------------------------------------------------- |
+| 10 / 15 min and 30 / h            | email+IP, email | sign-in                                                                    |
+| 5 / h (`REGISTER_LIMIT_PER_HOUR`) | IP              | registration (and an invite in production)                                 |
+| 120 / min                         | user            | attempts, sessions, sync, downloads, onboarding, placement, profile, terms |
+| 60 / min                          | user            | admin and staff mutations                                                  |
+| 5 / h, 3 / h, 10 / h              | user, IP, user  | password change, account deletion, feedback                                |
+| 30 / 10 min, 600 / min            | IP              | client error reports, public stroke data                                   |
+| 10 / h                            | IP              | password reset with a reset link                                           |
+
+All of them are shared across instances through PostgreSQL in production.
+
 ## Known limitations
 
 1. **The CSP allows `'unsafe-inline'` scripts**, because the App Router bootstraps with inline
    scripts. A nonce-based CSP would make every page dynamic, including the static offline pages
    the service worker caches. Mitigations: no user HTML is ever rendered
    (`dangerouslySetInnerHTML` isn't used), plus `object-src 'none'` and `base-uri 'self'`.
-   Post-beta.
-2. **No email verification or password reset.** Both need an email provider (an external
-   account). Until then, support would reset passwords by hand, which needs a documented
-   identity check. That procedure doesn't exist yet.
+   Post-beta. Reviewed again in M9 and kept: the static, service-worker-cached offline pages
+   can't carry a per-request nonce. The added COOP and CORP headers and the strict
+   `connect-src 'self'` limit what an injected script could do. Since the integration audit,
+   ESLint enforces the mitigation: `react/no-danger`, no `innerHTML`/`outerHTML` assignments and
+   no created `script` elements (D-046).
+2. **No email verification, and password reset is staff-assisted.** Email needs a provider
+   (an external account). Until then, staff create single-use reset links (D-045, Admin → Users
+   → a user → Password reset). The identity check below is a **draft for the owner to
+   approve**.
 3. **No 2FA for staff accounts** and no sign-in notifications. Post-beta. Keep the number of
    Super Admins small.
 4. **The client IP depends on correct proxy configuration.** If the app is exposed directly
@@ -93,6 +140,23 @@ raw SQL uses tagged templates.
 5. **Queued offline results aren't encrypted at rest** in IndexedDB (stroke coordinates only).
 6. **Account deletion is immediate and permanent**, with no grace period. The interface says so
    before confirming.
+
+## Password reset procedure (draft, needs owner approval)
+
+1. A learner asks for a reset. Note the account's email address, not the address the request
+   came from.
+2. A moderator opens the account in Admin → Users, gives a reason (for example "asked by email
+   on 11 Nov") and creates the link. A staff account needs a Super Admin.
+3. Send the link **only to the email address on the account**, from the team mailbox. Never
+   send it to a different address, phone number or chat handle the requester gives, even if
+   they say they lost access. In that case, ask the owner.
+4. The link works once, for 24 hours, and signs the account out everywhere. Creating a new link
+   cancels the old one. Both steps are in the audit log.
+5. Don't ask the learner for their old or new password, ever.
+
+Hosting note: reset links carry the token in the URL. The app logs paths without query
+strings, but check that the platform's access logs don't keep query strings, or keep them
+only briefly.
 
 ## Reporting
 

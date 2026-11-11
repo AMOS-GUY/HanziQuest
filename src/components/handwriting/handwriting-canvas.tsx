@@ -11,6 +11,10 @@ const MIN_POINT_DISTANCE = 0.003;
  * Pointer-Events drawing surface for one character. Supports mouse, touch and stylus;
  * captures normalised points (0–1, y down) with timestamps; renders crisply on high-DPI screens;
  * prevents page scrolling while drawing.
+ *
+ * Palm rejection: once a stylus is used, touch input is ignored, and a stylus touching down
+ * while a finger or palm is drawing replaces that stroke. A cancelled gesture (the system took
+ * over the pointer) is discarded rather than saved as a partial stroke.
  */
 export function HandwritingCanvas({
   strokes,
@@ -30,9 +34,12 @@ export function HandwritingCanvas({
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const active = useRef<{ pointerId: number; points: InkPoint[] } | null>(null);
+  const active = useRef<{ pointerId: number; pointerType: string; points: InkPoint[] } | null>(
+    null,
+  );
   const timeOrigin = useRef<number | null>(null);
   const strokesRef = useRef(strokes);
+  const penSeen = useRef(false);
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -107,11 +114,26 @@ export function HandwritingCanvas({
   };
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled || active.current || (event.pointerType === "mouse" && event.button !== 0)) return;
+    if (disabled || (event.pointerType === "mouse" && event.button !== 0)) return;
+    if (event.pointerType === "pen") penSeen.current = true;
+    else if (event.pointerType === "touch" && penSeen.current) return; // resting palm
+    if (active.current) {
+      // A pen landing during a touch stroke wins: the touch was probably the palm.
+      if (event.pointerType !== "pen" || active.current.pointerType === "pen") return;
+      active.current = null;
+    }
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // The pointer is already gone (InvalidPointerId): draw without capture.
+    }
     const rect = event.currentTarget.getBoundingClientRect();
-    active.current = { pointerId: event.pointerId, points: [toPoint(event, rect)] };
+    active.current = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      points: [toPoint(event, rect)],
+    };
     redraw();
   };
 
@@ -156,7 +178,7 @@ export function HandwritingCanvas({
         <span
           lang="zh"
           aria-hidden
-          className="hanzi text-foreground/15 pointer-events-none absolute inset-0 flex items-center justify-center text-[min(62vw,13rem)] leading-none"
+          className="hanzi text-foreground/20 pointer-events-none absolute inset-0 flex items-center justify-center text-[min(62vw,13rem)] leading-none"
         >
           {ghost}
         </span>
@@ -169,7 +191,11 @@ export function HandwritingCanvas({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={finish}
-        onPointerCancel={finish}
+        onPointerCancel={(event) => {
+          if (active.current?.pointerId !== event.pointerId) return;
+          active.current = null;
+          redraw();
+        }}
         onContextMenu={(e) => e.preventDefault()}
       />
     </div>

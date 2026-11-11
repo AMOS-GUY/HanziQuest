@@ -2,11 +2,17 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { buildEvaluationConfig } from "@/features/exercises/evaluation-config";
 import type { CurriculumContent, ContentWord } from "./content-schema";
 import type { StrokeData } from "./stroke-data";
+import { mayOverwrite } from "./provenance";
+import { nextRevision } from "@/features/administration/services";
 
 export interface ImportOptions {
   /** Publish lessons that are new in this import. Existing lessons keep their publication status. */
   publishNewLessons: boolean;
   lookupStrokes: (hanzi: string) => StrokeData | null;
+  /** Author of the content revisions this import writes (the importing admin). */
+  authorId?: string;
+  /** Runs inside the import transaction, e.g. to write the audit entry atomically. */
+  onImported?: (tx: Prisma.TransactionClient, summary: ImportSummary) => Promise<void>;
 }
 
 export interface ImportSummary {
@@ -17,6 +23,13 @@ export interface ImportSummary {
   lessonsCreated: number;
   lessonsUpdated: number;
   exercisesUpserted: number;
+  /**
+   * Shared characters and words whose reviewed reading or gloss was kept because this import's
+   * verification level is lower than theirs (D-038).
+   */
+  protectedKept: string[];
+  /** Existing shared characters and words this import changed (each got a ContentRevision). */
+  revised: string[];
 }
 
 type Tx = Prisma.TransactionClient;
@@ -34,10 +47,17 @@ export async function importCurriculumContent(
   content: CurriculumContent,
   options: ImportOptions,
 ): Promise<ImportSummary> {
-  return prisma.$transaction(async (tx) => doImport(tx, content, options), {
-    timeout: 120_000,
-    maxWait: 10_000,
-  });
+  return prisma.$transaction(
+    async (tx) => {
+      const summary = await doImport(tx, content, options);
+      await options.onImported?.(tx, summary);
+      return summary;
+    },
+    {
+      timeout: 120_000,
+      maxWait: 10_000,
+    },
+  );
 }
 
 async function doImport(
@@ -53,6 +73,8 @@ async function doImport(
     lessonsCreated: 0,
     lessonsUpdated: 0,
     exercisesUpserted: 0,
+    protectedKept: [],
+    revised: [],
   };
   const c = content.curriculum;
 
@@ -94,8 +116,39 @@ async function doImport(
   // Characters + reference strokes.
   const characterIds = new Map<string, string>();
   const strokeAvailable = new Set<string>();
-  for (const [hanzi, def] of Object.entries(content.characters)) {
+  /** Reading and gloss actually in effect (the file's, unless a reviewed record was kept). */
+  const effective = new Map<string, { pinyin: string; meaning: string }>();
+  for (const [hanzi, fileDef] of Object.entries(content.characters)) {
     const strokes = options.lookupStrokes(hanzi);
+    let def = fileDef;
+    const current = await tx.character.findUnique({
+      where: { hanzi },
+      select: { pinyin: true, pinyinAlternatives: true, meaning: true, verification: true },
+    });
+    if (
+      current &&
+      !mayOverwrite(current.verification, c.verification) &&
+      (current.pinyin !== fileDef.pinyin ||
+        current.meaning !== fileDef.meaning ||
+        current.pinyinAlternatives.join("|") !== (fileDef.alternatives ?? []).join("|"))
+    ) {
+      def = {
+        ...fileDef,
+        pinyin: current.pinyin,
+        meaning: current.meaning,
+        alternatives: current.pinyinAlternatives,
+      };
+      summary.protectedKept.push(hanzi);
+    } else if (
+      current &&
+      (current.pinyin !== fileDef.pinyin ||
+        current.meaning !== fileDef.meaning ||
+        current.pinyinAlternatives.join("|") !== (fileDef.alternatives ?? []).join("|"))
+    ) {
+      await snapshot(tx, "Character", hanzi, current, c.slug, options.authorId);
+      summary.revised.push(hanzi);
+    }
+    effective.set(hanzi, { pinyin: def.pinyin, meaning: def.meaning });
     const record = await tx.character.upsert({
       where: { hanzi },
       create: {
@@ -181,7 +234,16 @@ async function doImport(
       const vocabularyIds: string[] = [];
       for (const word of lesson.words) {
         vocabularyIds.push(
-          await upsertWord(tx, word, characterIds, c.source, c.licenseStatus, c.verification),
+          await upsertWord(
+            tx,
+            word,
+            characterIds,
+            c.source,
+            c.licenseStatus,
+            c.verification,
+            summary,
+            options.authorId,
+          ),
         );
         summary.vocabularyUpserted += 1;
       }
@@ -238,8 +300,8 @@ async function doImport(
             hanzi,
             {
               id,
-              pinyin: content.characters[hanzi]!.pinyin,
-              meaning: content.characters[hanzi]!.meaning,
+              pinyin: effective.get(hanzi)!.pinyin,
+              meaning: effective.get(hanzi)!.meaning,
               hasStrokes: strokeAvailable.has(hanzi),
             },
           ]),
@@ -396,7 +458,23 @@ async function upsertWord(
   defaultSource: string,
   licenseStatus: CurriculumContent["curriculum"]["licenseStatus"],
   verification: CurriculumContent["curriculum"]["verification"],
+  summary: ImportSummary,
+  authorId: string | undefined,
 ): Promise<string> {
+  const current = await tx.vocabulary.findUnique({
+    where: { simplified_pinyin: { simplified: word.simplified, pinyin: word.pinyin } },
+    select: { id: true, meaning: true, partOfSpeech: true, verification: true },
+  });
+  const differs =
+    current !== null &&
+    (current.meaning !== word.meaning ||
+      (current.partOfSpeech ?? null) !== (word.partOfSpeech ?? null));
+  const keep = differs && !mayOverwrite(current.verification, verification);
+  if (keep) summary.protectedKept.push(word.simplified);
+  else if (differs) {
+    await snapshot(tx, "Vocabulary", current.id, current, word.simplified, authorId);
+    summary.revised.push(word.simplified);
+  }
   const record = await tx.vocabulary.upsert({
     where: { simplified_pinyin: { simplified: word.simplified, pinyin: word.pinyin } },
     create: {
@@ -409,11 +487,13 @@ async function upsertWord(
       licenseStatus,
       verification,
     },
-    update: {
-      meaning: word.meaning,
-      partOfSpeech: word.partOfSpeech,
-      source: word.source ?? defaultSource,
-    },
+    update: keep
+      ? {}
+      : {
+          meaning: word.meaning,
+          partOfSpeech: word.partOfSpeech,
+          source: word.source ?? defaultSource,
+        },
   });
   const chars = [...word.simplified];
   await tx.vocabularyCharacter.deleteMany({ where: { vocabularyId: record.id } });
@@ -456,4 +536,28 @@ async function upsertExercise(tx: Tx, curriculumId: string, input: ExerciseInput
     update: data,
   });
   return record.id;
+}
+
+/** Records the previous values of a shared record before an import changes it. */
+async function snapshot(
+  tx: Tx,
+  entityType: "Character" | "Vocabulary",
+  key: string,
+  before: Record<string, unknown>,
+  importedFrom: string,
+  authorId: string | undefined,
+) {
+  const entity =
+    entityType === "Character"
+      ? await tx.character.findUniqueOrThrow({ where: { hanzi: key }, select: { id: true } })
+      : { id: key };
+  await tx.contentRevision.create({
+    data: {
+      entityType,
+      entityId: entity.id,
+      revision: await nextRevision(tx, entityType, entity.id),
+      data: { ...before, changedBy: `import:${importedFrom}` } as Prisma.InputJsonValue,
+      authorId: authorId ?? null,
+    },
+  });
 }

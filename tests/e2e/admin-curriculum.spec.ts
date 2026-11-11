@@ -70,6 +70,27 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByRole("button", { name: "Unpublish" })).toBeVisible();
 
+  // A published lesson in a draft curriculum is still invisible to learners. Publishing the
+  // curriculum releases it to the learning path.
+  await page.goto("/learn");
+  await expect(page.getByRole("heading", { name: `E2E ${slug}` })).toHaveCount(0);
+  await page.goto("/admin/curricula");
+  await page.getByRole("link", { name: `E2E ${slug}` }).click();
+  await expect(page.getByText("Draft", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Publish curriculum" }).click();
+  await expect(page.getByText("Published", { exact: true })).toBeVisible();
+  await page.goto("/learn");
+  await expect(page.getByRole("heading", { name: `E2E ${slug}` })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: `E2E ${slug}` }).getByText("Hello again"),
+  ).toBeVisible();
+  // Withdraw it again so other tests' learning paths are unaffected.
+  await page.goto("/admin/curricula");
+  await page.getByRole("link", { name: `E2E ${slug}` }).click();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Archive" }).click();
+  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
+
   // Field validation on a new character
   await page.goto("/admin/characters/new");
   await page.getByLabel("Character").fill("你");
@@ -97,6 +118,8 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
         verification: "PROVISIONAL",
       },
       level: { level: 1, name: "L1" },
+      // Same reading and gloss as the starter curriculum: characters are shared, and a test
+      // must not rewrite real content.
       characters: { 人: { pinyin: "rén", meaning: "person" } },
       units: [
         {
@@ -106,7 +129,14 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
             {
               slug: "l1",
               title: "L1",
-              words: [{ simplified: "人", pinyin: "rén", meaning: "person" }],
+              words: [
+                {
+                  simplified: "人",
+                  pinyin: "rén",
+                  meaning: "person; people",
+                  partOfSpeech: "noun",
+                },
+              ],
             },
           ],
         },
@@ -115,10 +145,18 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
   );
   await page.getByRole("button", { name: "Validate" }).click();
   await expect(page.getByText("Validation passed.")).toBeVisible();
+  // Validation also previews what the import would change, read-only.
+  await expect(page.getByText("— Import preview —")).toBeVisible();
+  await expect(page.getByText(/^Lessons: 1 new/)).toBeVisible();
   await page.getByRole("button", { name: "Import as drafts" }).click();
   await expect(page.getByText(/Imported: 1 new lessons \(as drafts\)/)).toBeVisible({
     timeout: 30_000,
   });
+
+  // Content quality report
+  await page.goto("/admin/content-quality");
+  await expect(page.getByRole("heading", { level: 1, name: "Content quality" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "HSK 1 Starter" })).toBeVisible();
 
   // Handwriting lab: record a labelled sample with consent.
   await page.goto("/admin/handwriting");

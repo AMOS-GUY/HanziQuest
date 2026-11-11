@@ -76,7 +76,12 @@ export default async function HandwritingLabPage({
             </div>
           ))}
         </dl>
-        <div className="overflow-x-auto">
+        <div
+          role="region"
+          aria-label="Handwriting samples (scrolls sideways)"
+          tabIndex={0}
+          className="overflow-x-auto"
+        >
           <table className="w-full min-w-[520px] text-left text-sm">
             <thead className="text-muted-foreground border-border border-b-2">
               <tr>

@@ -70,7 +70,7 @@ export function GuidedStrokeQuiz({
     return () => {
       cancelled = true;
       writer?.cancelQuiz();
-      host.innerHTML = "";
+      host.replaceChildren();
     };
   }, [hanzi, data]);
 

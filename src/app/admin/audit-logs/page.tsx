@@ -28,7 +28,12 @@ export default async function AuditLogPage({
       {entries.length === 0 ? (
         <p className="text-muted-foreground">No audit entries yet.</p>
       ) : (
-        <div className="border-border bg-surface overflow-x-auto rounded-[var(--radius-card)] border-2">
+        <div
+          role="region"
+          aria-label="Audit log entries (scrolls sideways)"
+          tabIndex={0}
+          className="border-border bg-surface overflow-x-auto rounded-[var(--radius-card)] border-2"
+        >
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="border-border text-muted-foreground border-b-2">
               <tr>

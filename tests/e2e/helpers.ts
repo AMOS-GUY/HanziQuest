@@ -105,7 +105,9 @@ export async function writeCurrentExercise(page: Page) {
         return;
       }
 
-      const tabs = [...document.querySelectorAll("[role=tab]")] as HTMLButtonElement[];
+      const tabs = [
+        ...document.querySelectorAll('[aria-label="Character to write"] button'),
+      ] as HTMLButtonElement[];
       const count = Math.max(1, tabs.length);
       if (expected.length !== count)
         throw new Error(`expected ${count} characters, got ${expected.join("")}`);
@@ -242,4 +244,20 @@ export async function writeOnCanvas(page: Page, hanzi: string) {
 function strokeMediansFor(hanzi: string): number[][][] {
   const file = path.resolve(process.cwd(), "node_modules/hanzi-writer-data", `${hanzi}.json`);
   return (JSON.parse(fs.readFileSync(file, "utf8")) as { medians: number[][][] }).medians;
+}
+
+/** Sets an account's status directly in the e2e database (test setup only). */
+export async function setAccountStatus(email: string, status: "ACTIVE" | "SUSPENDED") {
+  const { Client } = await import("pg");
+  await import("dotenv/config");
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(`UPDATE "User" SET status = $2::"UserStatus" WHERE email = $1`, [
+      email,
+      status,
+    ]);
+  } finally {
+    await client.end();
+  }
 }

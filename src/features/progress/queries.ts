@@ -1,11 +1,14 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { MasteryLevel } from "@/generated/prisma/enums";
+import { LEARNER_REVIEWABLE_CHARACTER } from "@/features/curriculum/visibility";
+import { countPlacementChecks } from "@/features/learning/sessions";
 import { addDays, dateToDay, dayToDate, liveStreak, localDay } from "./calendar";
 
 export interface ProgressSummary {
   xpTotal: number;
   today: { day: string; xp: number; goal: number; goalMet: boolean };
   streak: { current: number; longest: number };
+  /** Scheduled reviews due now plus placement checks (see `getPlacementChecks`). */
   dueNow: number;
   dueNext: Date | null;
   mastery: Record<MasteryLevel, number>;
@@ -27,9 +30,14 @@ export async function getProgressSummary(
     prisma.xPTransaction.aggregate({ where: { userId }, _sum: { amount: true } }),
     prisma.dailyActivity.findUnique({ where: { userId_date: { userId, date: dayToDate(day) } } }),
     prisma.streak.findUnique({ where: { userId } }),
-    prisma.reviewSchedule.count({ where: { userId, dueAt: { lte: now } } }),
+    Promise.all([
+      prisma.reviewSchedule.count({
+        where: { userId, dueAt: { lte: now }, character: LEARNER_REVIEWABLE_CHARACTER },
+      }),
+      countPlacementChecks(prisma, userId),
+    ]).then(([scheduled, placement]) => scheduled + placement),
     prisma.reviewSchedule.findFirst({
-      where: { userId, dueAt: { gt: now } },
+      where: { userId, dueAt: { gt: now }, character: LEARNER_REVIEWABLE_CHARACTER },
       orderBy: { dueAt: "asc" },
       select: { dueAt: true },
     }),
@@ -77,6 +85,11 @@ export async function getProgressDetails(
         level: true,
         strength: true,
         lastTechniqueOk: true,
+        guidedAttempts: true,
+        independentAttempts: true,
+        independentSuccesses: true,
+        techniqueAttempts: true,
+        techniqueClean: true,
         character: { select: { hanzi: true, pinyin: true, meaning: true } },
       },
     }),
@@ -108,7 +121,11 @@ export async function getProgressDetails(
       level: c.level,
       strength: c.strength,
       techniqueNeedsWork: c.lastTechniqueOk === false,
+      guidedAttempts: c.guidedAttempts,
+      recall: { attempts: c.independentAttempts, successes: c.independentSuccesses },
+      technique: { judged: c.techniqueAttempts, clean: c.techniqueClean },
     })),
+    skills: skillTotals(characters),
   };
 }
 
@@ -121,7 +138,7 @@ export async function getReviewForecast(
 ) {
   const horizon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const rows = await prisma.reviewSchedule.findMany({
-    where: { userId, dueAt: { gt: now, lte: horizon } },
+    where: { userId, dueAt: { gt: now, lte: horizon }, character: LEARNER_REVIEWABLE_CHARACTER },
     select: { dueAt: true },
   });
   const today = localDay(now, timezone);
@@ -134,4 +151,32 @@ export async function getReviewForecast(
     const day = addDays(today, i);
     return { day, count: counts.get(day) ?? 0 };
   });
+}
+
+/**
+ * Separate measures of what the learner can do (M7): recall (independent writing of the right
+ * character), technique (stroke order and direction on those recalls) and guided practice
+ * (tracing, never counted as recall). Rates are null until there is something to measure.
+ */
+export function skillTotals(
+  rows: readonly {
+    guidedAttempts: number;
+    independentAttempts: number;
+    independentSuccesses: number;
+    techniqueAttempts: number;
+    techniqueClean: number;
+  }[],
+) {
+  const sum = (f: (r: (typeof rows)[number]) => number) => rows.reduce((t, r) => t + f(r), 0);
+  const recallAttempts = sum((r) => r.independentAttempts);
+  const recallSuccesses = sum((r) => r.independentSuccesses);
+  const techniqueJudged = sum((r) => r.techniqueAttempts);
+  const techniqueClean = sum((r) => r.techniqueClean);
+  return {
+    guidedAttempts: sum((r) => r.guidedAttempts),
+    recallAttempts,
+    recallRate: recallAttempts > 0 ? recallSuccesses / recallAttempts : null,
+    techniqueJudged,
+    techniqueRate: techniqueJudged > 0 ? techniqueClean / techniqueJudged : null,
+  };
 }

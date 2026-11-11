@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { Prisma as PrismaNS } from "@/generated/prisma/client";
 import type { AttemptResult, LearningSessionType, PracticeMode } from "@/generated/prisma/enums";
 import { DomainError } from "@/features/administration/services";
+import { LEARNER_VISIBLE_LESSON } from "@/features/curriculum/visibility";
 import { evaluateWord } from "@/features/handwriting/evaluate";
 import { loadLevelReferences } from "@/features/handwriting/reference-store";
 import { fromMakeMeAHanzi } from "@/features/handwriting/reference";
@@ -97,7 +98,7 @@ export async function submitAttempt(
     where: { id: input.exerciseId },
     include: {
       lessons: {
-        where: { lesson: { status: "PUBLISHED" } },
+        where: { lesson: LEARNER_VISIBLE_LESSON },
         select: { lesson: { select: { unit: { select: { levelId: true } } } } },
       },
       character: { select: { strokeCount: true } },

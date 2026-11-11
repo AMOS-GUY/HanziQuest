@@ -55,7 +55,7 @@ export default async function HomePage() {
         <Card className="border-primary/30 bg-accent flex flex-col gap-4">
           <div>
             <CardTitle>{completed === 0 ? "Start learning" : "Continue learning"}</CardTitle>
-            <CardDescription className="text-accent-foreground/80">
+            <CardDescription className="text-accent-foreground">
               Next up: “{next.title}”
             </CardDescription>
           </div>
@@ -76,7 +76,7 @@ export default async function HomePage() {
           <PartyPopper className="text-primary mt-0.5 size-6 shrink-0" aria-hidden />
           <div>
             <CardTitle>All {total} lessons done</CardTitle>
-            <CardDescription className="text-accent-foreground/80">
+            <CardDescription className="text-accent-foreground">
               You&apos;ve finished every published lesson. Practise any lesson again from the
               learning path.
             </CardDescription>

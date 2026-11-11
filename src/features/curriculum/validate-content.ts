@@ -1,5 +1,13 @@
 import { curriculumContentSchema, type CurriculumContent } from "./content-schema";
 import type { StrokeData } from "./stroke-data";
+import { checkWordReadings } from "./readings";
+
+/** Pedagogical limits; exceeding them is a warning, not an error. */
+export const CONTENT_LIMITS = {
+  newCharactersPerLesson: 8,
+  wordsPerLesson: 12,
+  meaningLength: 120,
+} as const;
 
 export interface ContentIssue {
   severity: "error" | "warning";
@@ -146,6 +154,25 @@ export function validateCurriculumContent(
   }
 
   const content = parsed.data;
+  const c = content.curriculum;
+  if (c.verification !== "PROVISIONAL" && (c.licenseStatus === "UNKNOWN" || !c.source.trim())) {
+    issues.push({
+      severity: "error",
+      path: "curriculum.verification",
+      message: `Content can't be marked ${c.verification} while its licence or source is unknown`,
+    });
+  } else if (c.licenseStatus === "UNKNOWN") {
+    issues.push({
+      severity: "warning",
+      path: "curriculum.licenseStatus",
+      message: "Licence status is UNKNOWN: confirm you may use this content before publishing",
+    });
+  }
+  const readingsOf = (hanzi: string) => {
+    const def = content.characters[hanzi];
+    return def ? [def.pinyin, ...(def.alternatives ?? [])] : undefined;
+  };
+  const introduced = new Set<string>();
   const unitSlugs = new Set<string>();
   const seenWords = new Map<string, string>();
   const usedCharacters = new Set<string>();
@@ -184,6 +211,24 @@ export function validateCurriculumContent(
         });
       }
       lessonSlugs.add(lesson.slug);
+      if (lesson.words.length > CONTENT_LIMITS.wordsPerLesson) {
+        issues.push({
+          severity: "warning",
+          path: lessonPath,
+          message: `${lesson.words.length} words in one lesson (suggested at most ${CONTENT_LIMITS.wordsPerLesson})`,
+        });
+      }
+      const newHere = new Set(
+        lesson.words.flatMap((w) => [...w.simplified]).filter((ch) => !introduced.has(ch)),
+      );
+      for (const ch of newHere) introduced.add(ch);
+      if (newHere.size > CONTENT_LIMITS.newCharactersPerLesson) {
+        issues.push({
+          severity: "warning",
+          path: lessonPath,
+          message: `${newHere.size} new characters in one lesson (suggested at most ${CONTENT_LIMITS.newCharactersPerLesson})`,
+        });
+      }
 
       lesson.words.forEach((word, w) => {
         words += 1;
@@ -209,6 +254,26 @@ export function validateCurriculumContent(
           });
         }
 
+        if (syllables === chars.length) {
+          for (const r of checkWordReadings(word.simplified, word.pinyin, readingsOf)) {
+            issues.push({ severity: "warning", path: `${wordPath}.pinyin`, message: r.message });
+          }
+        }
+        if (word.traditional && [...word.traditional].length !== chars.length) {
+          issues.push({
+            severity: "error",
+            path: `${wordPath}.traditional`,
+            message: `Traditional form ${word.traditional} has a different number of characters`,
+          });
+        }
+        if (word.meaning.length > CONTENT_LIMITS.meaningLength) {
+          issues.push({
+            severity: "warning",
+            path: `${wordPath}.meaning`,
+            message: `Meaning is ${word.meaning.length} characters long; keep glosses short`,
+          });
+        }
+
         for (const ch of chars) {
           usedCharacters.add(ch);
           if (!content.characters[ch]) {
@@ -222,6 +287,44 @@ export function validateCurriculumContent(
       });
     });
   });
+
+  const byGloss = new Map<string, string[]>();
+  for (const [hanzi, def] of Object.entries(content.characters)) {
+    const gloss = def.meaning.trim().toLowerCase();
+    byGloss.set(gloss, [...(byGloss.get(gloss) ?? []), hanzi]);
+    if (def.traditional && [...def.traditional].length !== 1) {
+      issues.push({
+        severity: "error",
+        path: `characters.${hanzi}.traditional`,
+        message: "Traditional form must be a single character",
+      });
+    }
+    if ((def.alternatives ?? []).includes(def.pinyin)) {
+      issues.push({
+        severity: "warning",
+        path: `characters.${hanzi}.alternatives`,
+        message: "Alternative reading repeats the main reading",
+      });
+    }
+    for (const reading of [def.pinyin, ...(def.alternatives ?? [])]) {
+      if (countPinyinSyllables(reading) !== 1) {
+        issues.push({
+          severity: "error",
+          path: `characters.${hanzi}`,
+          message: `"${reading}" is not a single syllable`,
+        });
+      }
+    }
+  }
+  for (const [gloss, chars] of byGloss) {
+    if (chars.length > 1) {
+      issues.push({
+        severity: "warning",
+        path: `characters.${chars.join(",")}`,
+        message: `${chars.join(" and ")} share the meaning "${gloss}": check for a copy-paste error, or add a distinguishing note`,
+      });
+    }
+  }
 
   for (const hanzi of Object.keys(content.characters)) {
     if (!usedCharacters.has(hanzi)) {

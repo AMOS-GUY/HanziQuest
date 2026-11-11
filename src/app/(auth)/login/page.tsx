@@ -23,6 +23,9 @@ export default async function LoginPage({
         </p>
       ) : null}
       <LoginForm callbackUrl={callbackUrl} />
+      <p className="text-muted-foreground mt-4 text-center text-sm">
+        Forgotten your password? Ask the HanziQuest team for a reset link.
+      </p>
       <p className="text-muted-foreground mt-6 text-center text-sm">
         New to HanziQuest?{" "}
         <Link href="/register" className="text-primary font-bold hover:underline">

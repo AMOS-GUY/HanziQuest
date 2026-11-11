@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AuthorizationError } from "@/lib/auth/session";
 import { DomainError } from "@/features/administration/services";
 import { reportError } from "@/lib/monitoring/report";
+import { logEvent } from "@/lib/monitoring/log";
 
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown };
@@ -42,43 +43,65 @@ function crossSite(request: Request) {
   return !allowed.has(originHost);
 }
 
-/** Wraps a route handler with consistent error mapping. Unknown errors become 500 without leaking internals. */
+/**
+ * Wraps a route handler with consistent error mapping and one structured log line per request
+ * (method, path without query, status, duration: no bodies, no user data). Unknown errors
+ * become 500 without leaking internals.
+ */
 export function handleApi<Args extends unknown[]>(handler: (...args: Args) => Promise<Response>) {
   return async (...args: Args): Promise<Response> => {
     const request = args[0] instanceof Request ? args[0] : null;
-    if (request && crossSite(request))
-      return apiError(403, "forbidden", "Cross-site requests are not allowed.");
-    try {
-      return await handler(...args);
-    } catch (error) {
-      if (error instanceof PayloadTooLargeError)
-        return apiError(413, "payload_too_large", "The request is too large.");
-      if (error instanceof AuthorizationError) {
-        return apiError(
-          error.status,
-          error.status === 401 ? "unauthenticated" : "forbidden",
-          error.message,
-        );
-      }
-      if (error instanceof z.ZodError) {
-        return apiError(
-          400,
-          "invalid_request",
-          "The request is invalid.",
-          z.flattenError(error).fieldErrors,
-        );
-      }
-      if (error instanceof DomainError) {
-        const status = error.code === "not_found" ? 404 : error.code === "forbidden" ? 403 : 409;
-        return apiError(status, error.code, error.message);
-      }
-      if (error instanceof SyntaxError)
-        return apiError(400, "invalid_json", "Request body must be valid JSON.");
-      await reportError(error, {
-        source: "api",
-        path: request ? new URL(request.url).pathname : undefined,
+    const started = Date.now();
+    const response = await handle(request, handler, args);
+    if (request) {
+      logEvent(response.status >= 500 ? "error" : "info", "api.request", {
+        method: request.method,
+        path: new URL(request.url).pathname,
+        status: response.status,
+        ms: Date.now() - started,
       });
-      return apiError(500, "internal_error", "Something went wrong. Please try again.");
     }
+    return response;
   };
+}
+
+async function handle<Args extends unknown[]>(
+  request: Request | null,
+  handler: (...args: Args) => Promise<Response>,
+  args: Args,
+): Promise<Response> {
+  if (request && crossSite(request))
+    return apiError(403, "forbidden", "Cross-site requests are not allowed.");
+  try {
+    return await handler(...args);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError)
+      return apiError(413, "payload_too_large", "The request is too large.");
+    if (error instanceof AuthorizationError) {
+      return apiError(
+        error.status,
+        error.status === 401 ? "unauthenticated" : "forbidden",
+        error.message,
+      );
+    }
+    if (error instanceof z.ZodError) {
+      return apiError(
+        400,
+        "invalid_request",
+        "The request is invalid.",
+        z.flattenError(error).fieldErrors,
+      );
+    }
+    if (error instanceof DomainError) {
+      const status = error.code === "not_found" ? 404 : error.code === "forbidden" ? 403 : 409;
+      return apiError(status, error.code, error.message);
+    }
+    if (error instanceof SyntaxError)
+      return apiError(400, "invalid_json", "Request body must be valid JSON.");
+    await reportError(error, {
+      source: "api",
+      path: request ? new URL(request.url).pathname : undefined,
+    });
+    return apiError(500, "internal_error", "Something went wrong. Please try again.");
+  }
 }

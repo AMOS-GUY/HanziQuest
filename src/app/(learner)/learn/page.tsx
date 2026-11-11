@@ -34,12 +34,13 @@ export default async function LearnPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <h1 className="sr-only">Learn</h1>
       {curricula.map((curriculum) => (
         <section key={curriculum.id} aria-labelledby={`c-${curriculum.id}`}>
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h1 id={`c-${curriculum.id}`} className="text-3xl font-black">
+            <h2 id={`c-${curriculum.id}`} className="text-3xl font-black">
               {curriculum.name}
-            </h1>
+            </h2>
             {curriculum.verification !== "VERIFIED" ? (
               <Badge
                 variant="warning"
@@ -63,7 +64,7 @@ export default async function LearnPage() {
                   <p className="text-primary text-xs font-extrabold tracking-wider uppercase">
                     {level.name} · Unit {unitIndex + 1}
                   </p>
-                  <h2 className="text-xl font-extrabold">{unit.title}</h2>
+                  <h3 className="text-xl font-extrabold">{unit.title}</h3>
                   {unit.description ? (
                     <p className="text-muted-foreground mb-3 text-sm">{unit.description}</p>
                   ) : null}
@@ -77,17 +78,17 @@ export default async function LearnPage() {
                         <li key={lesson.id}>
                           <Link
                             href={`/learn/${lesson.id}`}
-                            aria-label={`${lesson.title}, ${meta.label}`}
                             className={cn(
                               "border-border bg-surface hover:bg-surface-muted flex h-full flex-col gap-2 rounded-[var(--radius-card)] border-2 p-4 transition-colors",
                               isNext && "border-primary shadow-[0_3px_0_0_var(--primary)]",
-                              state === "LOCKED" && "opacity-60",
+                              // Locked: dashed and muted, but text keeps full contrast.
+                              state === "LOCKED" && "bg-surface-muted border-dashed",
                             )}
                           >
                             <div className="flex items-baseline justify-between gap-2">
-                              <h3 className="font-extrabold">
+                              <h4 className="font-extrabold">
                                 {lessonIndex + 1}. {lesson.title}
-                              </h3>
+                              </h4>
                               <span
                                 className={cn(
                                   "text-muted-foreground flex items-center gap-1 text-xs font-bold whitespace-nowrap",

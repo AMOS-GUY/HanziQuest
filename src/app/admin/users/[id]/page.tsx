@@ -10,6 +10,8 @@ import type { RoleKey } from "@/generated/prisma/enums";
 import { RoleEditor } from "./role-editor";
 import { AdminForm } from "@/components/admin/admin-form";
 import { setUserStatusAction } from "@/features/account/actions";
+import { RESET_TTL_HOURS } from "@/features/account/password-reset";
+import { PasswordResetLink } from "./password-reset";
 
 export const metadata = { title: "User" };
 
@@ -100,6 +102,20 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
               { name: "reason", label: "Reason", required: true },
             ]}
           />
+        </Card>
+      ) : null}
+      {viewer.permissions.has("users:moderate") &&
+      viewer.id !== user.id &&
+      user.status === "ACTIVE" ? (
+        <Card>
+          <CardTitle className="mb-1">Password reset</CardTitle>
+          <p className="text-muted-foreground mb-4 text-sm">
+            For a learner who has forgotten their password. The link works once, for{" "}
+            {RESET_TTL_HOURS} hours, and signs them out everywhere when used. Send it only to the
+            email address on this account, never to an address or chat the requester gives you
+            (SECURITY.md). Staff accounts need a Super Admin.
+          </p>
+          <PasswordResetLink userId={user.id} />
         </Card>
       ) : null}
       <Card>

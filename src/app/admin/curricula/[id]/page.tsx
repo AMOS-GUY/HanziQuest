@@ -12,6 +12,8 @@ import {
   updateLevelAction,
 } from "@/features/administration/curriculum-actions";
 
+import { CurriculumStatus } from "./curriculum-status";
+
 export const metadata = { title: "Curriculum" };
 
 export default async function CurriculumPage({ params }: { params: Promise<{ id: string }> }) {
@@ -42,6 +44,13 @@ export default async function CurriculumPage({ params }: { params: Promise<{ id:
         <p className="text-muted-foreground text-sm">
           {c.framework} · version {c.version} · slug {c.slug}
         </p>
+        <div className="mt-3">
+          <CurriculumStatus
+            curriculumId={c.id}
+            status={c.status}
+            canPublish={user.permissions.has("curriculum:publish")}
+          />
+        </div>
       </div>
 
       {canWrite ? (

@@ -25,23 +25,36 @@ Check the current prices and terms of the chosen providers before signing up. Th
 other paid services: email is not used yet, and error reporting works with Sentry's free tier,
 a self-hosted GlitchTip, or with no reporting service at all (JSON logs only).
 
+## Environments
+
+| Environment | Database                                                                                                                                  | Registration                                | Secrets                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------- |
+| Development | local `hanziquest` on :5433 (`npm run db:local`)                                                                                          | open (the default outside production)       | `.env` (git-ignored), development values only |
+| Tests       | `hanziquest_test` (integration tests refuse a database whose name lacks "test"); e2e uses the development database with two local servers | e2e: one open server, one invite-only       | generated for each CI run                     |
+| Production  | managed PostgreSQL with point-in-time recovery                                                                                            | **invite-only** (the default in production) | the host's secret store only; never in git    |
+
+Never point development or test tools at the production database. The exceptions are
+`db:deploy`, `db:backup` and `db:verify`, run deliberately from a trusted machine. `.env` is
+git-ignored, and CI generates its `AUTH_SECRET` for each run.
+
 ## Environment variables
 
 `.env.example` documents every variable. The app refuses to start in production when a fatal
 item is wrong (`src/lib/env.ts`, checked from `src/instrumentation.ts`).
 
-| Variable                                   | Required | Notes                                                                                                                      |
-| ------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                             | yes      | Pooled connection string for the app. For migrations, use the direct (non-pooled) URL if the provider has one.             |
-| `AUTH_SECRET`                              | yes      | 32+ random characters (`npx auth secret`). Unique per environment; never the development value.                            |
-| `AUTH_URL`                                 | yes      | Public `https://` origin.                                                                                                  |
-| `AUTH_TRUST_HOST`                          | yes      | `true` behind the platform's proxy.                                                                                        |
-| `TRUSTED_PROXY_HOPS`                       | yes      | Number of proxies that append to `X-Forwarded-For`; usually `1`. Don't expose the app without a proxy (see SECURITY.md).   |
-| `RATE_LIMIT_STORE`                         | no       | Defaults to `postgres` in production (shared across instances).                                                            |
-| `SENTRY_DSN`                               | no       | Sentry or GlitchTip DSN. Without it, errors are JSON lines on stdout.                                                      |
-| `APP_RELEASE` / `APP_ENV`                  | no       | Commit SHA and environment label for health checks and error reports.                                                      |
-| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | once     | Only for the first seed, to create the first Super Admin. Remove them afterwards and change the password at first sign-in. |
-| `REGISTER_LIMIT_PER_HOUR`                  | no       | Leave unset in production (default 5 per IP per hour).                                                                     |
+| Variable                                   | Required | Notes                                                                                                                                                                                                                                     |
+| ------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                             | yes      | Pooled connection string for the app. For migrations, use the direct (non-pooled) URL if the provider has one.                                                                                                                            |
+| `AUTH_SECRET`                              | yes      | 32+ random characters (`npx auth secret`). Unique per environment; never the development value.                                                                                                                                           |
+| `AUTH_URL`                                 | yes      | Public `https://` origin.                                                                                                                                                                                                                 |
+| `AUTH_TRUST_HOST`                          | yes      | `true` behind the platform's proxy.                                                                                                                                                                                                       |
+| `TRUSTED_PROXY_HOPS`                       | yes      | Number of proxies that append to `X-Forwarded-For`; usually `1`. Don't expose the app without a proxy (see SECURITY.md).                                                                                                                  |
+| `RATE_LIMIT_STORE`                         | no       | Defaults to `postgres` in production (shared across instances).                                                                                                                                                                           |
+| `SENTRY_DSN`                               | no       | Sentry or GlitchTip DSN. Without it, errors are JSON lines on stdout.                                                                                                                                                                     |
+| `APP_RELEASE` / `APP_ENV`                  | no       | Commit SHA and environment label for health checks and error reports.                                                                                                                                                                     |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | once     | Only for the first seed, to create the first Super Admin. Remove them afterwards and change the password at first sign-in.                                                                                                                |
+| `REGISTER_LIMIT_PER_HOUR`                  | no       | Leave unset in production (default 5 per IP per hour).                                                                                                                                                                                    |
+| `REGISTRATION_MODE`                        | no       | `invite` (the default in production): sign-up needs a code from Admin → Invites. `open`: anyone can register. Keep `invite` until the owner approves the legal and operational prerequisites. The start-up check warns when it is `open`. |
 
 ## First deployment
 
@@ -62,10 +75,34 @@ item is wrong (`src/lib/env.ts`, checked from `src/instrumentation.ts`).
 6. Sign in as the seeded admin, change the password (Profile → Change password), and assign
    staff roles under Admin → Users.
 7. Add an uptime monitor (any free HTTP monitor) on `GET /api/health`, alerting on non-200.
+8. Create invite codes for the first testers in Admin → Invites (the beta is invite-only).
+   Admin → Operations shows configuration warnings, migrations, and the sync and feedback
+   backlogs.
+
+## Migration workflow
+
+Schema changes follow **expand, then contract**. The running app version never breaks during a
+deploy, and a rollback never needs a schema rollback.
+
+1. **Expand** (release N): add nullable columns, new tables and indexes. Deploy the migration
+   **before** the app that uses it. Old code ignores new columns.
+2. **Migrate data** if needed, with an idempotent script or a migration that only adds.
+3. **Contract** (release N+1 or later, once nothing reads the old shape): drop or rename. This
+   needs a `-- migration-safety: allow <rule> <reason>` line in the migration, a DECISIONS.md
+   entry and a fresh backup.
+
+`npm run db:check-migrations` runs in CI against the PR's base branch. It fails on DROP
+TABLE/COLUMN, TRUNCATE, DELETE, type changes, renames and SET NOT NULL unless they are
+explicitly allowed. It also fails on any edit to a migration already on the base branch.
+`prisma migrate deploy` only applies committed migrations; it never resets.
+
+Keep the foreign-key graph acyclic. The backup and restore tools depend on it; this is why
+`BetaInvite.createdById` is not a foreign key.
 
 ## Regular release
 
-1. CI must be green: lint, format, types, unit, integration, e2e, smoke and Docker build.
+1. CI must be green: dependency audit, migration safety, lint, format, types, unit,
+   integration, e2e, smoke and Docker build.
 2. **Take a manual database snapshot** (provider console) if the release contains a migration.
 3. Apply migrations: `npm run db:deploy` (direct URL). Migrations are additive. Never use
    `migrate reset` or `db push` on shared databases.
@@ -77,7 +114,11 @@ item is wrong (`src/lib/env.ts`, checked from `src/instrumentation.ts`).
 ## Rollback
 
 - **App:** redeploy the previous image or deployment. Every migration so far only adds tables
-  and columns, so the previous app version keeps working on the newer schema.
+  and columns (expand, then contract, enforced by `db:check-migrations`), so the previous app
+  version keeps working on the newer schema.
+- **Health after a rollback:** `/api/health` must report `"migrations": "ok"`. If a migration
+  failed part-way, it reports `incomplete` and returns 503. Check the database state, run
+  `npx prisma migrate resolve --rolled-back <name>`, then redeploy. Never edit the migration.
 - **Schema:** write a forward-fixing migration. Never edit or delete an applied migration.
 - **Data:** restore with point-in-time recovery to a **new** database (just before the bad
   change), check it with the smoke test, then switch `DATABASE_URL`. Learners' offline queues
@@ -115,6 +156,11 @@ DATABASE_URL="$SCRATCH_URL" AUTH_URL=http://localhost:3300 npx next start -p 330
 npm run smoke -- http://localhost:3300
 ```
 
+**Local drill repeated (2026-11-11, M9, development database):** after the `beta_invites`
+migrations, a 928 KB gzip backup was restored into a fresh migrated database. Every table
+matched, 69 foreign keys were checked with 0 orphaned rows, and the app-level reads for 5
+learners matched.
+
 **Local drill (2026-11-10, development database):** backup of every table (38 contain data, about 3,500 rows)
 (389 KB gzip), into a new migrated database. Restore took 2.6 s. Verify: every table identical
 by row count and content checksum, 68 foreign keys checked with 0 orphaned rows, and progress
@@ -130,8 +176,32 @@ pending: there is no production database yet.** CI runs the same drill on every 
   boundary (via `/api/client-errors`, rate limited) as one JSON line. With `SENTRY_DSN` set it
   also sends them to Sentry or GlitchTip. Messages and stack traces have secrets redacted; no
   user identifiers are attached.
-- **Health:** `GET /api/health` returns `{status, database, release, latencyMs}` and 503 when
-  the database is unreachable. The Dockerfile has a `HEALTHCHECK` on it.
+- **Health:** `GET /api/health` returns `{status, database, migrations, release, latencyMs}`.
+  It returns 503 when the database is unreachable or a migration is unfinished or failed. The
+  Dockerfile has a `HEALTHCHECK` on it.
+- **Request logs:** route handlers write one JSON line per request (`api.request`: method,
+  path without the query, status and ms). There are no bodies and no user identifiers; emails
+  and tokens are masked (`src/lib/monitoring/log.ts`).
+- **Admin → Operations** (needs `analytics:read`):
+  - database latency, migration state and configuration warnings (names only)
+  - registration mode and active invites
+  - stuck and rejected offline syncs, with the most common rejection reasons
+  - the untriaged feedback backlog
+  - pilot sample counts and the age of the audit log
+
+## Retention
+
+`npm run ops:prune -- --audit-days <n> --sync-days <n>` is a dry run that shows what would be
+deleted. Add `--apply` to delete:
+
+- audit entries older than `n` days (they hold IP addresses and user agents)
+- processed offline sync events older than `n` days (their attempts are kept)
+- expired rate-limit buckets
+
+The owner decides the periods (LEGAL_REVIEW.md). The minimums are 30 days for audit entries and
+7 for sync events, and an applied prune is itself audited. Once the periods are decided,
+schedule it with the host's cron.
+
 - **Product signals:** Admin → Overview shows 7-day aggregate counts (active learners,
   attempts, pass rate, lesson completions, rejected offline events).
 

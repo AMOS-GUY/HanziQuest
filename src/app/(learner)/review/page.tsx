@@ -29,6 +29,7 @@ export default async function ReviewPage() {
     getReviewForecast(prisma, user.id, timezone, now),
   ]);
   const maxCount = Math.max(1, ...forecast.map((f) => f.count));
+  const placementChecks = due.filter((d) => d.kind === "placement").length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,11 +49,18 @@ export default async function ReviewPage() {
               <CardTitle>
                 {due.length} character{due.length === 1 ? "" : "s"} to review
               </CardTitle>
-              <CardDescription className="text-accent-foreground/80">
+              <CardDescription className="text-accent-foreground">
                 {due.length > REVIEW_BATCH_SIZE
                   ? `Reviews come in rounds of ${REVIEW_BATCH_SIZE}.`
                   : "One short round."}
               </CardDescription>
+              {placementChecks > 0 ? (
+                <p className="text-accent-foreground mt-1 text-sm">
+                  Includes {placementChecks} character{placementChecks === 1 ? "" : "s"} from
+                  lessons you tested out of. The placement check only asked for meanings, so write
+                  each one once to confirm you can.
+                </p>
+              ) : null}
             </div>
           </div>
           <p lang="zh" className="hanzi text-accent-foreground text-3xl tracking-widest">

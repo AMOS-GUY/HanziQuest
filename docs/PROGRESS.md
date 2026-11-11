@@ -70,6 +70,7 @@ Target public beta: **2026-12-08**.
 ### M5 — Release integration and beta launch preparation
 
 - [x] M1–M4 integrated into `main` in order, with merge commits and full history (PRs #1–#4, merged by the owner)
+- [x] M5 merged into `main` by the owner (PR #5)
 - [ ] **CI confirmed green on GitHub** (private repo; no CLI or token available to this session, so the owner must check)
 - [x] Recall vs technique mastery policy implemented, tested and documented (D-033)
 - [x] Handwriting pilot kit: five-tester plan, spoken instructions, consent script, anonymous IDs, device facts, test-sample exclusion
@@ -83,6 +84,62 @@ Target public beta: **2026-12-08**.
 - [x] QA: Chromium desktop and Android emulation, WebKit desktop and iPhone emulation (all e2e flows)
 - [ ] Firefox (Playwright's Firefox can't start on this machine: `spawn UNKNOWN`) and **real physical devices** (owner/testers)
 - [ ] **Verification of the deployed production app** (after deployment: smoke test plus a manual pass)
+
+### M6 — Quality and reliability (2026-11-11, `feature/m6-quality`)
+
+- [x] Server-boundary audit of every route handler, server action and admin page (`docs/M6_QUALITY_AUDIT.md`)
+- [x] Defects fixed:
+  - M6-01: draft or archived curricula were reachable
+  - M6-02: concurrent sync uploads returned a 500
+  - M6-03: unthrottled learner actions
+  - M6-04: missing index
+  - M6-05: no way to publish a curriculum
+- [x] Regression tests: 11 integration, 12 unit, 3 e2e (session revocation, suspension, API refusals)
+- [x] Prioritised defect register and accepted risks
+
+### M7 — Curriculum and learning intelligence (2026-11-11, `feature/m7-curriculum`)
+
+- [x] Reviewed shared content protected from less verified imports; import changes revisioned (D-038)
+- [x] Import audit written inside the import transaction
+- [x] Read-only import preview (CLI and admin Validate)
+- [x] Validator: per-syllable reading and tone checks, licence and verification consistency, duplicate glosses, lesson size, traditional forms
+- [x] Word-list coverage tool for owner-supplied lists (HSK 2/3 pathway documented)
+- [x] Content quality report (`content:report`, `/admin/content-quality`, `docs/CURRICULUM_QUALITY_REPORT.md`)
+- [x] Levels unlock in order (D-039); placement: 3 questions per unit and a 24 h retake cooldown (D-040)
+- [x] Recall, technique and guided measures per character and in total (`skillTotals`)
+- [ ] **HSK 1 remaining 70 words, HSK 2 and 3 content, examples, audio, teacher review** (needs licensed sources and a reviewer)
+
+### M8 — Learner experience and accessibility (2026-11-11, `feature/m8-experience`)
+
+- [x] Automated accessibility audit (axe-core, WCAG A/AA) of 20 pages in light and dark, desktop and mobile; 4 violations found and fixed; now 0
+- [x] Handwriting: palm rejection, cancelled gestures discarded, canvas fits landscape phones, stroke counter, hint notice before use
+- [x] Keyboard and screen-reader focus management in the practice flow; honest semantics for the character switcher
+- [x] Progress: "How you write" (recall, technique and guided practice measured separately)
+- [x] Practice loading state; Learn heading structure
+- [x] Screenshots from the production build (`docs/screenshots/`)
+- [ ] **Physical devices and styluses, Firefox, manual screen-reader pass** (owner/testers)
+
+### M9 — Production and beta readiness (2026-11-11, `feature/m9-production`)
+
+- [x] Invite-only registration (production default), admin invites, atomic redemption (D-041)
+- [x] Migration safety check in CI (expand, then contract), dependency audit in CI, Dependabot (D-042)
+- [x] Health reports migration state; structured, redacted request logs (D-043); Admin → Operations
+- [x] Retention tool (`ops:prune`, dry run by default); COOP and CORP headers; public-route rate limit
+- [x] Local recovery drill repeated after the new migrations; an FK cycle caught and removed
+- [x] `docs/M9_PRODUCTION_READINESS.md`: checklist and the owner's external actions
+- [ ] **Deployment, production drill, production verification** (owner accounts and secrets)
+
+### Integration audit (2026-11-11, `feature/integration-audit`)
+
+- [x] Git history verified: linear stack on `main` `01d128e`; no PRs or merges for M6–M9 yet
+- [x] Each milestone re-verified on its own commit and a fresh database (types, lint, unit, integration, schema drift, content)
+- [x] Secrets and personal-data scan of every line added in M6–M9: test values only
+- [x] Tested-out characters reach Review as one-time writing checks (D-044); Home's count respects curriculum visibility
+- [x] Admin accessibility: 23 admin pages audited; table regions keyboard-reachable on phones
+- [x] Password recovery without email: staff-issued single-use reset links (D-045)
+- [x] CSP mitigation enforced by lint (D-046); advisory Firefox e2e in CI
+- [x] `docs/INTEGRATION_AUDIT.md`: verification, merge plan, rollback, owner actions
+- [ ] **Owner:** merge PRs 1–5 in order; approve the reset identity check; GitHub CI, Firefox, devices
 
 ## Session log
 
@@ -335,3 +392,85 @@ device info). Both are additive.
 - GitHub CI results not visible to this session.
 - Legal drafts not reviewed; placeholders unfilled. Keep the beta invite-only until done.
 - No testing on real phones or tablets yet (emulation only).
+
+### 2026-11-11 — Session 6 (M6–M9, overnight)
+
+**Starting point:** you merged M5 into `main` (PR #5, `01d128e`). M6 branches from there.
+
+**M6 (quality):** five defects found and fixed, each with a regression test that fails
+without the fix (checked by reverting the fix for M6-01 and M6-02). See
+`docs/M6_QUALITY_AUDIT.md`.
+
+- One migration: `attempt_session_index` (additive).
+- Checks: format, lint, typecheck clean; unit **126**; integration **66**; content validation;
+  production build.
+- Playwright Chromium (desktop and Pixel 7 emulation): **22 passed, 8 skipped**. The skipped
+  ones are mobile copies of desktop-only flows.
+- WebKit and Firefox were not run for M6.
+
+**M7 (curriculum):** see `docs/M7_CURRICULUM_AND_LEARNING.md`. No content was invented.
+
+- Defects found and fixed: M7-01 (a provisional import could overwrite verified glosses),
+  M7-02 (import audit outside the transaction), M7-03 (levels unlocked independently) and
+  M7-04 (placement guessable and retakeable).
+- The e2e import fixture was overwriting the starter's 人 gloss and part of speech in the dev
+  database on every run. It now matches the starter, and the dev data was restored with
+  `content:import`.
+- No migrations.
+- Checks: format, lint, typecheck clean; unit **144**; integration **72**; content
+  validation; production build.
+- Playwright Chromium: **22 passed, 8 skipped**.
+
+**M8 (experience):** see `docs/M8_UX_AND_ACCESSIBILITY.md`.
+
+- New dev dependency: `@axe-core/playwright` 4.14.0.
+- No migrations.
+- Checks: format, lint, typecheck clean; unit **144**; production build.
+- Playwright Chromium: **30 passed, 16 skipped**. The skips are mobile copies of desktop-only
+  flows, plus the 4 opt-in screenshot runs. New: 4 accessibility runs and 4 writing-experience
+  tests.
+- Playwright WebKit (desktop Safari and iPhone 14 emulation, `E2E_ALL_BROWSERS=1`): **32
+  passed, 14 skipped, 0 failed**.
+- Firefox: not run (it can't start on this machine).
+
+**M9 (production readiness):** see `docs/M9_PRODUCTION_READINESS.md`.
+
+- Migrations: `beta_invites` and `beta_invites_acyclic`. The second drops the creator foreign
+  key that would have created an FK cycle and broken restores. Both are additive in effect;
+  the first was already applied locally, so it was not edited.
+- Checks: format, lint, typecheck clean; unit **150**; integration **79**; migration check
+  (against `origin/main`); content validation; production build.
+- Playwright Chromium: **31 passed, 17 skipped**, with two servers (open, and invite-only).
+- Playwright WebKit (desktop Safari and iPhone 14 emulation): **34 passed, 14 skipped, 0
+  failed**. Firefox not run.
+- Smoke test **8/8** against a local production server. A production start without
+  `REGISTRATION_MODE` was confirmed to be invite-only.
+- Local backup, restore and verify drill: every table matched; 69 FKs checked, 0 orphans.
+
+**Session 6 summary:**
+
+- Four stacked branches, each pushed: `feature/m6-quality` → `feature/m7-curriculum` →
+  `feature/m8-experience` → `feature/m9-production`.
+- Nothing was deployed, purchased or published. No real users or samples are involved.
+
+### 2026-11-11 — Session 7 (M6–M9 integration audit)
+
+See `docs/INTEGRATION_AUDIT.md`.
+
+- Verified: linear history on `main` `01d128e` (PRs #1–#5 merged; **no PR exists for M6–M9**).
+  Each milestone re-checked at its own commit on a fresh database: M6 126/66, M7 144/72,
+  M8 144/72, M9 150/79 (unit/integration), no schema drift, content valid. No secrets or
+  personal data in the M6–M9 diffs.
+- Fixed on `feature/integration-audit` (built on M9):
+  - placement checks in Review (D-044);
+  - due counts respect curriculum visibility;
+  - admin accessibility (23 pages; phone table regions);
+  - staff-issued password reset links (D-045, migration `password_reset_tokens`);
+  - lint-enforced CSP mitigation (D-046);
+  - advisory Firefox e2e in CI;
+  - reset links pruned by `ops:prune`.
+- Checks: format, lint, typecheck clean; unit **150**; integration **85**; migration check;
+  production build; smoke **8/8**; drill: 70 FKs, 0 orphans.
+- Playwright Chromium: **36 passed, 18 skipped**. WebKit: **40 passed, 14 skipped, 0 failed**.
+- Not done: GitHub CI, Firefox (fails to start locally with a Windows side-by-side error),
+  physical devices, screen readers. Nothing merged or deployed.

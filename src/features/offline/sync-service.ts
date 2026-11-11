@@ -122,7 +122,9 @@ export async function processSyncBatch(
       continue;
     }
     if (!existing) {
-      await prisma.syncEvent.create({
+      // skipDuplicates: two uploads of the same queue (two tabs, or a retry racing a slow
+      // request) must not fail the whole batch. Applying the event is idempotent anyway.
+      const { count } = await prisma.syncEvent.createMany({
         data: {
           id: event.id,
           userId,
@@ -131,7 +133,15 @@ export async function processSyncBatch(
           payload: event.payload as Prisma.InputJsonValue,
           clientCreatedAt: new Date(event.clientCreatedAt),
         },
+        skipDuplicates: true,
       });
+      if (count === 0) {
+        const winner = await prisma.syncEvent.findUnique({ where: { id: event.id } });
+        if (winner && winner.userId !== userId) {
+          results.push({ id: event.id, status: "rejected", error: "Event id already in use." });
+          continue;
+        }
+      }
     }
     try {
       const result = await apply(prisma, userId, device.id, event, now);

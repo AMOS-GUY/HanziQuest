@@ -31,6 +31,8 @@ export const registerSchema = z.object({
   password: passwordSchema,
   /** Recorded with the terms version when true. Required by the sign-up form and action. */
   acceptTerms: z.boolean().optional(),
+  /** Required when registration is invite-only (REGISTRATION_MODE=invite). */
+  inviteCode: z.string().trim().max(40).optional(),
 });
 
 /** What the public sign-up form and action require: the beta terms must be accepted. */

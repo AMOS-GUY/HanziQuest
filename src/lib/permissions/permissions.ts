@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   "content:import",
   "handwriting:validate",
   "feedback:manage",
+  "invites:manage",
   "users:read",
   "users:moderate",
   "users:manage-roles",
