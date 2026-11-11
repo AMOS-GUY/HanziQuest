@@ -1,0 +1,153 @@
+# Production deploy: manual and owner-approved only (M10-06). Never triggered by a push.
+#
+# Before the first run, the owner must:
+#   1. Create the GitHub environment "production" with required reviewers (themselves) and
+#      "Allow administrators to bypass" off. GitHub creates an unprotected environment if a job
+#      names one that doesn't exist, so create and protect it BEFORE adding secrets.
+#   2. Add the environment secrets (never repository files): RENDER_DEPLOY_HOOK_URL,
+#      PRODUCTION_URL, PRODUCTION_DIRECT_DATABASE_URL, BACKUP_AGE_RECIPIENT.
+#   3. Keep auto-deploy off on Render (render.yaml), so this workflow is the only way in.
+# Steps: preflight (CI green for the exact commit, still main's head, confirmation phrase)
+# → owner approval → encrypted pre-migration backup → Render deploy hook (migrations run in
+# Render's pre-deploy step) → wait for readiness on the new release → read-only smoke test.
+# See docs/DEPLOYMENT.md and docs/ROLLBACK.md.
+name: Deploy (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full commit SHA to deploy (must be the head of main, with green CI)"
+        required: true
+        type: string
+      confirm:
+        description: 'Type "deploy production" to confirm'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Confirmation phrase
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          [ "$CONFIRM" = "deploy production" ] || { echo "::error::Confirmation phrase mismatch"; exit 1; }
+          echo "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "::error::Give the full 40-character SHA"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The commit is the head of main
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          head=$(git rev-parse origin/main)
+          [ "$head" = "$SHA" ] || { echo "::error::$SHA is not the head of main ($head). Render deploys main's head."; exit 1; }
+
+      - name: Required CI checks passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          for check in verify docker; do
+            conclusion=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs?check_name=$check" \
+              --jq '[.check_runs[] | select(.app.slug == "github-actions")] | sort_by(.completed_at) | last | .conclusion')
+            echo "$check: ${conclusion:-missing}"
+            [ "$conclusion" = "success" ] || { echo "::error::CI check '$check' has not passed for $SHA"; exit 1; }
+          done
+
+  deploy:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Owner approval happens here (required reviewers on the environment).
+    environment: production
+    env:
+      SHA: ${{ inputs.sha }}
+      PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+    steps:
+      - name: Secrets are configured
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          DB: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
+          AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          missing=""
+          [ -n "$HOOK" ] || missing="$missing RENDER_DEPLOY_HOOK_URL"
+          [ -n "$DB" ] || missing="$missing PRODUCTION_DIRECT_DATABASE_URL"
+          [ -n "$AGE" ] || missing="$missing BACKUP_AGE_RECIPIENT"
+          [ -n "$PRODUCTION_URL" ] || missing="$missing PRODUCTION_URL"
+          [ -z "$missing" ] || { echo "::error::Missing environment secrets:$missing (docs/DEPLOYMENT.md)"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          DATABASE_URL: postgresql://build:build@localhost:5432/build
+        run: npm ci
+
+      - name: Migration safety (no destructive statements, applied migrations unchanged)
+        run: npm run db:check-migrations -- --base origin/main
+
+      - name: Pre-migration backup (encrypted, kept 30 days)
+        env:
+          DB: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}
+          AGE: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          sudo apt-get install -y -qq age >/dev/null
+          mkdir -p backup
+          name="hanziquest-predeploy-$(date -u +%Y%m%dT%H%M%SZ)-${SHA:0:7}.ndjson.gz"
+          DATABASE_URL="$DB" npm run db:backup -- --source "$DB" --out "backup/plain.ndjson.gz"
+          age -r "$AGE" -o "backup/$name.age" backup/plain.ndjson.gz
+          shred -u backup/plain.ndjson.gz
+          echo "BACKUP_NAME=$name.age" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: predeploy-backup-${{ inputs.sha }}
+          path: backup/*.age
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Trigger the Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$HOOK" -o /dev/null && echo "Deploy requested for ${SHA:0:7}"
+
+      - name: Wait for the new release to be ready
+        run: |
+          for i in $(seq 1 90); do
+            body=$(curl -fsS "$PRODUCTION_URL/api/health" || true)
+            release=$(echo "$body" | jq -r '.release // empty' 2>/dev/null)
+            status=$(echo "$body" | jq -r '.status // empty' 2>/dev/null)
+            if [ -n "$release" ] && [ "$status" = "ok" ] && [ "${SHA#"$release"}" != "$SHA" ]; then
+              echo "Ready: release $release"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::The new release did not become ready in 15 minutes. Last: $body (docs/ROLLBACK.md)"
+          exit 1
+
+      - name: Smoke test (read-only)
+        run: npm run smoke -- "$PRODUCTION_URL"

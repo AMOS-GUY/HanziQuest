@@ -1,0 +1,44 @@
+# Render Blueprint for HanziQuest (M10, docs/DEPLOYMENT_ARCHITECTURE.md). NOT applied: nothing
+# is connected to Render. When the owner creates the Blueprint, Render shows a preview with the
+# plan and price before creating anything. Check each value there.
+#
+# - Auto-deploy is OFF. Deploys happen only through .github/workflows/deploy.yml (owner
+#   approval, pre-migration backup).
+# - Migrations run in the pre-deploy step with the new image, before traffic switches. The
+#   health check is readiness (/api/health), so a release whose migrations didn't apply never
+#   takes traffic.
+# - Secrets are `sync: false`: Render asks for them in its dashboard. They never go in git.
+# - The database is Neon (outside Render), so no `databases:` section.
+services:
+  - type: web
+    name: hanziquest
+    runtime: docker
+    # 512 MB, under 1 CPU, $7/month at 2026-11-11 (render.com/pricing). Verify the plan name in
+    # the Blueprint preview.
+    plan: starter
+    # Same region as the Neon database (DEPLOYMENT_ARCHITECTURE.md). The owner chooses.
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: "off"
+    healthCheckPath: /api/health
+    preDeployCommand: node node_modules/prisma/build/index.js migrate deploy
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_TRUST_HOST
+        value: "true"
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: DATABASE_POOL_MAX
+        value: "5"
+      # Invite-only and no reset links: leave both unset (their production defaults).
+      - key: DATABASE_URL
+        sync: false # Neon *pooled* URL, sslmode=require
+      - key: MIGRATE_DATABASE_URL
+        sync: false # Neon *direct* URL, for the pre-deploy migration
+      - key: AUTH_SECRET
+        sync: false # openssl rand -base64 32; unique to production
+      - key: AUTH_URL
+        sync: false # https://<the public origin>
+      - key: SENTRY_DSN
+        sync: false # optional
