@@ -19,7 +19,7 @@ M6, M7, M8 or M9**, and nothing new has been merged.
 | `feature/m7-curriculum`                       | `d53776c`                            | `b2ee19c`        |
 | `feature/m8-experience`                       | `3bb55bb`, `505bc57`                 | `d53776c`        |
 | `feature/m9-production`                       | `b53b11f`                            | `505bc57`        |
-| `feature/integration-audit` (new, this audit) | see `git log`                        | `b53b11f`        |
+| `feature/integration-audit` (new, this audit) | `537b64f`, then a docs-only commit   | `b53b11f`        |
 
 The history is linear: each branch contains the previous one (`git merge-base --is-ancestor`
 holds for every step), and `main` hasn't moved since M6 branched. Local and remote branch heads
