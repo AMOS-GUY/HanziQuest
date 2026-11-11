@@ -102,7 +102,7 @@ jobs:
           shred -u backup/plain.ndjson.gz
           ls -l backup
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: offsite-backup-${{ inputs.environment || 'production' }}-${{ github.run_id }}
           path: backup/*.age
