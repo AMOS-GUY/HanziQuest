@@ -153,6 +153,20 @@ Target public beta: **2026-12-08**.
 - [x] Second review of the merged code: RS-07 (parallel link creation) fixed on the same branch; procedure in SECURITY.md made explicit (still a draft)
 - [ ] **Owner:** open a follow-up PR for the RS-07 commit, check CI, merge; review Dependabot PRs #7–#13; approve or change the reset procedure
 
+### M10 — Production infrastructure (2026-11-11, `feature/m10-production-infrastructure`)
+
+- [x] Infrastructure audit before implementation (`docs/M10_INFRASTRUCTURE_AUDIT.md`)
+- [x] Hosting comparison with official prices; recommendation Render + Neon Launch, about $14–28/month (`docs/DEPLOYMENT_ARCHITECTURE.md`, D-051)
+- [x] Liveness and readiness split; readiness detects unapplied migrations (D-048)
+- [x] Fatal configuration now exits the server (M10-12, D-049); stricter production env checks; pool settings
+- [x] Manual, owner-approved `deploy.yml`; `render.yaml` with auto-deploy off (D-050)
+- [x] Off-site `backup.yml` with restore verification and `age` encryption; `db:verify --backup` (D-052)
+- [x] CI docker job start-up test (written; not yet run on GitHub)
+- [x] Runbooks: DEPLOYMENT, ROLLBACK, DATABASE_BACKUP, PRODUCTION_OPERATIONS
+- [x] Invite-only and `PASSWORD_RESET_LINKS` off preserved; the reset procedure still a draft
+- [ ] **Not observed:** GitHub Actions (including the new docker start-up test), Docker locally, Firefox
+- [ ] **Owner:** review and merge the M10 PR; accounts, environment, secrets and first deployment (DEPLOYMENT.md)
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -533,3 +547,31 @@ See `docs/INTEGRATION_AUDIT.md` section 7 and SECURITY.md.
 - `PASSWORD_RESET_LINKS` is unchanged: off by default in production.
 - GitHub Actions results are still not observed (no CLI or sign-in). Not merged, not deployed;
   M10 not started.
+
+### 2026-11-11 — Session 10 (M10 production infrastructure)
+
+See `docs/M10_INFRASTRUCTURE_AUDIT.md`.
+
+- Started from `main` `9b83917` (all milestones and PRs #14 and #15 present). Baseline: unit
+  151, integration 92, Chromium e2e 36/18/0.
+- The audit was written first. Then:
+  - liveness and readiness probes
+  - pending-migration readiness
+  - Node as PID 1
+  - pool settings and a stricter env check
+  - **M10-12: the start-up check didn't stop the server; it now exits**
+  - release id
+  - `MIGRATE_DATABASE_URL`
+  - backup checksums and `db:verify --backup`
+  - `deploy.yml`, `backup.yml`, `render.yaml`
+  - the CI start-up test
+  - architecture and runbook docs
+- Checks:
+  - format, lint, typecheck pass
+  - unit **158**, integration **93**
+  - migration check and build pass (no warnings)
+  - Chromium e2e **36 passed, 18 skipped, 0 failed**; WebKit subset 8/1/0
+  - smoke **9/9**; placeholder-secret refusal exits 1
+  - backup drill: 70 FKs, 0 orphans; tamper detected
+- Not done: GitHub Actions, Docker, Firefox, any real host. Nothing purchased, connected or
+  deployed. Invite-only and reset links off are unchanged.

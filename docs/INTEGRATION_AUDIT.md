@@ -134,7 +134,7 @@ blocking once it has passed (remove `continue-on-error` in `ci.yml`).
 - **Reverting the audit PR** removes reset links and placement checks. The
   `PasswordResetToken` table stays unused, and no learner data is lost (placement checks are
   computed, not stored).
-- **Database:** for a failed migration follow DEPLOYMENT.md, "Rollback". Take a backup
+- **Database:** for a failed migration follow ROLLBACK.md, "Failed migration". Take a backup
   (`db:backup`) before the first deploy that applies migrations 1–4.
 
 ## 5. Results after the audit fixes (`feature/integration-audit`)

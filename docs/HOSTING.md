@@ -1,5 +1,8 @@
 # Hosting and database options (researched 2026-11-10)
 
+> **Superseded by DEPLOYMENT_ARCHITECTURE.md (M10, 2026-11-11).** That document uses official
+> prices read on 2026-11-11. This page is kept as the earlier research record.
+
 Prices change often. **Verify on the provider's own pricing page before signing up.** Each
 figure below says where it came from: _official_ means read on the provider's page or docs on
 the date above; _third-party_ means pricing aggregators or blogs, which often disagree and may

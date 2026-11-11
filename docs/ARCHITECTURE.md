@@ -119,7 +119,9 @@ attempt save fails on network ──► IndexedDB outbox ──(online / every 6
 - `lib/security/rate-limit.ts`: async limits with a PostgreSQL or memory store.
   `lib/api/body.ts`: bounded JSON bodies.
 - Route error boundaries (`error.tsx`, `global-error.tsx`) and loading skeletons.
-- `GET /api/health`, `npm run smoke`, `Dockerfile`, CI `docker` job.
+- `GET /api/health` (readiness), `GET /api/health/live` (liveness), `npm run smoke`,
+  `Dockerfile`, the CI `docker` job (with a start-up test), and `deploy.yml` / `backup.yml`
+  (manual, owner-approved). See DEPLOYMENT.md.
 
 ## Not built yet
 

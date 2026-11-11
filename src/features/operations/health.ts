@@ -26,7 +26,10 @@ export interface Readiness {
 let cached: string[] | null | undefined;
 
 /** Migration folder names shipped with this build, or null if the folder isn't present. */
-export function expectedMigrations(dir = path.join(process.cwd(), "prisma", "migrations")) {
+export function expectedMigrations(
+  // Resolved at run time from the app root (the image copies prisma/); not a build input.
+  dir = path.join(/* turbopackIgnore: true */ process.cwd(), "prisma", "migrations"),
+) {
   if (cached !== undefined) return cached;
   try {
     cached = fs
