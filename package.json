@@ -38,6 +38,7 @@
     "db:restore": "tsx scripts/db-restore.ts",
     "db:verify": "tsx scripts/db-verify.ts",
     "db:environment": "tsx scripts/db-environment.ts",
+    "db:inspect": "tsx scripts/db-inspect.ts",
     "drill:migrations": "tsx scripts/drills/migrations.ts",
     "drill:backup": "tsx scripts/drills/backup.ts",
     "test:staging": "playwright test --config playwright.staging.config.ts",
