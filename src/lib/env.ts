@@ -54,6 +54,13 @@ export function checkEnvironment(
           "is 'open': anyone can sign up. Keep the beta invite-only until the legal and operational prerequisites are approved",
         fatal: false,
       });
+    if (env.PASSWORD_RESET_LINKS?.trim().toLowerCase() === "on")
+      issues.push({
+        name: "PASSWORD_RESET_LINKS",
+        problem:
+          "is 'on': staff can create password reset links. Only after the owner approves the procedure in SECURITY.md",
+        fatal: false,
+      });
     if (env.RATE_LIMIT_STORE === "memory")
       issues.push({
         name: "RATE_LIMIT_STORE",

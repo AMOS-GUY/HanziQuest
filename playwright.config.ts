@@ -46,6 +46,8 @@ export default defineConfig({
             AUTH_URL: `http://localhost:${PORT}`,
             REGISTER_LIMIT_PER_HOUR: "1000",
             REGISTRATION_MODE: "open",
+            // Off by default in production builds (D-047); tests/e2e/password-reset.spec.ts.
+            PASSWORD_RESET_LINKS: "on",
           },
           reuseExistingServer: false,
           timeout: 120_000,

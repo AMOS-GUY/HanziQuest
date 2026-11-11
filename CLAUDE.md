@@ -76,7 +76,8 @@ npm run content:validate
 - Review queries use `LEARNER_REVIEWABLE_CHARACTER`. Placement checks (tested-out characters
   never written) come from `getPlacementChecks`; they never write schedules (D-044).
 - Password reset links are staff-issued (D-045, `features/account/password-reset.ts`); only token
-  hashes are stored.
+  hashes are stored. Policy is re-checked at use (`usableNow`), and `PASSWORD_RESET_LINKS` is off
+  in production until the owner approves (D-047). Playwright's :3100 server turns it on.
 - ESLint forbids `dangerouslySetInnerHTML`, `innerHTML` and created scripts: the CSP relies on
   it (D-046).
 - The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it

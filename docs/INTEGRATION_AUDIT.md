@@ -157,12 +157,87 @@ of any of these results.
 
 ## 6. Owner actions
 
-1. Open PR 1 (`main` ← `feature/m6-quality`), check CI, merge with a merge commit. Repeat for
-   PRs 2–5 in order.
-2. Approve or change the password-reset identity check (SECURITY.md) before staff use reset
-   links with real learners.
+1. ~~Open PRs 1–5 in order~~. Superseded: PR #6 merged everything into `main` at once (see
+   section 7). Check the Actions results for PR #6 and `main`.
+2. Approve or change the password-reset procedure and its limitations (SECURITY.md) before
+   setting `PASSWORD_RESET_LINKS=on` anywhere real learners are.
 3. On a Windows machine where Firefox fails the same way: install the Microsoft Visual C++
    Redistributable, then run `npx playwright install firefox --force` and
    `E2E_ALL_BROWSERS=1 npx playwright test --project=firefox`. Otherwise rely on the CI step.
 4. Everything in `docs/M9_PRODUCTION_READINESS.md` (hosting, secrets, legal review, the pilot,
    device testing) still applies.
+
+## 7. GitHub integration and reset security review (2026-11-11, after the audit)
+
+### What GitHub shows (verified with `git fetch` and `git ls-remote`)
+
+- `feature/integration-audit` was already pushed at `39188bf`.
+- **The owner opened PR #6 (`main` ← `feature/integration-audit`) and merged it** as merge
+  commit `925969a`. Because the branches are stacked, that one merge brought **M6, M7, M8, M9
+  and the audit into `main` together**. `git merge-base --is-ancestor` holds for every
+  milestone head against `origin/main`.
+- The planned PRs 1–4 (one per milestone) **were not opened and won't be**. Each would have no
+  changes, so it would only duplicate PR #6. The milestone branches stay on GitHub, unchanged,
+  as the per-milestone record.
+- **PR #7 is open from Dependabot:** `actions/checkout` 4 → 7 in `ci.yml`. Not merged here.
+  It is the owner's to review once CI has run on it.
+- Nothing was force-pushed or rewritten.
+
+| Ref                                   | Commit        | State                                            |
+| ------------------------------------- | ------------- | ------------------------------------------------ |
+| `main`                                | `925969a`     | Merge of PR #6. Contains M1–M9 and the audit     |
+| `feature/m6-quality`                  | `b2ee19c`     | In `main` (through PR #6)                        |
+| `feature/m7-curriculum`               | `d53776c`     | In `main` (through PR #6)                        |
+| `feature/m8-experience`               | `505bc57`     | In `main` (through PR #6)                        |
+| `feature/m9-production`               | `b53b11f`     | In `main` (through PR #6)                        |
+| `feature/integration-audit`           | `39188bf`     | In `main` (PR #6)                                |
+| `feature/reset-security-review` (new) | see `git log` | Built on `main` `925969a`, pushed, **no PR yet** |
+
+### GitHub Actions: not observed
+
+The repository is private. This machine has no GitHub CLI or token, and the browser pane isn't
+signed in to GitHub (the PR page returns 404). Using the stored git credential to call the API
+would mean handling a private credential, so it wasn't done. **No GitHub Actions result for
+PR #6, for `main` or for PR #7 has been seen in this session**, and none is claimed. Firefox
+has never passed anywhere, so it stays advisory (`continue-on-error`).
+
+Local evidence on `main` + this review's changes (the same commands the `verify` job runs,
+except Docker):
+
+| Check                                                         | Result                                 |
+| ------------------------------------------------------------- | -------------------------------------- |
+| Format, lint, typecheck                                       | pass                                   |
+| Unit / integration                                            | 151 / 151; 91 / 91                     |
+| All 11 migrations applied in order to an empty database       | pass; no drift afterwards              |
+| Migration safety check                                        | pass (11 migrations)                   |
+| Production build                                              | pass                                   |
+| Playwright Chromium (full suite)                              | 36 passed, 18 skipped, 0 failed        |
+| Playwright WebKit (reset flow, desktop and iPhone emulation)  | 2 passed                               |
+| Accessibility audit, WebKit desktop (learner and admin pages) | pass                                   |
+| Docker image build                                            | **not run**: no Docker on this machine |
+
+### Password reset security review
+
+The full table and the limitations are in SECURITY.md, "Password reset security review"
+(D-047). Findings:
+
+| ID    | Severity | Finding                                                                                                                                                                    | Status                                                                                             |
+| ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| RS-01 | medium   | Policy was checked only at creation. A moderator's link for a learner kept working after that learner was promoted to staff, which could lead to a staff account takeover. | **Fixed.** Re-checked in the atomic use. Promotion discards unused links. Tested.                  |
+| RS-02 | medium   | Links outlived a suspended or demoted issuer.                                                                                                                              | **Fixed.** The issuer must be an active moderator at use. Tested.                                  |
+| RS-03 | low      | Suspending and then reactivating an account revived its unused link.                                                                                                       | **Fixed.** Suspension discards links (audited). Tested.                                            |
+| RS-04 | low      | The token stayed in the address bar and browser history.                                                                                                                   | **Fixed** (best effort). The page removes it on load. Tested in e2e. The limitation is documented. |
+| RS-05 | policy   | `main` would enable reset links on any production deploy, before the owner approves the procedure.                                                                         | **Fixed.** `PASSWORD_RESET_LINKS` is off by default in production.                                 |
+| RS-06 | accepted | Whoever creates a link can use it, and the learner isn't notified.                                                                                                         | Documented. Needs email to improve. The owner reviews the audit entries.                           |
+
+Verified unchanged:
+
+- hashing and storage
+- single use under concurrency
+- expiry
+- earlier links discarded
+- sessions signed out
+- audit entries
+- query strings stripped from logs and error reports
+- `no-referrer`
+- the service worker never caches the page

@@ -54,6 +54,7 @@ item is wrong (`src/lib/env.ts`, checked from `src/instrumentation.ts`).
 | `APP_RELEASE` / `APP_ENV`                  | no       | Commit SHA and environment label for health checks and error reports.                                                                                                                                                                     |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | once     | Only for the first seed, to create the first Super Admin. Remove them afterwards and change the password at first sign-in.                                                                                                                |
 | `REGISTER_LIMIT_PER_HOUR`                  | no       | Leave unset in production (default 5 per IP per hour).                                                                                                                                                                                    |
+| `PASSWORD_RESET_LINKS`                     | no       | Staff-issued password reset links (D-045, D-047). Off by default in production; set `on` only after the owner approves the reset procedure in SECURITY.md. `off` disables them anywhere. The start-up check warns when it is `on`.        |
 | `REGISTRATION_MODE`                        | no       | `invite` (the default in production): sign-up needs a code from Admin → Invites. `open`: anyone can register. Keep `invite` until the owner approves the legal and operational prerequisites. The start-up check warns when it is `open`. |
 
 ## First deployment

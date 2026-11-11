@@ -2,6 +2,21 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-11 — Password reset security review
+
+**D-047 · Reset links are re-checked when used, and off in production until approved.** The
+review found that the D-045 policy was only checked when a link was created. A moderator's link
+for a learner stayed usable after that learner was promoted to staff, and links outlived a
+suspended or demoted issuer. Now the atomic use (and the page's check) share one SQL condition:
+the account is active, the issuer is still an active moderator, and the issuer is a Super Admin
+if the account holds a staff role today. Granting a staff role or suspending the account also
+discards unused links, in the same transaction. The reset page removes the token from the
+address bar once it has loaded. `PASSWORD_RESET_LINKS` defaults to off in production
+(`on` enables it, `off` disables it anywhere), so a deploy of `main` can't start real-user
+recovery before the owner approves the procedure in SECURITY.md. Accepted limitation: whoever
+creates a link could use it. Without email, only the audit trail and the "signed out
+everywhere" effect reveal that.
+
 ## 2026-11-11 — Integration audit (M6–M9)
 
 **D-046 · The CSP keeps `'unsafe-inline'` scripts for the beta, and lint enforces the

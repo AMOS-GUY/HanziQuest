@@ -94,6 +94,19 @@ describe("request body limit", () => {
   });
 });
 
+describe("password reset links switch (D-047)", () => {
+  it("is off in production unless the owner turns it on", async () => {
+    const { resetLinksEnabled } = await import("@/features/account/password-reset");
+    expect(resetLinksEnabled({ NODE_ENV: "production" })).toBe(false);
+    expect(resetLinksEnabled({ NODE_ENV: "production", PASSWORD_RESET_LINKS: "nonsense" })).toBe(
+      false,
+    );
+    expect(resetLinksEnabled({ NODE_ENV: "production", PASSWORD_RESET_LINKS: " ON " })).toBe(true);
+    expect(resetLinksEnabled({ NODE_ENV: "development" })).toBe(true);
+    expect(resetLinksEnabled({ NODE_ENV: "test", PASSWORD_RESET_LINKS: "off" })).toBe(false);
+  });
+});
+
 describe("registration mode and invite codes (D-041)", () => {
   it("is invite-only in production unless explicitly opened", async () => {
     const { registrationMode } = await import("@/features/invites/invites");

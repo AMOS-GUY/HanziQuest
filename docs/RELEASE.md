@@ -1,6 +1,24 @@
 # Beta release package
 
-## Status (2026-11-11, after M9)
+## Status (2026-11-11, after PR #6)
+
+- `main` (`925969a`) contains M1–M9 and the integration audit. The owner merged
+  `feature/integration-audit` as PR #6, and because the branches are stacked this brought in
+  M6–M9 as well. The per-milestone branches remain on GitHub, unchanged.
+- **Open:** `feature/reset-security-review` (password reset hardening, D-047). Pushed, with no
+  PR yet:
+  https://github.com/AMOS-GUY/HanziQuest/compare/main...feature/reset-security-review?expand=1.
+  It has no migrations. Merge it with a merge commit after the `verify` and `docker` checks
+  pass.
+- **Open:** Dependabot PR #7 (`actions/checkout` 4 → 7). Review it after its CI run.
+- **GitHub Actions results haven't been observed from the development machine** (private
+  repository, no CLI or sign-in). Check the Actions tab for PR #6, `main` and the new PR.
+  Firefox stays advisory until it has passed once.
+- Staff password reset links are **off in production** (`PASSWORD_RESET_LINKS`) until the owner
+  approves the procedure in SECURITY.md.
+- **Not deployed.** See `docs/M9_PRODUCTION_READINESS.md`.
+
+## Status (2026-11-11, after M9, superseded)
 
 - `main` has M1–M5 (PRs #1–#5, merge commits). M6, M7, M8 and M9 are stacked branches, each
   built on the previous one: `feature/m6-quality` → `feature/m7-curriculum` →
