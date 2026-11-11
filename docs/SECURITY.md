@@ -143,27 +143,75 @@ All of them are shared across instances through PostgreSQL in production.
 
 ## Password reset procedure (draft, needs owner approval)
 
-Until the owner approves this procedure, leave `PASSWORD_RESET_LINKS` unset in production. The
-admin card then says the feature is turned off, and any link is refused.
+**Not approved.** This is a draft for the owner. Until the owner approves it, leave
+`PASSWORD_RESET_LINKS` unset in production. The admin card then says the feature is turned off,
+and every link is refused.
 
-1. A learner asks for a reset. Note the account's email address, not the address the request
-   came from.
-2. A moderator opens the account in Admin → Users, gives a reason (for example "asked by email
-   on 11 Nov") and creates the link. A staff account needs a Super Admin.
-3. Send the link **only to the email address on the account**, from the team mailbox. Never
-   send it to a different address, phone number or chat handle the requester gives, even if
-   they say they lost access. In that case, ask the owner.
-4. The link works once, for 24 hours, and signs the account out everywhere. Creating a new link
-   cancels the old one. Both steps are in the audit log.
-5. Don't ask the learner for their old or new password, ever.
-6. Create the link with nobody watching your screen. Paste it straight into the email, then
-   clear it from your clipboard (copy something else). Don't paste it into chat, tickets or
-   notes.
-7. If the learner says they didn't ask for a reset, or a reset link was used that you didn't
-   send, tell the owner. Check Admin → Audit logs for `user.password.reset_link` and
+### Who can create a link
+
+- A **Moderator** or a **Super Admin** (the `users:moderate` permission), for a learner account.
+- Only a **Super Admin** can create one for a staff account (any role other than Learner).
+- Nobody can create one for their own account; they use Change password on their profile.
+- Nobody can create one for a suspended or deleted account; reactivate it first.
+- The server checks all of this again when the link is used (D-047). A link stops working if
+  the person who created it is suspended or loses the Moderator role, or if the account is
+  promoted to staff and the creator isn't a Super Admin.
+
+### Verifying the recipient
+
+1. The request must come from, or be confirmed by a reply from, **the email address on the
+   account**. Look the account up in Admin → Users by that address and check that it matches
+   exactly.
+2. Don't accept a name, a display name, lesson history or "security questions" as proof. Don't
+   accept a request from a different address, phone number or chat handle, even if the
+   requester says they lost access to their email. Don't create a link in that case; refer it to
+   the owner.
+3. Never ask for, or accept, the learner's old or new password.
+
+### Creating and delivering the link
+
+1. In Admin → Users → the account → Password reset, give a reason (for example "asked by email
+   on 11 Nov, replied from the account address") and create the link. The link is shown once.
+   Only its hash is stored.
+2. Create it with nobody watching your screen. Paste it straight into a reply to the
+   **account's email address**, sent from the team mailbox. Don't paste it into chat, tickets or
+   notes. Afterwards, clear your clipboard by copying something else.
+3. Creating a new link cancels any earlier unused link for the account.
+
+### When a link expires or doesn't work
+
+- A link works **once**, for **24 hours**. After that, or once it has been used, the page says
+  "This reset link is not valid any more" and asks the learner to contact the team.
+- To help, go through the whole procedure again: verify the request and create a new link.
+  Don't re-send an old link. Expired and used links are deleted by `npm run ops:prune`.
+- A link also stops working if the account is suspended, the creator is suspended or demoted,
+  the account is promoted to staff (unless a Super Admin created the link), or
+  `PASSWORD_RESET_LINKS` is off.
+
+### After the password is changed
+
+- The account is **signed out on every device**: every session from before the change is
+  refused. The learner logs in with the new password.
+- The link is used up, and any other unused links for the account are deleted.
+- The audit log has `user.password.reset_link` (who created it, for whom, the reason and the
+  expiry) and `user.password.reset` (when it was used, with IP and user agent). Neither contains
+  the token.
+
+### Oversight
+
+1. If the learner says they didn't ask for a reset, or a link was used that you didn't send,
+   tell the owner. Check Admin → Audit logs for `user.password.reset_link` and
    `user.password.reset`.
-8. The owner reviews `user.password.reset_link` entries weekly during the beta: who issued each
-   link, for whom and why.
+2. The owner reviews the `user.password.reset_link` entries weekly during the beta: who issued
+   each link, for whom and why.
+
+### Without an email provider
+
+- The app can't email the link itself, so a person has to copy it into an email (see the
+  limitations below).
+- The learner gets **no notice** that a link was created or that their password was changed.
+- There is no self-service "forgot password", and email addresses aren't verified at sign-up.
+  So "the address on the account" is the address the learner typed when registering.
 
 Hosting note: reset links carry the token in the URL. The app logs paths without query
 strings, but check that the platform's access logs don't keep query strings, or keep them
@@ -174,28 +222,28 @@ only briefly.
 A code review of the complete implementation, plus tests. This is not a third-party penetration
 test.
 
-| Property                  | Implementation                                                                                                                                                                                                                                                                         | Evidence                                                                     |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Who can create a link     | `users:moderate` (Moderator, Super Admin), checked server-side in the action. A staff account needs a Super Admin. Nobody can create one for their own account, or for a suspended or deleted account. The admin card is also hidden from other roles, but the server is what decides. | integration "guards who can issue links"                                     |
-| Policy at the time of use | **Fixed in this review.** The atomic use checks that the issuer is still an active moderator, and a Super Admin if the account is staff today. Granting a staff role or suspending the account discards unused links.                                                                  | 5 integration tests, which fail without the fix                              |
-| Token and storage         | 256 random bits (base64url, 43 characters). Only `SHA-256("hanziquest-reset:" + token)` is stored. The audit log stores the row id, never the token.                                                                                                                                   | integration: the row and the audit entry don't contain the token             |
-| Single use                | Consumed by one guarded `UPDATE … WHERE usedAt IS NULL … RETURNING`, in the same transaction as the password change.                                                                                                                                                                   | integration: 4 parallel uses, exactly 1 succeeds                             |
-| Expiry                    | 24 hours (`RESET_TTL_HOURS`), checked in SQL at use. Expired and used rows are deleted by `ops:prune`.                                                                                                                                                                                 | integration (expiry, prune)                                                  |
-| Earlier links             | A new link deletes the account's unused links. A successful reset deletes any others.                                                                                                                                                                                                  | integration "one live link per account"                                      |
-| Session revocation        | The reset sets `credentialsChangedAt`. Every session issued before it is refused by `requireUser` and by the admin gate in `proxy.ts`.                                                                                                                                                 | e2e: the learner's other session is signed out                               |
-| Audit                     | `user.password.reset_link` (actor, reason, expiry, number of discarded links) and `user.password.reset` (the learner, IP, user agent). Each is written in the same transaction as the change it records. Role grants and suspensions record `discardedResetLinks`.                     | integration                                                                  |
-| Brute force               | 2^256 search space. The reset action is limited to 10 per hour per IP. A wrong password doesn't use up the link.                                                                                                                                                                       | integration                                                                  |
-| URL, history, referrer    | The page sets `Referrer-Policy: no-referrer`; the site default is `strict-origin-when-cross-origin`. The page is dynamic (`no-store`) and the service worker never caches it. **Fixed in this review:** the page removes the token from the address bar once loaded.                   | e2e: the address bar shows `/reset-password` (Chromium, WebKit)              |
-| Logs and error reports    | `onRequestError` and client error reports drop query strings before logging or sending to Sentry. `logEvent` masks long tokens. Neither the token nor the password is ever logged.                                                                                                     | code review (`instrumentation.ts`, `api/client-errors`, `monitoring/log.ts`) |
-| Disclosure to other staff | The link exists only in the issuing moderator's browser, in the action response. It isn't stored, emailed or shown in audit logs, and isn't shown again on reload.                                                                                                                     | code review                                                                  |
-| Switch                    | `PASSWORD_RESET_LINKS` is off by default in production. When it is off, creating, checking and using a link are all refused in the service.                                                                                                                                            | unit + integration                                                           |
+| Property                  | Implementation                                                                                                                                                                                                                                                                         | Evidence                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Who can create a link     | `users:moderate` (Moderator, Super Admin), checked server-side in the action. A staff account needs a Super Admin. Nobody can create one for their own account, or for a suspended or deleted account. The admin card is also hidden from other roles, but the server is what decides. | integration "guards who can issue links"                                              |
+| Policy at the time of use | **Fixed in this review.** The atomic use checks that the issuer is still an active moderator, and a Super Admin if the account is staff today. Granting a staff role or suspending the account discards unused links.                                                                  | 5 integration tests, which fail without the fix                                       |
+| Token and storage         | 256 random bits (base64url, 43 characters). Only `SHA-256("hanziquest-reset:" + token)` is stored. The audit log stores the row id, never the token.                                                                                                                                   | integration: the row and the audit entry don't contain the token                      |
+| Single use                | Consumed by one guarded `UPDATE … WHERE usedAt IS NULL … RETURNING`, in the same transaction as the password change.                                                                                                                                                                   | integration: 4 parallel uses, exactly 1 succeeds                                      |
+| Expiry                    | 24 hours (`RESET_TTL_HOURS`), checked in SQL at use. Expired and used rows are deleted by `ops:prune`.                                                                                                                                                                                 | integration (expiry, prune)                                                           |
+| Earlier links             | A new link deletes the account's unused links, with the account row locked, so parallel requests can't leave two (**RS-07, fixed**). A successful reset deletes any others.                                                                                                            | integration "one live link per account", and 6 parallel creations leaving 1 live link |
+| Session revocation        | The reset sets `credentialsChangedAt`. Every session issued before it is refused by `requireUser` and by the admin gate in `proxy.ts`.                                                                                                                                                 | e2e: the learner's other session is signed out                                        |
+| Audit                     | `user.password.reset_link` (actor, reason, expiry, number of discarded links) and `user.password.reset` (the learner, IP, user agent). Each is written in the same transaction as the change it records. Role grants and suspensions record `discardedResetLinks`.                     | integration                                                                           |
+| Brute force               | 2^256 search space. The reset action is limited to 10 per hour per IP. A wrong password doesn't use up the link.                                                                                                                                                                       | integration                                                                           |
+| URL, history, referrer    | The page sets `Referrer-Policy: no-referrer`; the site default is `strict-origin-when-cross-origin`. The page is dynamic (`no-store`) and the service worker never caches it. **Fixed in this review:** the page removes the token from the address bar once loaded.                   | e2e: the address bar shows `/reset-password` (Chromium, WebKit)                       |
+| Logs and error reports    | `onRequestError` and client error reports drop query strings before logging or sending to Sentry. `logEvent` masks long tokens. Neither the token nor the password is ever logged.                                                                                                     | code review (`instrumentation.ts`, `api/client-errors`, `monitoring/log.ts`)          |
+| Disclosure to other staff | The link exists only in the issuing moderator's browser, in the action response. It isn't stored, emailed or shown in audit logs, and isn't shown again on reload.                                                                                                                     | code review                                                                           |
+| Switch                    | `PASSWORD_RESET_LINKS` is off by default in production. When it is off, creating, checking and using a link are all refused in the service.                                                                                                                                            | unit + integration                                                                    |
 
 **Limitations (accepted for the beta, owner to confirm):**
 
 1. **Whoever creates a link can use it.** A Moderator can therefore take over any learner
    account, and a Super Admin any account. Without email, nothing technical prevents this.
    Detection: the audit entry with a reason, and the learner being signed out everywhere. Keep
-   the number of Moderators small and review the entries (step 8).
+   the number of Moderators small and review the entries (Oversight).
 2. **No notice to the learner** that a link was created or used. Email is needed for that.
 3. **The link travels by email.** Anyone who can read the learner's or the team's mailbox
    within 24 hours can use it. Mail scanners that open links don't use it up: the link is

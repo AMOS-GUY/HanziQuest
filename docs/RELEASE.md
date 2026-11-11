@@ -1,18 +1,20 @@
 # Beta release package
 
-## Status (2026-11-11, after PR #6)
+## Status (2026-11-11, after PR #14)
 
-- `main` (`925969a`) contains M1–M9 and the integration audit. The owner merged
+- `main` (`7e1f43b`) contains M1–M9, the integration audit (PR #6) and the reset review (PR #14). The owner merged
   `feature/integration-audit` as PR #6, and because the branches are stacked this brought in
   M6–M9 as well. The per-milestone branches remain on GitHub, unchanged.
-- **Open:** `feature/reset-security-review` (password reset hardening, D-047). Pushed, with no
-  PR yet:
+- **Merged:** `feature/reset-security-review` as PR #14 (`main` = `7e1f43b`).
+- **Open (no PR yet):** a follow-up commit on `feature/reset-security-review` fixes RS-07
+  (parallel link creation). PR #14 is already merged, so it needs a new PR:
   https://github.com/AMOS-GUY/HanziQuest/compare/main...feature/reset-security-review?expand=1.
   It has no migrations. Merge it with a merge commit after the `verify` and `docker` checks
   pass.
-- **Open:** Dependabot PR #7 (`actions/checkout` 4 → 7). Review it after its CI run.
+- **Open:** Dependabot PRs #7–#13, including major upgrades (TypeScript 7, ESLint 10). Review
+  each one after its CI run.
 - **GitHub Actions results haven't been observed from the development machine** (private
-  repository, no CLI or sign-in). Check the Actions tab for PR #6, `main` and the new PR.
+  repository, no CLI or sign-in). Check the Actions tab for PRs #6 and #14, `main` and the follow-up PR.
   Firefox stays advisory until it has passed once.
 - Staff password reset links are **off in production** (`PASSWORD_RESET_LINKS`) until the owner
   approves the procedure in SECURITY.md.

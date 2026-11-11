@@ -106,6 +106,24 @@ describe("password reset links", () => {
     });
   });
 
+  it("keeps one live link per account under concurrent creation", async () => {
+    const learner = await newUser();
+    const results = await Promise.allSettled(
+      Array.from({ length: 6 }, () =>
+        issuePasswordReset(prisma, moderator, learner, { reason: "parallel" }),
+      ),
+    );
+    const usable = await Promise.all(
+      results.map((r) =>
+        r.status === "fulfilled" ? resetTokenUsable(prisma, r.value.token) : false,
+      ),
+    );
+    expect(usable.filter(Boolean)).toHaveLength(1);
+    expect(
+      await prisma.passwordResetToken.count({ where: { userId: learner, usedAt: null } }),
+    ).toBe(1);
+  });
+
   it("can be used only once under concurrency", async () => {
     const learner = await newUser();
     const { token } = await issuePasswordReset(prisma, moderator, learner, { reason: "race" });

@@ -149,7 +149,9 @@ Target public beta: **2026-12-08**.
 - [x] `PASSWORD_RESET_LINKS` off by default in production until the owner approves
 - [x] Migrations apply in sequence on an empty database; local `verify` equivalent passes
 - [ ] **Not observed:** GitHub Actions results (private repo, no CLI or sign-in here), Docker build, Firefox
-- [ ] **Owner:** open the PR for `feature/reset-security-review`, check CI, merge; review Dependabot PR #7
+- [x] Merged by the owner as PR #14 (`main` = `7e1f43b`)
+- [x] Second review of the merged code: RS-07 (parallel link creation) fixed on the same branch; procedure in SECURITY.md made explicit (still a draft)
+- [ ] **Owner:** open a follow-up PR for the RS-07 commit, check CI, merge; review Dependabot PRs #7–#13; approve or change the reset procedure
 
 ## Session log
 
@@ -508,3 +510,26 @@ See `docs/INTEGRATION_AUDIT.md` section 7 and SECURITY.md.
   **36 passed, 18 skipped, 0 failed**. WebKit reset flow 2/2, WebKit accessibility pass.
 - Not done: GitHub Actions results (not visible from here), Docker build, Firefox, devices.
   Nothing deployed.
+
+### 2026-11-11 — Session 9 (security PR follow-up)
+
+- Found on GitHub: PR #14 (`feature/reset-security-review` at `2b61811`) is already merged, so
+  `main` = `7e1f43b`. Dependabot PRs #7–#13 are open. No duplicate PR was created.
+- Reviewed the merged reset code again:
+  - session revocation is sound (`issuedAt` is fixed at sign-in; roles are read from the
+    database)
+  - **RS-07:** six parallel link creations left six live links. Fixed by locking the account
+    row during creation. A new integration test fails without the fix.
+- SECURITY.md procedure rewritten with explicit sections:
+  - who may create links
+  - verifying the recipient
+  - delivery
+  - expiry
+  - after the change
+  - without email
+
+  It is still marked not approved.
+
+- `PASSWORD_RESET_LINKS` is unchanged: off by default in production.
+- GitHub Actions results are still not observed (no CLI or sign-in). Not merged, not deployed;
+  M10 not started.
