@@ -10,7 +10,7 @@ import type { RoleKey } from "@/generated/prisma/enums";
 import { RoleEditor } from "./role-editor";
 import { AdminForm } from "@/components/admin/admin-form";
 import { setUserStatusAction } from "@/features/account/actions";
-import { RESET_TTL_HOURS } from "@/features/account/password-reset";
+import { RESET_TTL_HOURS, resetLinksEnabled } from "@/features/account/password-reset";
 import { PasswordResetLink } from "./password-reset";
 
 export const metadata = { title: "User" };
@@ -115,7 +115,14 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
             email address on this account, never to an address or chat the requester gives you
             (SECURITY.md). Staff accounts need a Super Admin.
           </p>
-          <PasswordResetLink userId={user.id} />
+          {resetLinksEnabled() ? (
+            <PasswordResetLink userId={user.id} />
+          ) : (
+            <p className="text-sm font-bold">
+              Turned off on this server until the owner approves the reset procedure
+              (PASSWORD_RESET_LINKS).
+            </p>
+          )}
         </Card>
       ) : null}
       <Card>

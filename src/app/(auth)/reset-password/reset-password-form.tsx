@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,11 @@ export function ResetPasswordForm({ token }: { token: string }) {
     resetPasswordAction.bind(null, token),
     {},
   );
+  // Keep the token out of the address bar, browser history and history sync once the page has
+  // it (D-047). The form keeps it in memory; reloading asks the learner to open the link again.
+  useEffect(() => {
+    if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
+  }, []);
   if (state.ok) {
     return (
       <div role="status" className="bg-accent text-accent-foreground rounded-xl p-4">

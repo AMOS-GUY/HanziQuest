@@ -24,6 +24,14 @@ export default async function ResetPasswordPage({
           </p>
           <ResetPasswordForm token={token} />
         </>
+      ) : !token ? (
+        <p role="alert" className="text-muted-foreground mt-2">
+          Open the reset link you were given again. For safety, this page removes it from the
+          address bar once it has loaded.{" "}
+          <Link href="/login" className="text-primary font-bold hover:underline">
+            Back to log in
+          </Link>
+        </p>
       ) : (
         <p role="alert" className="text-muted-foreground mt-2">
           This reset link is not valid any more: it may have expired or been used already. Ask the

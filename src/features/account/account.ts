@@ -2,6 +2,7 @@
 import { z } from "zod";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { recordAudit } from "@/lib/audit";
+import { discardResetLinks } from "@/features/account/password-reset";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { passwordSchema } from "@/lib/validation/auth";
 import { DAILY_GOAL_OPTIONS } from "@/features/onboarding/schema";
@@ -161,13 +162,19 @@ export async function setUserStatus(
       throw new DomainError("forbidden", "Only a Super Admin can suspend staff accounts.");
     if (user.status === status) return { changed: false };
     await tx.user.update({ where: { id: userId }, data: { status } });
+    // A reset link must not come back to life when the account is reactivated (D-047).
+    const discardedResetLinks = status === "SUSPENDED" ? await discardResetLinks(tx, userId) : 0;
     await recordAudit(tx, {
       actorId: actor.id,
       action: status === "SUSPENDED" ? "user.suspend" : "user.reactivate",
       entityType: "User",
       entityId: userId,
       before: { status: user.status },
-      after: { status, reason: reason.slice(0, 300) },
+      after: {
+        status,
+        reason: reason.slice(0, 300),
+        ...(discardedResetLinks ? { discardedResetLinks } : {}),
+      },
       ipAddress: actor.ip,
       userAgent: actor.userAgent,
     });

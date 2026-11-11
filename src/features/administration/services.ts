@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import type { RoleKey } from "@/generated/prisma/enums";
 import { recordAudit } from "@/lib/audit";
+import { discardResetLinks } from "@/features/account/password-reset";
 
 export interface Actor {
   id: string;
@@ -113,9 +114,12 @@ export async function setUserRole(
       where: { userId_roleId: { userId, roleId: role.id } },
     });
     if (grant === Boolean(existing)) return { changed: false };
+    let discardedResetLinks = 0;
 
     if (grant) {
       await tx.userRole.create({ data: { userId, roleId: role.id, assignedById: actor.id } });
+      // A link issued while this was a learner account must not outlive the promotion (D-047).
+      if (roleKey !== "LEARNER") discardedResetLinks = await discardResetLinks(tx, userId);
     } else {
       if (roleKey === "SUPER_ADMIN") {
         const superAdmins = await tx.userRole.count({ where: { roleId: role.id } });
@@ -129,7 +133,7 @@ export async function setUserRole(
       action: grant ? "user.role.grant" : "user.role.revoke",
       entityType: "User",
       entityId: userId,
-      after: { role: roleKey },
+      after: { role: roleKey, ...(discardedResetLinks ? { discardedResetLinks } : {}) },
       ipAddress: actor.ip,
       userAgent: actor.userAgent,
     });

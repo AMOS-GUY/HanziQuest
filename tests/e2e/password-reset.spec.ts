@@ -45,6 +45,8 @@ test("staff reset link: works once and signs the learner out elsewhere", async (
   const page = await visitor.newPage();
   await page.goto(path);
   await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
+  // The token leaves the address bar (and so the history entry) once the page has it (D-047).
+  await expect(page).toHaveURL(/\/reset-password$/);
   const newPassword = throwawayPassword();
   await page.getByLabel("New password", { exact: true }).fill(newPassword);
   await page.getByLabel("Repeat new password").fill(newPassword);
@@ -67,6 +69,10 @@ test("staff reset link: works once and signs the learner out elsewhere", async (
   const reuse = await again.newPage();
   await reuse.goto(path);
   await expect(reuse.getByRole("alert").filter({ hasText: "not valid any more" })).toBeVisible();
+
+  // Reloading the page after the token has left the address bar asks for the link again.
+  await reuse.goto("/reset-password");
+  await expect(reuse.getByRole("alert").filter({ hasText: "Open the reset link" })).toBeVisible();
 
   await Promise.all([learnerContext, staffContext, visitor, again].map((c) => c.close()));
 });

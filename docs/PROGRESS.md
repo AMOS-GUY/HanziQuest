@@ -139,7 +139,17 @@ Target public beta: **2026-12-08**.
 - [x] Password recovery without email: staff-issued single-use reset links (D-045)
 - [x] CSP mitigation enforced by lint (D-046); advisory Firefox e2e in CI
 - [x] `docs/INTEGRATION_AUDIT.md`: verification, merge plan, rollback, owner actions
-- [ ] **Owner:** merge PRs 1–5 in order; approve the reset identity check; GitHub CI, Firefox, devices
+- [x] Merged into `main` by the owner through PR #6 (`925969a`); this brought in M6–M9 too
+- [ ] **Owner:** approve the reset procedure; GitHub CI results; Firefox; devices
+
+### Reset security review and GitHub integration (2026-11-11, `feature/reset-security-review`)
+
+- [x] Verified on GitHub: PR #6 merged all of M6–M9 and the audit into `main`; per-milestone PRs would duplicate it, so they weren't opened
+- [x] Password reset review: policy re-checked at use, links discarded on promotion and suspension, token removed from the address bar (D-047)
+- [x] `PASSWORD_RESET_LINKS` off by default in production until the owner approves
+- [x] Migrations apply in sequence on an empty database; local `verify` equivalent passes
+- [ ] **Not observed:** GitHub Actions results (private repo, no CLI or sign-in here), Docker build, Firefox
+- [ ] **Owner:** open the PR for `feature/reset-security-review`, check CI, merge; review Dependabot PR #7
 
 ## Session log
 
@@ -474,3 +484,27 @@ See `docs/INTEGRATION_AUDIT.md`.
 - Playwright Chromium: **36 passed, 18 skipped**. WebKit: **40 passed, 14 skipped, 0 failed**.
 - Not done: GitHub CI, Firefox (fails to start locally with a Windows side-by-side error),
   physical devices, screen readers. Nothing merged or deployed.
+
+### 2026-11-11 — Session 8 (GitHub integration and reset security review)
+
+See `docs/INTEGRATION_AUDIT.md` section 7 and SECURITY.md.
+
+- GitHub: `feature/integration-audit` was already pushed at `39188bf`. The owner merged it as
+  PR #6 (`main` = `925969a`), which brought M6–M9 into `main`. No per-milestone PRs were
+  opened, because they would duplicate it. Dependabot opened PR #7 (`actions/checkout` 4 → 7).
+  It is not merged.
+- Reset review fixes on `feature/reset-security-review` (built on `main`):
+  - RS-01: policy re-checked at use
+  - RS-02: a suspended or demoted issuer's links die
+  - RS-03: suspension discards links
+  - RS-04: the token is removed from the address bar
+  - RS-05: `PASSWORD_RESET_LINKS` off in production
+
+  There are 6 new integration tests and 1 unit test. The 5 policy tests were confirmed to fail
+  without the fix.
+
+- Checks: format, lint, typecheck; unit **151**; integration **91**. Migrations applied in
+  order to an empty database with no drift. Migration check and build pass. Chromium e2e
+  **36 passed, 18 skipped, 0 failed**. WebKit reset flow 2/2, WebKit accessibility pass.
+- Not done: GitHub Actions results (not visible from here), Docker build, Firefox, devices.
+  Nothing deployed.
