@@ -150,52 +150,80 @@ Neon → project `hanziquest-staging` → **Connect** → branch = the default b
 | `DATABASE_URL` (app, pooled)    | **on**                           | `ep-<name>-pooler.eu-central-1.aws.neon.tech`         | Render → `hanziquest-staging` → Environment                                                                                     |
 | `MIGRATE_DATABASE_URL` (direct) | **off**                          | `ep-<name>.eu-central-1.aws.neon.tech` (no `-pooler`) | GitHub environment `staging` → secret `DIRECT_DATABASE_URL` (the workflows pass it to the Prisma CLI as `MIGRATE_DATABASE_URL`) |
 
-Both must name database `hanziquest` and keep `sslmode=require`. With the installed `pg`
-driver, `require` already verifies the certificate and hostname (it's treated as
-`verify-full`). Neon also appends `channel_binding=require`; `pg` ignores that parameter, so it
-can stay. The two strings differ **only** by `-pooler` in the host: the same endpoint `ep-<name>`
-means the same branch.
+Both must name database `hanziquest` and keep `sslmode=require`. The two strings differ
+**only** by `-pooler` in the host; the same endpoint `ep-<name>` means the same branch.
 
-Store both in the password manager, labelled STAGING. **Never** write them into `.env` or
-`.env.local`. Local `.env` keeps pointing at the local development database, and any command
-below gets the staging URL from the current shell only (`dotenv` never overrides a variable
-that is already set).
+TLS (verified on the real staging project, 2026-11-12):
 
-### 3. Read-only verification from your machine
+- **The app's `pg` driver** (pooled `DATABASE_URL`, and the backup, restore and guard scripts):
+  `sslmode=require` is treated as `verify-full`. Staging measured TLS 1.3 with a verified Let's
+  Encrypt certificate for `*.c-7.eu-central-1.aws.neon.tech`.
+- **The Prisma CLI (migrations)** does **not** verify certificates unless the URL has
+  `sslaccept=strict` (Prisma's default is `accept_invalid_certs`). **The direct URL must include
+  `&sslaccept=strict`.** `db:environment` refuses a hosted URL without it, and the deploy
+  workflow runs that guard before migrating. Tested: `migrate status` connects to Neon with
+  `strict`, and no certificate file is needed.
+- Neon's `channel_binding=require` is ignored by `pg` and can stay.
+
+### 3. Where the values live (local)
+
+| File                 | Contents                                                                                          | Git                |
+| -------------------- | ------------------------------------------------------------------------------------------------- | ------------------ |
+| `.env`               | **Local only**: `DATABASE_URL` and `TEST_DATABASE_URL` on `localhost:5433`                        | ignored            |
+| `.env.staging.local` | **Staging only**: `DATABASE_URL` (pooled) and `MIGRATE_DATABASE_URL` (direct, `sslaccept=strict`) | ignored (`.env.*`) |
+
+`.env.staging.local` is loaded **only** by the explicit `staging:*` scripts (`--env-file`), never
+by default. Never copy staging values into `.env`.
+
+### 4. Read-only verification
 
 ```bash
-read -rs MIGRATE_DATABASE_URL && export MIGRATE_DATABASE_URL   # paste the DIRECT url; not echoed or saved to history
-npm run db:inspect                                             # read-only; prints no credentials
-read -rs DATABASE_URL && export DATABASE_URL                   # paste the POOLED url
-npm run db:inspect -- --pooled
-npm run db:environment -- --expect staging                     # read-only guard
-unset MIGRATE_DATABASE_URL DATABASE_URL
+npm run staging:db:inspect            # direct URL: endpoint, region, database, TLS, schema state
+npm run staging:db:inspect:pooled     # pooled URL: must show the same endpoint
+npm run staging:db:environment        # the deploy guard (read-only without --mark)
+npm run staging:migrate:status        # Prisma CLI over strict TLS; reports, never applies
 ```
 
-Expected output, before any migration:
+**Result on 2026-11-12:**
 
-| Check              | Expected                                                       |
-| ------------------ | -------------------------------------------------------------- |
-| host kind          | `direct`, then `pooled`                                        |
-| endpoint           | the same `ep-…` both times, matching the branch in the console |
-| region             | `eu-central-1`                                                 |
-| database           | `hanziquest`                                                   |
-| TLS in use         | `yes`                                                          |
-| public tables      | 0                                                              |
-| applied migrations | none                                                           |
-| environment marker | none                                                           |
-| accounts           | none                                                           |
-| `db:environment`   | "Database is new and unmarked (no accounts)"                   |
+- the staging project is confirmed from inside the database (`neon.project_id=dark-moon-97366800`)
+- direct and pooled reach the same endpoint and compute, in region `eu-central-1`
+- database `hanziquest`, role `hanziquest_owner`, PostgreSQL 18.6
+- 0 tables, no migrations, no marker, no accounts
+- the guard says "new and unmarked"; `migrate status` lists the 12 migrations as not applied
 
-**Stop if anything differs.** That includes a different region, a different endpoint between
-the two URLs, any tables or accounts, or a marker saying `production`.
+There are deliberately **no** staging scripts that write. Migrating, marking and seeding staging
+happen only through `deploy-staging.yml`, or a deliberate owner command (`SEED_TARGET=staging`).
 
-### 4. After approval only
+### 5. Isolation guards (M11, tested with unreachable `.invalid` hosts)
+
+| Default command                                                       | Guard                               | Result for a hosted database                                                                                                                                                         |
+| --------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `prisma migrate dev`, `migrate reset`, `db push`, `db execute`        | `prisma.config.ts`                  | refused before connecting                                                                                                                                                            |
+| `npm run db:seed` / `prisma db seed`                                  | `prisma/seed.ts`                    | refused unless `SEED_TARGET=staging` (or `production`) **and** the database carries that marker                                                                                      |
+| `npm run dev`                                                         | start-up check (development)        | exits 1 (escape hatch `ALLOW_REMOTE_DATABASE=true`, deliberately ugly)                                                                                                               |
+| `npm run test:integration`                                            | `tests/integration/global-setup.ts` | refused. It also now forces `MIGRATE_DATABASE_URL` to the test database: before M11, a staging `MIGRATE_DATABASE_URL` in the environment would have been migrated by the test setup. |
+| `npx playwright test` (local servers)                                 | `playwright.config.ts`              | refused (deployed servers use `npm run test:staging`)                                                                                                                                |
+| `npm run drill:*`                                                     | `scripts/drills/lib.ts`             | refused                                                                                                                                                                              |
+| `npm run db:environment` with a hosted URL lacking `sslaccept=strict` | `scripts/db-environment.ts`         | refused                                                                                                                                                                              |
+
+### 6. GitHub Actions variable mapping (verified in the workflow files)
+
+| GitHub secret (environment `staging`)                | Becomes                                              | Used by                                                                                                                                                                                                    |
+| ---------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DIRECT_DATABASE_URL` (direct, `sslaccept=strict`)   | `MIGRATE_DATABASE_URL`                               | `db:environment` (guard, then `--mark`) and `prisma migrate deploy` in `_deploy.yml`; `db:environment` in `backup.yml`                                                                                     |
+| `DIRECT_DATABASE_URL`                                | `--source` (and `DATABASE_URL` for that one command) | `db:backup` in `_deploy.yml` and `backup.yml`                                                                                                                                                              |
+| —                                                    | `DATABASE_URL`                                       | In the workflows, only a build placeholder (`npm ci`) and the runner's own throwaway restore database. **The pooled staging URL is never in GitHub**: it lives only on Render as the app's `DATABASE_URL`. |
+| `APP_URL`, `DEPLOY_HOOK_URL`, `BACKUP_AGE_RECIPIENT` | as named                                             | readiness wait, smoke test, Render deploy, encryption                                                                                                                                                      |
+
+The restore-database migrations in `backup.yml` and CI now set `MIGRATE_DATABASE_URL` explicitly,
+so a job-level value can never redirect them.
+
+### 7. After approval only
 
 The staging GitHub environment, its secrets and the first `deploy-staging.yml` run follow
-"Provisioning steps" above. Migrations run **only** through that workflow, after its database
-guard and encrypted backup. Never with `prisma migrate dev`, `db push`, `migrate reset` or
-`neon deploy`.
+"Provisioning steps" above. Never use `prisma migrate dev`, `db push`, `migrate reset` or
+`neon deploy` on staging; the guards refuse the first three.
 
 ## Staging security review (Phase F)
 
