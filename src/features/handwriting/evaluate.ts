@@ -169,8 +169,14 @@ export function evaluateCharacter(
   options: EvaluateOptions = {},
 ): CharacterEvaluation {
   const weights = options.weights ?? DEFAULT_EVALUATION_WEIGHTS;
+  // Points with non-finite coordinates are dropped (M13 audit: they made the engine loop
+  // forever). Every server entry point already rejects them; finite input is unaffected.
   const strokes = ink
-    .map((s) => s.points.map((p) => [p.x, p.y] as Vec))
+    .map((s) =>
+      s.points
+        .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+        .map((p) => [p.x, p.y] as Vec),
+    )
     .filter((s) => s.length > 0);
   const expectedCount = expected.medians.length;
   const candidates = new Map<string, ReferenceCharacter>();

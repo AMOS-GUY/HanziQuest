@@ -107,7 +107,13 @@ export function assign(cost: readonly (readonly number[])[]): number[] {
   const n = Math.max(rows, cols);
   if (n === 0) return [];
   const PAD = 1e6;
-  const a = (i: number, j: number) => (i < rows && j < cols ? cost[i]![j]! : PAD);
+  // Non-finite costs (NaN, ±Infinity) would stop the search from ever choosing a column, and
+  // the loop below would never end. Treat them as the padding cost; finite costs are unchanged.
+  const a = (i: number, j: number) => {
+    if (i >= rows || j >= cols) return PAD;
+    const c = cost[i]![j]!;
+    return Number.isFinite(c) ? c : PAD;
+  };
 
   // 1-indexed implementation (e-maxx).
   const u = new Array<number>(n + 1).fill(0);

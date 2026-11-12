@@ -260,3 +260,42 @@ describe("technique verdict", () => {
     expect(techniqueVerdict(wrong)).toBeNull();
   });
 });
+
+describe("robustness against non-finite input (M13 audit)", () => {
+  it("assign terminates on NaN and infinite costs and leaves finite matrices unchanged", () => {
+    expect(
+      assign([
+        [NaN, 1],
+        [1, NaN],
+      ]),
+    ).toEqual([1, 0]);
+    expect(
+      assign([
+        [Infinity, 2],
+        [3, -Infinity],
+      ]).sort(),
+    ).toEqual([0, 1]);
+    expect(
+      assign([
+        [4, 1, 3],
+        [2, 0, 5],
+        [3, 2, 2],
+      ]),
+    ).toEqual([1, 0, 2]);
+  });
+
+  it("evaluates ink with NaN or Infinity points instead of hanging, dropping those points", () => {
+    const r = ref("你");
+    const ink = toInk(r.medians, { seed: 3 });
+    const poisoned = ink.map((s, i) =>
+      i === 0
+        ? { points: [{ x: NaN, y: 0.5, t: 0 }, { x: Infinity, y: 0.2, t: 1 }, ...s.points] }
+        : s,
+    );
+    const started = Date.now();
+    const result = evaluate(poisoned, r);
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(result).toEqual(evaluate(ink, r));
+    expect(evaluate([{ points: [{ x: NaN, y: NaN, t: 0 }] }], r).feedback[0]!.code).toBe("EMPTY");
+  });
+});
