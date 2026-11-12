@@ -164,6 +164,70 @@ version-agnostic. Still, the first GitHub run after 2026-12-01 is the real Postg
 
 ## Results
 
-See "Run log" below; each entry names the exact commit tested.
+**Final verification (2026-11-12): run `20261112T064912-61ef`, commit `ee05d63`,
+`npm run ci:local -- --fresh --with-firefox`.**
 
-## Run log
+- The working tree was clean (enforced by `--fresh`), and `.next`, `test-results` and
+  `playwright-report` were removed first.
+- `origin/main` was `f079947`.
+- Node 24.18.0; local PostgreSQL 18.6 (GitHub CI: postgres:17). The run's own summary shows
+  "postgres ?" because of a reporting bug, fixed in `829cb4e`. 18.6 was measured separately on the
+  same server.
+- **Exit code 0: 25 PASS, 5 BLOCKED, 1 NOT RUN, 0 FAIL.**
+
+| #     | ci.yml step                           | Result                         | Evidence or reason                                                                                                       |
+| ----- | ------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| 00    | checkout, setup-node                  | PASS                           | clean tree, Node 24.18.0                                                                                                 |
+| 01    | Install dependencies                  | PASS                           | `npm ls --all`: the installed tree matches the lockfile (`npm ci` itself not re-run)                                     |
+| 02    | Dependency audit                      | PASS                           | 0 high/critical in production dependencies                                                                               |
+| 03    | Migration safety                      | PASS                           | 12 migrations, none destructive, none edited since `origin/main`                                                         |
+| 04    | Ephemeral auth secret                 | PASS                           | random per run                                                                                                           |
+| 05–08 | Lint, Formatting, Type check, Content | PASS                           |                                                                                                                          |
+| 09    | Unit tests                            | PASS                           | 160 tests                                                                                                                |
+| 10    | Create test database                  | PASS                           | through the `pg` driver (CI: psql)                                                                                       |
+| 11    | Integration tests                     | PASS                           | 94 tests, on the disposable test database                                                                                |
+| 12    | Migrate and seed                      | PASS                           | fresh disposable database                                                                                                |
+| 13a–d | Backup and restore drill              | PASS                           | backup, migrate restore database, restore, verify (checksums, FKs, app reads)                                            |
+| 14    | Install age                           | **BLOCKED**                    | `age` isn't installed                                                                                                    |
+| 15    | Migration drill                       | PASS                           | fresh, upgrade, pending, failure and recovery, marker, database down                                                     |
+| 16    | Backup drill                          | PASS (encryption part BLOCKED) | restore, verify, 6 corrupted or tampered cases rejected; the `age` round trip was skipped by the drill                   |
+| 17    | Production build                      | PASS                           |                                                                                                                          |
+| 18    | Playwright browser                    | PASS                           | Chromium installed                                                                                                       |
+| 19    | End-to-end tests (Chromium)           | PASS                           | **36 passed, 18 skipped, 0 failed** (5.7 min, `CI=true`)                                                                 |
+| 20    | Firefox e2e (advisory)                | **BLOCKED**                    | `browserType.launch: spawn UNKNOWN`: Firefox can't start on this machine (22 tests couldn't launch; 3 needed no browser) |
+| 21    | Smoke test                            | PASS                           | all checks on a production server (:3200)                                                                                |
+| —     | Upload Playwright report              | NOT RUN                        | no artifact store locally                                                                                                |
+| 22    | docker: build image                   | **BLOCKED**                    | no Docker                                                                                                                |
+| 23    | docker: start-up test                 | **BLOCKED**                    | no Docker. Local equivalent **23L PASS**: the image's `CMD` started; liveness ok; readiness `migrations: ok`             |
+| 24    | docker: placeholder-secret refusal    | **BLOCKED**                    | no Docker. Local equivalent **24L PASS**: exit code 1                                                                    |
+
+**Genuine failures: none.** The 18 skipped e2e tests are phone copies of desktop-only flows and
+the opt-in screenshot runs, the same as on CI.
+
+**First run (2026-11-12): run `20261112T063513-80ca`, commit `34bdef7`**, the first version of
+the runner, with `--keep-going --with-firefox`. **Exit 0**: every verify step that could run
+passed, `age` and Docker were unavailable, and Firefox failed to launch. It turned up no code
+failures, only runner improvements, made in `ee05d63`:
+
+- PASS/FAIL/BLOCKED/NOT RUN classification
+- notes that show the first real error line
+- local container equivalents
+- `--fresh`
+- a real Chromium check
+- the `DEP0190` warning fixed
+
+A stray `next start -p 3300` left by an earlier session was stopped before the final run.
+
+## Getting Docker, age and Firefox (investigated, nothing installed)
+
+All three are free. Each needs software installed on the development machine, which is the
+owner's decision. None affects the database guards or the project.
+
+| Tool                        | Cost         | Option                                                                                                                                                                            | Notes                                                                                                                                                                                                                                                     |
+| --------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **age** (backup encryption) | free (BSD-3) | `winget install FiloSottile.age`, or the official release zip from github.com/FiloSottile/age (check the release checksum)                                                        | A single small binary, no service and no admin rights for the zip. It enables step 14 and the drill's encryption round trip. It's the same tool the workflows use.                                                                                        |
+| **Firefox for Playwright**  | free         | Install the **Microsoft Visual C++ Redistributable** (x64, from Microsoft: `winget install Microsoft.VCRedist.2015+.x64`), then `npx playwright install firefox --force`          | `spawn UNKNOWN` plus the Windows "side-by-side configuration is incorrect" error (seen since M5) point to a missing runtime. Not confirmed until it runs.                                                                                                 |
+| **Container engine**        | free options | **Podman Desktop** (Apache-2.0) or **Rancher Desktop** (Apache-2.0); **Docker Desktop** is free for personal use and small businesses (check Docker's current subscription terms) | Needs WSL 2 or virtualisation and admin rights, and it's the heaviest change. The runner calls `docker` and uses `host.docker.internal`, so with Podman an alias, or `podman machine` with Docker compatibility, is needed. Then steps 22–24 run in full. |
+
+No paid service is needed. Until these are installed, steps 14, 20 and 22–24 stay BLOCKED here and
+are verified only by GitHub CI from 2026-12-01.
