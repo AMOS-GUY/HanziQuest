@@ -302,11 +302,11 @@ Full methodology: `docs/M13_HANDWRITING_DIAGNOSTICS.md`.
 
 Local CI (`npm run ci:local`, Windows with PostgreSQL 18.6, **not GitHub CI**):
 
-| Commit                        | Run                    | Exit       | PASS       | FAIL       | BLOCKED       | NOT RUN      | Tests                          |
-| ----------------------------- | ---------------------- | ---------- | ---------- | ---------- | ------------- | ------------ | ------------------------------ |
-| `d712a82` (baseline, `main`)  | `20261112T173638-ac59` | 0          | 25         | 0          | 4             | 2            | —                              |
-| `7850083` (M13 code and docs) | `20261112T180316-0493` | 0          | 25         | 0          | 4             | 2            | integration 126; e2e 36 passed |
-| FINAL (see section P)         | FINAL_RUN              | FINAL_EXIT | FINAL_PASS | FINAL_FAIL | FINAL_BLOCKED | FINAL_NOTRUN | FINAL_TESTS                    |
+| Commit                            | Run                    | Exit | PASS | FAIL | BLOCKED | NOT RUN | Tests                                                                    |
+| --------------------------------- | ---------------------- | ---- | ---- | ---- | ------- | ------- | ------------------------------------------------------------------------ |
+| `d712a82` (baseline, `main`)      | `20261112T173638-ac59` | 0    | 25   | 0    | 4       | 2       | —                                                                        |
+| `7850083` (M13 code and docs)     | `20261112T180316-0493` | 0    | 25   | 0    | 4       | 2       | integration 126; e2e 36 passed                                           |
+| `4ba3ea7` (final code and report) | `20261112T183909-28ec` | 0    | 25   | 0    | 4       | 2       | unit 235; integration 126; e2e 36 passed; backup drill all checks passed |
 
 - **BLOCKED every run:**
   - `age` is not installed, so the backup encryption round trip can't run
@@ -501,5 +501,6 @@ npm run handwriting:report -- --synthetic     # compare with docs/handwriting-ba
 npm run ci:local                              # full local CI (not GitHub CI)
 ```
 
-**Final state:** final commit FINAL_COMMIT; local CI run FINAL_RUN. Compare:
+**Final state:** final code commit `4ba3ea770bd75b0845516404481a3fea21d9d053`; local CI run
+`20261112T183909-28ec` (exit 0). The commit after it only records these numbers in this report. Compare:
 https://github.com/AMOS-GUY/HanziQuest/compare/main...feature/m13-handwriting-diagnostics
