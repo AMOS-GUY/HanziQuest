@@ -443,7 +443,8 @@ async function main() {
   if (FRESH)
     for (const d of [".next", "test-results", "playwright-report"])
       fs.rmSync(d, { recursive: true, force: true });
-  const pgVersion = (await adminQuery<{ v: string }>("SHOW server_version"))[0]?.v ?? "?";
+  const pgVersion =
+    (await adminQuery<{ v: string }>("SELECT current_setting('server_version') AS v"))[0]?.v ?? "?";
   console.log(
     `Local CI ${run}: ${branch} @ ${git("rev-parse --short HEAD")}${dirty ? " (uncommitted changes!)" : ""}${FRESH ? " (fresh)" : ""}`,
   );
