@@ -198,6 +198,7 @@ Target public beta: **2026-12-08**.
 - [x] Structured observations and fixed styles replace free text; unknown fields rejected (D-059)
 - [x] Source register, edition tags, example provenance, review metadata, `content:provenance` report and list comparison (D-060); no content added, no HSK membership claimed
 - [x] Expand-only migration `20261112125646_m12_pilot_consent_and_provenance`; `db:check-migrations` passes
+- [x] `npm run ci:local` at `8ebbb70` (run `20261112T132843-2d56`): **exit 0, 25 PASS, 4 BLOCKED (age, Docker ×3), 2 NOT RUN (Firefox advisory, report upload), 0 FAIL**. The first run failed one e2e: the admin import fixture didn't cite a registered source (the new rule working) and the lab test reused ink; both fixed. GitHub Actions not run (quota)
 - [ ] **Not built:** pilot report with intervals (protocol item 3), optional participant bands (4), LAN pilot mode (6), printable checklist (7), admin review queue page, learner-facing edition label, fixing the 3 content warnings
 - [ ] **Owner:** approve the consent form (then flip `ownerApproved`), fill in its blanks, approve register entries
 - [ ] **Not done here:** no participants recruited, no real handwriting, no thresholds changed, nothing on Neon or Render
