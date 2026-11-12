@@ -813,3 +813,14 @@ See `docs/M11_STAGING_AUDIT.md`.
 - The review caught one privacy issue in new code before commit: the split report's metrics
   included the per-participant breakdown, keyed by code. It now reports counts only, and a test
   guards it.
+- Platform audit (same session; full report in
+  [reports/2026-11-13-m13-overnight-engineering-report.md](reports/2026-11-13-m13-overnight-engineering-report.md)):
+  - fixed: the engine never returned on NaN or infinite coordinates (latent; no grading change,
+    410/410 replays and the synthetic baseline identical); a doubled word was listed twice on a
+    character page
+  - documented: lab vs learner candidate sets, linear evaluation cost (about 10 ms at 102
+    candidates, about 400 ms at 3,000), small mobile header links, curriculum gaps (no
+    traditional forms, examples or audio)
+  - corrected: HANDWRITING.md's "10 testers" (the rules say 15) and the in-set qualifier;
+    ROADMAP's status note
+  - decision register D1–D12 and three proposed milestones in the report

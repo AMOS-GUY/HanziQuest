@@ -12,6 +12,12 @@ Detailed plans:
 
 ## Where things stand
 
+_Note (2026-11-13, M13 audit): this table is the 2026-11-12 snapshot. Since then M12's pilot
+privacy work and M14's provenance infrastructure have been merged (PRs #22 and #23), the
+repository is public, and GitHub Actions is blocked by an account billing restriction rather
+than by private minutes. Current state: docs/PROGRESS.md and
+docs/reports/2026-11-13-m13-overnight-engineering-report.md._
+
 | Area                  | Built                                                                                   | Missing                                                                                                                       |
 | --------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Handwriting engine    | `hq-eval-1`; lab, consent, metrics, export, report; synthetic baseline                  | **0 real samples.** Accuracy for real learners is unknown. The validation procedure needs ≥ 15 participants before any tuning |

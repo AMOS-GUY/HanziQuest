@@ -92,25 +92,28 @@ The synthetic baseline report is `docs/handwriting-baseline-synthetic.md`.
 
 ## Validation status (honest)
 
-| What                                                                                          | Status                                                                     |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Synthetic sweep over all **102 starter characters** (`tests/unit/handwriting-engine.test.ts`) | ✅ Passing                                                                 |
-| — correct writing with jitter, wobble, ±scale, offset, ±0.04 rad rotation                     | 102/102 verified, Good or Excellent                                        |
-| — writing size 0.3× vs 1×, speed 2 vs 60 ms/point                                             | Scores within 3 points                                                     |
-| — a different character written                                                               | 102/102 rejected (Try again)                                               |
-| — similar pairs (他/她, 人/八, 人/儿, 上/下, 午/年, …)                                        | All distinguished                                                          |
-| — missing stroke (chars with ≥ 4 strokes)                                                     | Always capped below Good                                                   |
-| — extra stroke                                                                                | Flagged                                                                    |
-| — reversed longest stroke                                                                     | Detected on ≥ 95 % (required threshold)                                    |
-| — first/last strokes swapped                                                                  | Detected on ≥ 95 %                                                         |
-| — one stroke stretched 1.8×                                                                   | Shape flagged, not Excellent                                               |
-| End-to-end: a full lesson written in the browser (Playwright)                                 | ✅ All 18 exercises Excellent or Good, saved by the server                 |
-| **Real learner handwriting**                                                                  | ❌ **Not yet validated.** Thresholds are calibrated only on synthetic ink. |
+| What                                                                                          | Status                                                                                                        |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Synthetic sweep over all **102 starter characters** (`tests/unit/handwriting-engine.test.ts`) | ✅ Passing                                                                                                    |
+| — correct writing with jitter, wobble, ±scale, offset, ±0.04 rad rotation                     | 102/102 verified, Good or Excellent                                                                           |
+| — writing size 0.3× vs 1×, speed 2 vs 60 ms/point                                             | Scores within 3 points                                                                                        |
+| — a different character written                                                               | 102/102 rejected (Try again)                                                                                  |
+| — similar pairs (他/她, 人/八, 人/儿, 上/下, 午/年, …)                                        | All distinguished **when both are in the candidate set** (M13: not when the written look-alike is outside it) |
+| — missing stroke (chars with ≥ 4 strokes)                                                     | Always capped below Good                                                                                      |
+| — extra stroke                                                                                | Flagged                                                                                                       |
+| — reversed longest stroke                                                                     | Detected on ≥ 95 % (required threshold)                                                                       |
+| — first/last strokes swapped                                                                  | Detected on ≥ 95 %                                                                                            |
+| — one stroke stretched 1.8×                                                                   | Shape flagged, not Excellent                                                                                  |
+| End-to-end: a full lesson written in the browser (Playwright)                                 | ✅ All 18 exercises Excellent or Good, saved by the server                                                    |
+| **Real learner handwriting**                                                                  | ❌ **Not yet validated.** Thresholds are calibrated only on synthetic ink.                                    |
 
-Before the beta goes public, collect real samples from at least 10 testers (correct and
-incorrect writing), measure false accept and false reject rates per band, and retune
-`THRESHOLDS` in `evaluate.ts`. Bump `ENGINE_VERSION` whenever thresholds change, so stored
-attempts can be told apart.
+Before the beta goes public, collect real samples (correct and incorrect writing) and
+measure false accept and false reject rates per band. Change `THRESHOLDS` in `evaluate.ts`
+only under the rules in HANDWRITING_VALIDATION.md: at least 15 participants and 300 correct
+and 300 incorrect samples (`MIN_SAMPLES`), and bump `ENGINE_VERSION` with any change.
+
+_Corrected 2026-11-13 (M13 audit): this paragraph used to say "at least 10 testers … and
+retune", which contradicted the validation rules and the code's `MIN_SAMPLES`._
 
 ## Known limitations
 
