@@ -98,5 +98,11 @@ npm run content:validate
   The direct URL needs `sslaccept=strict` (Prisma CLI). Never write staging values into `.env`.
 - Drills: `npm run drill:migrations` and `npm run drill:backup` (local databases only; CI runs
   both). The staging acceptance suite (`npm run test:staging`) is HTTP-only and refuses production.
+- Handwriting lab (M12): samples need an unrevoked `PilotConsent` for the current form version
+  (`features/handwriting/consent.ts`). Real codes are refused while `ownerApproved` is false; only
+  the owner approves the form. Erasure (`features/handwriting/participants.ts`) is the only way
+  to delete samples. No free text in the lab (D-057 to D-059).
+- Curriculum sources (M14): content files cite ids from `content/sources.json`. Never add an HSK
+  level tag or an `OFFICIAL_LIST` source without owner approval (D-060).
 - The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it
   when caching rules change. Test offline flows with `npm run build` + Playwright.

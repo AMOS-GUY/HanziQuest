@@ -38,7 +38,10 @@ private note outside HanziQuest, and destroy it when the study ends.
 >
 > Is that OK with you?
 
-Only after a clear "yes" do you tick the consent box in the lab. If they say no, don't record.
+Only after a clear "yes", and once the written form is signed (docs/M12_PILOT_PROTOCOL.md
+section 4), record the consent under **Participants and consent** in the lab. If they say no,
+don't record. The lab refuses samples for a code without recorded consent, and refuses real
+codes entirely until the owner approves the consent form.
 
 _This consent text is a draft written for the pilot. It hasn't been reviewed by a lawyer or an
 ethics board. If your organisation or country requires review for research with people, get
@@ -46,8 +49,8 @@ it before running the pilot._
 
 ## Running a session
 
-1. Open `/admin/handwriting`, choose the tester's code (P01–P05) under **Pilot: five
-   testers**, and tick the consent box once they agree.
+1. Open `/admin/handwriting`, record the signed consent under **Participants and consent**,
+   then choose the tester's code (P01–P05) under **Pilot: five testers**.
 2. Set **Input** to how they'll write (finger, stylus, mouse or trackpad). Screen size,
    browser and OS are captured automatically as coarse facts.
 3. The recorder shows the next prompt: the character, and a sentence to **say** to the tester
@@ -57,10 +60,11 @@ it before running the pilot._
 5. Press **Record**. The engine's verdict appears; don't share it with the tester until the
    end, so it doesn't change how they write.
 6. Repeat until the lab shows 36/36. If a prompt went wrong (interrupted, or they wrote
-   something else), press **Clear** and redo it before recording. If something was recorded
-   by mistake, note the time in your private notes so it can be removed.
+   something else), press **Clear** and redo it before recording. Tick any **Observations**
+   that apply (fixed choices; there is no free-text field, by design).
 7. Thank them. Optionally ask: "Did any feedback seem wrong or unfair to you?" and note the
-   answers (without names) in Admin → Feedback, as kind "Handwriting".
+   answers in Admin → Feedback, as kind "Handwriting", with no name **and no code** (feedback
+   isn't erased with a participant's samples).
 
 Each tester gets every pilot character written correctly twice (once normally, once small or
 fast) plus one deliberate error. The error types rotate per tester, so across five testers

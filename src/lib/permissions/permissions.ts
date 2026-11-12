@@ -8,6 +8,8 @@ export const PERMISSIONS = [
   "curriculum:publish",
   "content:import",
   "handwriting:validate",
+  /** Erase a pilot participant's handwriting data (withdrawal or end of retention). */
+  "handwriting:erase",
   "feedback:manage",
   "invites:manage",
   "users:read",

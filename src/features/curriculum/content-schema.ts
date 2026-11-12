@@ -16,12 +16,65 @@ export const hanziSchema = z
   .min(1)
   .regex(HAN_PATTERN, "Must contain only Chinese characters");
 
+/** Ids in the source register (content/sources.json). Checked by `checkSources`. */
+const sourceRefsSchema = z
+  .array(z.string().regex(/^[a-z0-9][a-z0-9.-]{1,63}$/, "Not a source id"))
+  .max(10)
+  .optional();
+
+const verificationSchema = z.enum(["PROVISIONAL", "REVIEWED", "VERIFIED"]);
+
+/**
+ * Per-standard level tags (M14). Optional: an untagged item makes no membership claim.
+ * A tag must cite an approved OFFICIAL_LIST source in the register.
+ */
+const editionsSchema = z
+  .strictObject({
+    sourceRef: z.string().min(1),
+    hsk20Level: z.number().int().min(1).max(6).optional(),
+    hsk30Level: z.number().int().min(1).max(9).optional(),
+  })
+  .refine(
+    (e) => e.hsk20Level !== undefined || e.hsk30Level !== undefined,
+    "Give at least one level",
+  );
+
+const characterEditionsSchema = z
+  .strictObject({
+    sourceRef: z.string().min(1),
+    hsk20Level: z.number().int().min(1).max(6).optional(),
+    hsk30Level: z.number().int().min(1).max(9).optional(),
+    /** On the HSK 3.0 handwriting list. */
+    hsk30Handwriting: z.boolean().optional(),
+  })
+  .refine(
+    (e) =>
+      e.hsk20Level !== undefined || e.hsk30Level !== undefined || e.hsk30Handwriting !== undefined,
+    "Give at least one tag",
+  );
+
+/** One example sentence with its own provenance (M14). */
+export const contentExampleSchema = z.strictObject({
+  zh: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[\p{Script=Han}\p{P}\s]+$/u, "Chinese characters and punctuation only"),
+  pinyin: z.string().trim().min(1).max(300),
+  en: z.string().trim().min(1).max(300),
+  sourceRef: z.string().min(1),
+  verification: verificationSchema,
+});
+
 export const contentCharacterSchema = z.object({
   pinyin: pinyinSchema,
   meaning: z.string().trim().min(1),
   alternatives: z.array(pinyinSchema).optional(),
   traditional: hanziSchema.optional(),
   radical: z.string().optional(),
+  sourceRefs: sourceRefsSchema,
+  editions: characterEditionsSchema.optional(),
 });
 
 export const contentWordSchema = z.object({
@@ -31,6 +84,9 @@ export const contentWordSchema = z.object({
   meaning: z.string().trim().min(1),
   partOfSpeech: z.string().optional(),
   source: z.string().optional(),
+  sourceRefs: sourceRefsSchema,
+  editions: editionsSchema.optional(),
+  example: contentExampleSchema.optional(),
 });
 
 const slugSchema = z.string().regex(/^[a-z0-9-]+$/, "Use lowercase letters, digits and hyphens");
@@ -57,8 +113,9 @@ export const curriculumContentSchema = z.object({
     version: z.string().min(1),
     description: z.string().optional(),
     source: z.string().min(1),
+    sourceRefs: sourceRefsSchema,
     licenseStatus: z.enum(["UNKNOWN", "OPEN_LICENSE", "LICENSED", "ORIGINAL", "PUBLIC_FACT"]),
-    verification: z.enum(["PROVISIONAL", "REVIEWED", "VERIFIED"]),
+    verification: verificationSchema,
   }),
   level: z.object({
     level: z.number().int().min(1).max(9),

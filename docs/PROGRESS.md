@@ -190,6 +190,19 @@ Target public beta: **2026-12-08**.
 - [ ] **BLOCKED here:** `age` round trip, Firefox e2e, the `docker` job (local process-level equivalents pass). Free ways to obtain them are documented; installing them is the owner's decision.
 - [ ] **GitHub CI not run** (minutes exhausted until 2026-12-01); resume steps in docs/LOCAL_CI.md
 
+### M12 pilot privacy + M14 provenance infrastructure (2026-11-12, `feature/m12-pilot-privacy`) — PR open, not merged
+
+- [x] Versioned consent (`PilotParticipant`, `PilotConsent`): recording refused without a current, unrevoked acceptance; real codes refused until the owner approves the form (D-057)
+- [x] Participant erasure: samples (incl. pre-M12 rows), audit-content redaction, consent revoked, code blocked; one transaction, Super Admin only, typed confirmation (D-058)
+- [x] Withdrawal enforcement: an erased code can't record or re-consent; recording and erasure lock the same row
+- [x] Structured observations and fixed styles replace free text; unknown fields rejected (D-059)
+- [x] Source register, edition tags, example provenance, review metadata, `content:provenance` report and list comparison (D-060); no content added, no HSK membership claimed
+- [x] Expand-only migration `20261112125646_m12_pilot_consent_and_provenance`; `db:check-migrations` passes
+- [x] `npm run ci:local` at `8ebbb70` (run `20261112T132843-2d56`): **exit 0, 25 PASS, 4 BLOCKED (age, Docker ×3), 2 NOT RUN (Firefox advisory, report upload), 0 FAIL**. The first run failed one e2e: the admin import fixture didn't cite a registered source (the new rule working) and the lab test reused ink; both fixed. GitHub Actions not run (quota)
+- [ ] **Not built:** pilot report with intervals (protocol item 3), optional participant bands (4), LAN pilot mode (6), printable checklist (7), admin review queue page, learner-facing edition label, fixing the 3 content warnings
+- [ ] **Owner:** approve the consent form (then flip `ownerApproved`), fill in its blanks, approve register entries
+- [ ] **Not done here:** no participants recruited, no real handwriting, no thresholds changed, nothing on Neon or Render
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -654,3 +667,37 @@ See `docs/M11_STAGING_AUDIT.md`.
   database (readiness 200, migrations ok).
 - The next roadmap (M12–M17) was proposed for owner review in docs/ROADMAP.md; nothing implemented.
 - Nothing touched Neon or Render. No secrets, no spending.
+- The owner approved the roadmap direction and order (M12 → M14 alongside → M15 → M13 → M16 →
+  M17). Documentation and planning only:
+  - [M12_PILOT_PROTOCOL.md](M12_PILOT_PROTOCOL.md): recruitment criteria, a draft written
+    consent form, data stored per attempt, device coverage, the generated prompt rotation,
+    privacy, retention and withdrawal, and the evaluation method with intervals
+  - [CURRICULUM_PROVENANCE_PLAN.md](CURRICULUM_PROVENANCE_PLAN.md): HSK 2.0 and 3.0
+  - ROADMAP.md now separates the 5-person exploratory pilot from the ≥ 15-person validation
+    study, and lists which work needs no staging or spending
+- Findings while planning:
+  - there is no way to delete one participant's samples (needed for withdrawal)
+  - consent is stored only as a boolean
+  - the pilot has only 10 wrong-character samples, so it cannot show the ≤ 1 % target
+  - the HSK 1 Starter file cites the HSK 2.0 list as "public" without a recorded source
+- No participants recruited, no handwriting collected, no thresholds or content changed.
+
+### 2026-11-12 — Session 14 (M12 pilot privacy, M14 provenance infrastructure)
+
+- The owner approved M12 technical work, with `08ed395` as the planning baseline. PR #21 had
+  been merged before that commit, so `feature/m12-pilot-privacy` is cut from `main`
+  (`cbff673`) with `08ed395` cherry-picked.
+- Inspected first: `HandwritingSample` had a boolean consent, free-text `notes` and `style`, no
+  participant model and no deletion path; the lab's only writer is `recordSample`.
+- Built: versioned consent, erasure with audit redaction, withdrawal enforcement, structured
+  observations, the source register and edition/provenance fields, review metadata, and the
+  provenance report. One additive migration; existing rows are untouched (new columns are
+  nullable or default to empty).
+- Tests: `tests/integration/handwriting-lab.test.ts` (consent, observations, erasure,
+  withdrawal, a recording/erasure race, permissions), `tests/integration/provenance.test.ts`,
+  `tests/unit/provenance-and-pilot.test.ts`; the admin e2e now covers consent → record →
+  erase → refused.
+- Checked in the dev preview with TEST codes: P01 refused (draft form), TEST consent recorded
+  and erased.
+- Not touched: thresholds, `ENGINE_VERSION`, content (only metadata wording and a source id in
+  the starter file), Neon, Render, secrets, spending. No participants, no real handwriting.

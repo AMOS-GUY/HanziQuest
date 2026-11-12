@@ -114,6 +114,8 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
         framework: "CUSTOM",
         version: `${slug}-import`,
         source: "e2e",
+        // Imports must cite the source register (M14).
+        sourceRefs: ["hanziquest-authored"],
         licenseStatus: "ORIGINAL",
         verification: "PROVISIONAL",
       },
@@ -158,15 +160,47 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
   await expect(page.getByRole("heading", { level: 1, name: "Content quality" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "HSK 1 Starter" })).toBeVisible();
 
-  // Handwriting lab: record a labelled sample with consent.
+  // Handwriting lab (M12): no recording without consent; consent, record, erase, refused.
+  const code = `TEST${Date.now() % 100_000_000}`;
   await page.goto("/admin/handwriting");
-  await page.getByLabel("Participant code").fill("TEST-E2E");
-  await page.getByLabel("Character asked for").selectOption("你");
-  await page.getByRole("checkbox").check();
-  await writeOnCanvas(page, "你");
-  await page.getByRole("button", { name: "Record" }).click();
+  const recordSampleOnce = async () => {
+    await page.getByLabel("Participant code", { exact: true }).fill(code);
+    await page.getByLabel("Character asked for").selectOption("你");
+    await page.getByLabel(/signed consent is recorded/).check();
+    // A refused attempt keeps its ink on the canvas: start each attempt from a clean canvas.
+    const clear = page.getByRole("button", { name: "Clear" });
+    if (await clear.isEnabled()) await clear.click();
+    await writeOnCanvas(page, "你");
+    await page.getByRole("button", { name: "Record", exact: true }).click();
+  };
+  await recordSampleOnce();
+  await expect(page.getByText(/No consent is recorded for this code/)).toBeVisible({
+    timeout: 15_000,
+  });
+
+  await page.getByLabel("Code giving consent").fill(code);
+  await page.getByLabel("Date signed (YYYY-MM-DD)").fill(new Date().toISOString().slice(0, 10));
+  await page.getByLabel("Signed form").selectOption("yes");
+  await page.getByRole("button", { name: "Record consent" }).click();
+  await expect(page.getByText(`Consent pilot-v0.1 recorded for ${code}.`)).toBeVisible();
+
+  await page.getByLabel("Hesitated").check();
+  await recordSampleOnce();
   await expect(page.getByText("Sample saved.")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("accepted (as expected)")).toBeVisible();
+
+  // Erasure is Super Admin only: hidden (and refused server-side) for curriculum editors.
+  await expect(page.getByLabel("Code to erase")).toHaveCount(0);
+  await grantRole(email, "SUPER_ADMIN");
+  await page.reload();
+  await page.getByLabel("Code to erase").fill(code);
+  await page.getByLabel("Reason").selectOption("WITHDRAWAL");
+  await page.getByLabel("Type the code again to confirm").fill(code);
+  await page.getByRole("button", { name: "Erase permanently" }).click();
+  await expect(page.getByText(`${code}: 1 sample(s) deleted`)).toBeVisible();
+
+  await recordSampleOnce();
+  await expect(page.getByText(/has withdrawn/)).toBeVisible({ timeout: 15_000 });
 });
 
 test("learners can't reach admin pages, and the 404 reveals nothing", async ({

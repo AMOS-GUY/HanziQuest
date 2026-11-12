@@ -42,7 +42,8 @@ writers, and phone (finger), tablet (stylus) and laptop (mouse or trackpad) user
 
 **Consent.** Before recording, explain that the participant's handwriting strokes (no audio, no
 video, no name) will be stored to test the app and may be kept for future engine versions, and
-that they can ask for their samples to be deleted. Tick the consent box only after they agree.
+that they can ask for their samples to be deleted. Record their signed consent in the lab
+(**Participants and consent**) before recording; the lab refuses samples without it.
 Participants are identified only by a code (`P01`, `P02`, …). Keep the code-to-person mapping,
 if any, outside the app.
 

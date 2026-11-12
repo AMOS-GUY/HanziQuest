@@ -18,6 +18,32 @@ import {
 } from "@/features/curriculum/import-content";
 import { buildEvaluationConfig } from "@/features/exercises/evaluation-config";
 import { DomainError, type Actor } from "./services";
+import { VERIFICATION_RANK, type Verification } from "@/features/curriculum/provenance";
+import { ADMIN_ROLES } from "@/lib/permissions/permissions";
+
+/** Source register id for content written in the admin (content/sources.json). */
+const AUTHORED_SOURCE = "hanziquest-authored";
+
+/**
+ * Review metadata (M14): raising an item's verification records the reviewer's role (never a
+ * name) and the time; returning it to PROVISIONAL clears both. VERIFIED needs a known licence.
+ */
+function reviewStamp(
+  actor: Actor,
+  before: Verification | null,
+  next: Verification,
+  licenseStatus: string,
+) {
+  if (next === "VERIFIED" && licenseStatus === "UNKNOWN")
+    throw new DomainError("conflict", "Content can't be VERIFIED while its licence is unknown.");
+  if (next === "PROVISIONAL") return { reviewerRole: null, reviewedAt: null };
+  if (before === null || VERIFICATION_RANK[next] > VERIFICATION_RANK[before])
+    return {
+      reviewerRole: ADMIN_ROLES.find((r) => actor.roles.includes(r)) ?? null,
+      reviewedAt: new Date(),
+    };
+  return {};
+}
 
 type Tx = Prisma.TransactionClient;
 
@@ -495,6 +521,7 @@ export async function createCharacter(
       .create({
         data: {
           ...input,
+          ...reviewStamp(actor, null, input.verification, input.licenseStatus),
           strokeCount: strokes?.strokes.length ?? null,
           hasStrokeData: strokes !== null,
         },
@@ -520,7 +547,13 @@ export async function updateCharacter(
     const before = await t.character.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Character not found.");
     await revision(t, actor, "Character", id, before);
-    const updated = await t.character.update({ where: { id }, data: input });
+    const updated = await t.character.update({
+      where: { id },
+      data: {
+        ...input,
+        ...reviewStamp(actor, before.verification, input.verification, input.licenseStatus),
+      },
+    });
     // Guided and free-writing prompts show the character's pinyin and meaning.
     if (before.pinyin !== input.pinyin || before.meaning !== input.meaning) {
       const exercises = await t.exercise.findMany({
@@ -566,7 +599,16 @@ export async function createVocabulary(prisma: PrismaClient, actor: Actor, raw: 
     if (missing.length)
       throw new DomainError("conflict", `Add these characters first: ${missing.join(" ")}`);
     const created = await t.vocabulary
-      .create({ data: input })
+      .create({
+        data: {
+          ...input,
+          ...reviewStamp(actor, null, input.verification, input.licenseStatus),
+          ...(input.exampleZh && {
+            exampleSourceRef: AUTHORED_SOURCE,
+            exampleVerification: "PROVISIONAL" as const,
+          }),
+        },
+      })
       .catch((e: unknown) => unique(e, "This word (with this pinyin) already exists."));
     await t.vocabularyCharacter.createMany({
       data: chars.map((c, i) => ({
@@ -591,7 +633,22 @@ export async function updateVocabulary(
     const before = await t.vocabulary.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Word not found.");
     await revision(t, actor, "Vocabulary", id, before);
-    const updated = await t.vocabulary.update({ where: { id }, data: input });
+    // An example edited here is team-authored and provisional until reviewed again (M14).
+    const exampleChanged =
+      before.exampleZh !== input.exampleZh ||
+      before.examplePinyin !== input.examplePinyin ||
+      before.exampleEn !== input.exampleEn;
+    const updated = await t.vocabulary.update({
+      where: { id },
+      data: {
+        ...input,
+        ...reviewStamp(actor, before.verification, input.verification, input.licenseStatus),
+        ...(exampleChanged && {
+          exampleSourceRef: input.exampleZh ? AUTHORED_SOURCE : null,
+          exampleVerification: input.exampleZh ? ("PROVISIONAL" as const) : null,
+        }),
+      },
+    });
     if (before.meaning !== input.meaning) {
       // Keep generated prompts in step with the gloss.
       const key = `word:${before.simplified}:${before.pinyin}`;

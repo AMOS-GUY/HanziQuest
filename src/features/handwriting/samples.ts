@@ -8,6 +8,8 @@ import { ENGINE_VERSION } from "./evaluate";
 import { fromMakeMeAHanzi } from "./reference";
 import type { InkStroke, ReferenceCharacter } from "./types";
 import { pilotPlan, sampleKey, TEST_PARTICIPANT_PREFIX } from "./pilot";
+import { participantCodeSchema, requireRecordingConsent } from "./participants";
+import { OBSERVATION_LABEL, OBSERVATIONS, SAMPLE_STYLES, type Observation } from "./sample-options";
 import {
   computeMetrics,
   SAMPLE_CATEGORIES,
@@ -17,15 +19,14 @@ import {
   type SampleCategory,
 } from "./validation";
 
-export const sampleInputSchema = z.object({
-  participantCode: z
-    .string()
-    .trim()
-    .regex(/^[A-Za-z0-9-]{1,16}$/, "Use a short code such as P07 (no names or emails)"),
+export { OBSERVATION_LABEL, OBSERVATIONS, SAMPLE_STYLES, type Observation };
+
+export const sampleInputSchema = z.strictObject({
+  participantCode: participantCodeSchema,
   hanzi: z.string().trim().min(1).max(2),
   category: z.enum(SAMPLE_CATEGORIES),
   writtenHanzi: z.string().trim().max(2).optional().nullable(),
-  style: z.string().trim().max(40).optional().nullable(),
+  style: z.enum(SAMPLE_STYLES, "Choose one of the listed styles.").optional().nullable(),
   inputDevice: z.enum(["finger", "stylus", "mouse", "trackpad"]),
   canvasSizePx: z.number().int().min(80).max(4000).optional(),
   /** Coarse device facts only (no full user agent): limits fingerprinting. */
@@ -39,7 +40,15 @@ export const sampleInputSchema = z.object({
     })
     .optional(),
   strokes: z.array(inkStrokeSchema).min(1).max(40),
-  notes: z.string().trim().max(500).optional().nullable(),
+  /** Free text is refused (names could be typed into it). Use `observations`. */
+  notes: z
+    .undefined("Free-text notes are no longer accepted. Choose observations instead.")
+    .optional(),
+  observations: z
+    .array(z.enum(OBSERVATIONS))
+    .max(OBSERVATIONS.length)
+    .refine((o) => new Set(o).size === o.length, "Each observation can be chosen once.")
+    .default([]),
   consentConfirmed: z.literal(true, "Confirm the participant consented before recording."),
 });
 
@@ -73,10 +82,14 @@ export async function recordSample(prisma: PrismaClient, actor: Actor, raw: unkn
     candidates,
   );
   const sample = await prisma.$transaction(async (tx) => {
+    // Consent and withdrawal are enforced here, under the participant's row lock.
+    const { participant, consent } = await requireRecordingConsent(tx, input.participantCode);
     const created = await tx.handwritingSample.create({
       data: {
         collectorId: actor.id,
-        participantCode: input.participantCode.toUpperCase(),
+        participantCode: participant.code,
+        participantId: participant.id,
+        consentId: consent.id,
         characterId: character.id,
         category: input.category,
         shouldAccept: shouldAccept(input.category),
@@ -90,7 +103,7 @@ export async function recordSample(prisma: PrismaClient, actor: Actor, raw: unkn
         band: evaluation.band,
         score: evaluation.score,
         identityVerified: evaluation.identity.verified,
-        notes: input.notes ?? null,
+        observations: input.observations,
         consentConfirmed: true,
       },
     });
