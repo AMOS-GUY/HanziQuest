@@ -114,6 +114,8 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
         framework: "CUSTOM",
         version: `${slug}-import`,
         source: "e2e",
+        // Imports must cite the source register (M14).
+        sourceRefs: ["hanziquest-authored"],
         licenseStatus: "ORIGINAL",
         verification: "PROVISIONAL",
       },
@@ -165,6 +167,9 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
     await page.getByLabel("Participant code", { exact: true }).fill(code);
     await page.getByLabel("Character asked for").selectOption("你");
     await page.getByLabel(/signed consent is recorded/).check();
+    // A refused attempt keeps its ink on the canvas: start each attempt from a clean canvas.
+    const clear = page.getByRole("button", { name: "Clear" });
+    if (await clear.isEnabled()) await clear.click();
     await writeOnCanvas(page, "你");
     await page.getByRole("button", { name: "Record", exact: true }).click();
   };

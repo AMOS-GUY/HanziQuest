@@ -37,6 +37,16 @@ The schema is in `src/features/curriculum/content-schema.ts`:
   character used by any word must be defined here.
 - `units[].lessons[].words[]`: `{ simplified, pinyin, meaning, partOfSpeech?, source? }`.
 
+## Sources and editions (M14)
+
+Every content file must cite at least one id from the source register,
+`content/sources.json`, in `curriculum.sourceRefs`; files without it no longer validate or
+import (CLI or admin). Characters and words may add their own `sourceRefs`, optional
+`editions` tags (HSK 2.0 level, HSK 3.0 level, HSK 3.0 handwriting) and, for words, one
+`example` with its own `sourceRef` and verification. Edition tags need an approved
+`OFFICIAL_LIST` source, and none is registered. `npm run content:provenance` reports what is
+unreviewed or unsourced. See docs/CURRICULUM_PROVENANCE_PLAN.md and D-060.
+
 ## Validation (`npm run content:validate [file]`)
 
 Errors (import is refused):
