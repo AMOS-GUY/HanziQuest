@@ -25,6 +25,19 @@ async function main() {
     throw new Error(`Usage: --expect ${DEPLOYMENT_ENVIRONMENTS.join("|")} [--mark]`);
   const url = process.env.MIGRATE_DATABASE_URL || process.env.DATABASE_URL;
   if (!url) throw new Error("Set MIGRATE_DATABASE_URL (direct) or DATABASE_URL");
+  // The Prisma CLI (migrations) skips certificate verification unless sslaccept=strict. The deploy
+  // workflow runs this guard before migrating, so a hosted URL without it is refused here.
+  const parsed = new URL(url);
+  if (
+    !["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname) &&
+    parsed.searchParams.get("sslaccept") !== "strict"
+  ) {
+    console.error(
+      "REFUSED: the direct database URL must include sslaccept=strict (and sslmode=require), so migrations verify the server certificate.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   const prisma = createPrismaClient(url);
   try {
     const guard = await guardDatabase(prisma, expect);

@@ -1,4 +1,18 @@
+import "dotenv/config";
 import { defineConfig, devices } from "@playwright/test";
+
+// M11: the e2e suite registers accounts and writes progress through the local servers it starts.
+// It only runs against a local database; a deployed server is tested with `npm run test:staging`.
+if (!process.env.E2E_BASE_URL) {
+  let host = "";
+  try {
+    host = new URL(process.env.DATABASE_URL ?? "").hostname;
+  } catch {
+    host = "";
+  }
+  if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(host))
+    throw new Error("Refusing: e2e tests need DATABASE_URL to be a local database (localhost).");
+}
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
 /** Second server with invite-only registration. */

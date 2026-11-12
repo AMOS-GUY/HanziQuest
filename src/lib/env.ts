@@ -27,6 +27,22 @@ export function checkEnvironment(
       problem: "should be at least 32 characters",
       fatal: production,
     });
+  // M11: development servers only use a local database (dev data is throwaway; staging isn't).
+  if (env.NODE_ENV === "development" && env.DATABASE_URL && env.ALLOW_REMOTE_DATABASE !== "true") {
+    let host = "";
+    try {
+      host = new URL(env.DATABASE_URL).hostname;
+    } catch {
+      host = "";
+    }
+    if (host && !["localhost", "127.0.0.1", "::1", "[::1]"].includes(host))
+      issues.push({
+        name: "DATABASE_URL",
+        problem:
+          "points at a hosted database in development. Use the local database (npm run db:local); staging is reached only with the staging:* scripts",
+        fatal: true,
+      });
+  }
   if (env.DATABASE_URL && !/^postgres(ql)?:\/\//.test(env.DATABASE_URL))
     issues.push({
       name: "DATABASE_URL",

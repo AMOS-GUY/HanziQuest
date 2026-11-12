@@ -11,6 +11,8 @@ import path from "node:path";
 import bcrypt from "bcryptjs";
 import type { RoleKey } from "../src/generated/prisma/enums";
 import { createPrismaClient } from "../src/lib/database/client";
+import { describeDatabaseUrl, isLocalDatabaseUrl } from "../src/lib/database/locality";
+import { readMarker } from "../src/features/operations/environment";
 import { ROLE_DEFINITIONS } from "../src/lib/permissions/permissions";
 import { loadStrokeData } from "../src/features/curriculum/stroke-data";
 import { validateCurriculumContent } from "../src/features/curriculum/validate-content";
@@ -91,7 +93,29 @@ async function seedAdmin() {
   console.log(`Admin: ${email} has SUPER_ADMIN`);
 }
 
+/**
+ * M11: seeding writes accounts and content. A local database is seeded freely; a hosted one only
+ * when SEED_TARGET names it ("staging" or "production") AND the database carries that
+ * DeploymentMarker (written by its first deploy). So a stray seed can never hit staging or
+ * production, and a staging seed can never hit production.
+ */
+async function guardTarget() {
+  const url = process.env.DATABASE_URL;
+  if (isLocalDatabaseUrl(url)) return;
+  const target = process.env.SEED_TARGET?.trim().toLowerCase();
+  if (target !== "staging" && target !== "production")
+    throw new Error(
+      `Refusing to seed ${describeDatabaseUrl(url)}: it isn't local. Set SEED_TARGET=staging (or production) to seed that deployment deliberately.`,
+    );
+  const marker = await readMarker(prisma);
+  if (marker !== target)
+    throw new Error(
+      `Refusing to seed: SEED_TARGET=${target} but the database is marked "${marker ?? "nothing"}". Deploy it first (it gets marked), and check the URL.`,
+    );
+}
+
 async function main() {
+  await guardTarget();
   await seedRoles();
   await seedAchievements();
   await seedCurriculum();

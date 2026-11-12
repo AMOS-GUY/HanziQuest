@@ -88,7 +88,7 @@ jobs:
             const keep=new Set(JSON.parse(first).migrations);
             for (const d of fs.readdirSync("prisma/migrations",{withFileTypes:true}))
               if (d.isDirectory() && !keep.has(d.name)) fs.rmSync("prisma/migrations/"+d.name,{recursive:true});'
-          DATABASE_URL="$RESTORE_URL" npx prisma migrate deploy
+          MIGRATE_DATABASE_URL="$RESTORE_URL" DATABASE_URL="$RESTORE_URL" npx prisma migrate deploy
           DATABASE_URL="$RESTORE_URL" npm run db:restore -- --in backup/plain.ndjson.gz --target "$RESTORE_URL"
           DATABASE_URL="$RESTORE_URL" npm run db:verify -- --backup backup/plain.ndjson.gz --target "$RESTORE_URL"
 

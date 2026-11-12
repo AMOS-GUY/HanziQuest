@@ -92,6 +92,10 @@ npm run content:validate
 - `APP_ENV` (`staging`/`production`) must match the database's `DeploymentMarker`, or readiness
   returns 503 (D-054). `npm run db:environment` guards and marks; it never changes a marker.
   Never copy production data into staging.
+- Local vs hosted databases: `.env` is local-only; staging URLs live in `.env.staging.local`, loaded
+  only by `npm run staging:*` (read-only). Guards refuse hosted databases for `migrate dev/reset`,
+  `db push`, seed (needs `SEED_TARGET` + matching marker), `next dev`, integration and e2e tests.
+  The direct URL needs `sslaccept=strict` (Prisma CLI). Never write staging values into `.env`.
 - Drills: `npm run drill:migrations` and `npm run drill:backup` (local databases only; CI runs
   both). The staging acceptance suite (`npm run test:staging`) is HTTP-only and refuses production.
 - The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it

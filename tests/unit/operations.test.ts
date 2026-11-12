@@ -75,6 +75,30 @@ describe("environment check", () => {
     expect(deploymentEnvironment({ APP_ENV: "dev" })).toBeNull();
     expect(deploymentEnvironment({})).toBeNull();
   });
+  it("keeps development servers on a local database (M11)", async () => {
+    const fatal = (env: Record<string, string | undefined>) =>
+      checkEnvironment(env)
+        .filter((i) => i.fatal)
+        .map((i) => i.name);
+    const hosted = "postgresql://u:p@ep-x-pooler.c-7.eu-central-1.aws.neon.tech/hanziquest";
+    expect(fatal({ NODE_ENV: "development", DATABASE_URL: hosted })).toContain("DATABASE_URL");
+    expect(
+      fatal({ NODE_ENV: "development", DATABASE_URL: hosted, ALLOW_REMOTE_DATABASE: "true" }),
+    ).toEqual([]);
+    expect(
+      fatal({
+        NODE_ENV: "development",
+        DATABASE_URL: "postgresql://u:p@localhost:5433/hanziquest",
+      }),
+    ).toEqual([]);
+    const { isLocalDatabaseUrl, describeDatabaseUrl } = await import("@/lib/database/locality");
+    expect(isLocalDatabaseUrl("postgresql://u:p@127.0.0.1:5433/x")).toBe(true);
+    expect(isLocalDatabaseUrl(hosted)).toBe(false);
+    expect(isLocalDatabaseUrl("not a url")).toBe(false);
+    expect(isLocalDatabaseUrl(undefined)).toBe(false);
+    expect(describeDatabaseUrl(hosted)).toBe("ep-x-pooler/hanziquest");
+    expect(describeDatabaseUrl(hosted)).not.toContain("p@");
+  });
   it("names the running release from APP_RELEASE or Render's commit", async () => {
     const { releaseId } = await import("@/lib/release");
     expect(releaseId({ APP_RELEASE: "v1.2.0", RENDER_GIT_COMMIT: "abc" })).toBe("v1.2.0");
