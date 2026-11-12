@@ -104,6 +104,11 @@ The owner chose **written** consent. Recruiting and collection wait for the owne
 
 ## M13 — Evaluation accuracy and false-positive handling
 
+**Status (2026-11-13):** diagnostic tooling is built on `feature/m13-handwriting-diagnostics`:
+the confusable suite, advisory import diagnostics and the read-only replay harness
+(docs/M13_HANDWRITING_DIAGNOSTICS.md). Not started: the dispute route, the technique-cap
+decision and any tuning. Those still need real samples, a teacher and owner decisions.
+
 - **Objective.** Measure and, only with enough evidence, improve accuracy, with the emphasis on
   false acceptance: a wrong character accepted damages learning more than a correct one rejected.
 - **Scope.**

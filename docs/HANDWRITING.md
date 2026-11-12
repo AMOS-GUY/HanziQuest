@@ -116,7 +116,13 @@ attempts can be told apart.
 
 - Joined strokes (cursive, 连笔) count as one stroke, so they produce stroke-count feedback.
 - Identity is only checked within the level's candidate set. A character outside it can be
-  "nearest" to something else.
+  "nearest" to something else. **Measured in M13 (synthetic ink):** in HSK 1 Starter, seven
+  look-alikes outside the set are accepted, for example 入 written for 八 and 王 for 五. One
+  in-set pair (干 for 千) is accepted on one seed. See docs/M13_HANDWRITING_DIAGNOSTICS.md; no
+  scoring change has been made.
+- Diagnostics (M13): `npm run handwriting:replay` replays stored attempts and lab samples
+  read-only, and the confusable suite runs on every content validation and import preview
+  (advisory). None of it is evidence of accuracy with real learners.
 - Characters with no stroke data get no writing exercises (the importer skips them).
 - ONNX or model-based recognition is a future option. The evaluator is a pure module, so a
   recogniser could replace step 5 without changing the rest.

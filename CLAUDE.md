@@ -107,5 +107,11 @@ npm run content:validate
   feedback stays on paper (D-063). Commit with the GitHub noreply address (D-064).
 - Curriculum sources (M14): content files cite ids from `content/sources.json`. Never add an HSK
   level tag or an `OFFICIAL_LIST` source without owner approval (D-060).
+- Handwriting diagnostics (M13): `features/handwriting/confusables.ts`, `replay.ts`,
+  `features/curriculum/confusable-diagnostics.ts`. Diagnostic only: never change grading from
+  them. Synthetic ink lives in `features/handwriting/synthetic-ink.ts`; its results aren't
+  accuracy evidence. Replay uses `readOnlyClient`. Changing the engine or content changes the
+  pinned findings in `tests/unit/handwriting-diagnostics.test.ts` on purpose: update them with a
+  decision entry (D-066 to D-069).
 - The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it
   when caching rules change. Test offline flows with `npm run build` + Playwright.
