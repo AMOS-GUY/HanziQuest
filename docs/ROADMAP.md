@@ -1,7 +1,14 @@
-# Roadmap after M11 and local CI (proposed 2026-11-12, for owner review)
+# Roadmap after M11 and local CI (2026-11-12)
 
-**Status: proposal. Nothing here is approved or started.** Priorities: product quality and
-learning effectiveness first; infrastructure only where a beta needs it.
+**Status: the owner approved the direction and priority order on 2026-11-12. No milestone is
+approved for implementation yet. M12 and M14 are at protocol or plan review.** Priorities:
+product quality and learning effectiveness first; infrastructure only where a beta needs it.
+
+Detailed plans:
+
+- [M12_PILOT_PROTOCOL.md](M12_PILOT_PROTOCOL.md): the five-person pilot protocol, consent form and
+  implementation plan
+- [CURRICULUM_PROVENANCE_PLAN.md](CURRICULUM_PROVENANCE_PLAN.md): the HSK 2.0 and 3.0 provenance plan
 
 ## Where things stand
 
@@ -14,25 +21,42 @@ learning effectiveness first; infrastructure only where a beta needs it.
 | Onboarding, retention | Onboarding and placement flows; "active in the last 7 days" count                       | No activation, return or review-completion metrics                                                                            |
 | Beta launch           | Invite-only, legal drafts, staging design, local CI                                     | Legal review, age, retention periods, reset decision, staging, devices and Firefox, GitHub CI after 2026-12-01                |
 
-**Important constraint:** five testers give about 180 samples (5 × 36). That's a pilot: enough to
-find gross failures and broken prompts. It is **not** enough to change thresholds. The minimum
-before tuning is 15 participants and 300 correct plus 300 incorrect samples
-(HANDWRITING_VALIDATION.md). The roadmap keeps those as separate steps.
+## Exploratory pilot vs validation study: two separate steps
 
-## Proposed order
+|                   | **M12 exploratory pilot**                                                                   | **M13 validation study**                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Who               | 5 consenting adults (P01–P05)                                                               | ≥ 15 participants (target 20–30), with a held-out third                                                                         |
+| Samples           | 180: 120 correct, 60 deliberate errors (10 per error type, 10 wrong-character)              | ≥ 300 correct and ≥ 300 incorrect (current minimum). Proposed: about 300 wrong-character and about 150 structural-error samples |
+| Purpose           | Does the procedure work? Gross failures by device, size or character? Is the feedback fair? | Estimate accuracy against the beta targets, per device and size                                                                 |
+| Threshold changes | **Never**                                                                                   | Only if a target is missed, under HANDWRITING_VALIDATION.md's six rules, with `ENGINE_VERSION` bumped                           |
+| Accuracy claims   | **None**: the report is headed "not an accuracy estimate"                                   | Only for what was tested, with intervals                                                                                        |
+
+Why: with zero errors observed, 10 wrong-character samples still leave a 95 % upper bound of
+about 26 % against a ≤ 1 % target (M12_PILOT_PROTOCOL.md §2). The synthetic baseline is not
+evidence for real learners either.
+
+## Approved order (owner, 2026-11-12)
+
+1. **M12** Handwriting pilot (protocol review first)
+2. **M14** Curriculum accuracy and provenance, developed alongside M12
+3. **M15** Onboarding, retention and learning measurement
+4. **M13** Handwriting accuracy and false-positive calibration (the validation study)
+5. **M16** Spaced repetition and mastery calibration
+6. **M17** Remaining beta blockers
 
 ```
-M12 Handwriting pilot (5)  ─┬─> M13 Accuracy and false positives (needs 15+ for tuning)
-M14 Curriculum provenance  ─┤      (teacher sourcing runs in parallel from day 1)
-M15 Learning measurement   ─┴─> M16 Scheduling and mastery calibration (needs beta data)
-M17 Beta launch blockers   ──── runs alongside; gates the first invites
+M12 pilot (5) ──────────────┐
+M14 provenance (parallel) ──┼─> M15 measurement ─> M13 validation (≥ 15) ─> M16 SRS calibration
+                            │
+M17 beta blockers ──────────┴── owner-driven, gates the first invites
 ```
-
-Recommended next: **M12**, preceded by the one decision it needs: where the pilot runs.
 
 ---
 
 ## M12 — Handwriting pilot with 5 consenting testers
+
+Full protocol, written consent form and implementation plan: [M12_PILOT_PROTOCOL.md](M12_PILOT_PROTOCOL.md).
+The owner chose **written** consent. Recruiting and collection wait for the owner's approval.
 
 - **Objective.** Real handwriting evidence for the first time: find gross failures (devices,
   sizes, characters, prompts) before inviting learners. No accuracy claims, no threshold changes.
@@ -43,7 +67,9 @@ Recommended next: **M12**, preceded by the one decision it needs: where the pilo
       local pilot database, turned off after.
     - (b) **staging**, once M11 provisioning is approved.
 
-    Recommendation: (b) if staging is approved within about two weeks, otherwise (a).
+    Recommendation: (a), after a security review of the LAN mode. It needs no staging and no
+    spending; (b) waits for staging approvals and GitHub Actions. There's also A-lite (laptop
+    only, no network exposure), which loses phone and stylus coverage.
 
   - Pilot rehearsal with `TEST` codes on every device class. Check the recorder at small screen
     sizes, with a stylus and with a trackpad.
@@ -56,10 +82,10 @@ Recommended next: **M12**, preceded by the one decision it needs: where the pilo
   - The owner recruits 5 testers with the planned mix: at least 2 phones, 1 stylus, 1 laptop, at
     least 2 beginners.
   - The location decision (a or b).
-  - The owner decides whether spoken consent is enough or a written form is needed
-    (LEGAL_REVIEW item 4).
-  - The consent text is an unreviewed draft. Get review first if the owner's jurisdiction requires
-    it for research with people.
+  - Written consent (the owner's choice). The draft form in the protocol is unreviewed; get
+    ethics or legal review first if the owner's jurisdiction requires it for research with
+    people.
+  - A sample-withdrawal function, which doesn't exist yet and must be built before P01.
 - **Risks.**
   - A LAN mode widens exposure; it must be explicit, off by default and never used in production.
   - Too few testers or devices to be meaningful.
@@ -117,6 +143,9 @@ Recommended next: **M12**, preceded by the one decision it needs: where the pilo
   - Otherwise thresholds stay unchanged and the reason is written down.
 
 ## M14 — Curriculum accuracy and HSK 2.0 / 3.0 provenance
+
+Detailed plan: [CURRICULUM_PROVENANCE_PLAN.md](CURRICULUM_PROVENANCE_PLAN.md). No HSK content is
+added until sources are registered and approved.
 
 - **Objective.** Content a teacher has checked and whose origin is recorded, plus a model that
   can express both HSK editions, before the curriculum grows.
@@ -278,11 +307,44 @@ Recommended next: **M12**, preceded by the one decision it needs: where the pilo
 
 ---
 
-## Decisions the owner needs to make first
+## What can be done without staging or spending
 
-1. M12 location: local LAN pilot or staging.
-2. Consent form: spoken (as drafted) or written, and whether ethics or legal review is required
-   first.
-3. HSK edition for new learners: HSK 2.0, HSK 3.0, or both labelled separately.
-4. Teacher: who, and on what terms.
-5. The order: recommended M12 → (M14 and M15 in parallel) → M13 → M16, with M17 alongside.
+Every item below runs on the development machine and its local database. Each still needs the
+owner's go-ahead for its milestone.
+
+| Milestone | Can be done now (local, $0)                                                                                                                                                                                                                               | Needs staging, an external party or possible spending                                  |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| M12       | Withdrawal (delete by code, audited); consent-version field; pilot report with Wilson intervals; notes guard; prompt-coverage test; rehearsal with `TEST` codes; session checklist; LAN pilot mode design and review                                      | Pilot option B (staging). Recruiting and sessions need owner approval, but no money    |
+| M14       | Source register and importer rule; honest provenance for HSK 1 Starter; edition-tag model (local migration); example-sentence format; review queue and metadata; fixing the 3 validator warnings in original content; edition-mapping dry run on fixtures | HSK lists (owner sourcing and legal advice); teacher review (may be paid); audio       |
+| M15       | Every metric service and admin page on stored data; onboarding walkthrough on local builds; retention aids in the app                                                                                                                                     | Meaningful numbers need beta learners; email or push needs a provider                  |
+| M13       | Offline replay harness; confusable-pair suite (synthetic ink); dispute-route design; validation-minimum amendment (docs)                                                                                                                                  | ≥ 15 real participants; teacher input on the technique policy                          |
+| M16       | Simulation harness in tests                                                                                                                                                                                                                               | Calibration needs weeks of beta data                                                   |
+| M17       | Document the decisions; optional free local tools (`age`, VC++ runtime, a container engine)                                                                                                                                                               | Legal review, staging provisioning, GitHub Actions (from 2026-12-01), physical devices |
+
+## Implementation plan for review (not started)
+
+Proposed sequence once approved. Each step is one branch and PR, local CI before every PR, and no
+merge without the owner.
+
+1. **M12-a:** withdrawal, consent version, notes guard, prompt-coverage test (2–3 days).
+2. **M14-a, in parallel:** source register, importer rule, honest HSK 1 Starter provenance
+   (2–3 days).
+3. **M12-b:** pilot report with intervals, rehearsal checklist; LAN mode design for review
+   (1–2 days, plus 1–2 if option A).
+4. **M14-b:** edition tags, example format, review queue, warning fixes (4–6 days).
+5. **Owner gate:** approve the protocol, the consent form and the location → recruit → rehearse →
+   P01–P05 → pilot report → findings decisions.
+6. **M15:** metric services and the onboarding pass (5–7 days), then M13 → M16 → M17 as
+   above.
+
+## Decisions the owner needs to make
+
+1. M12 location: A (local LAN pilot, recommended), A-lite (laptop only), or B (staging).
+2. Approve or change the draft consent form, and whether ethics or legal review is needed first.
+   Fill the retention date and the contact.
+3. Optional participant bands (experience, handedness) in the app, or on paper only.
+4. Whether to adopt the proposed validation minimum (about 300 wrong-character and about 150
+   structural-error samples).
+5. HSK edition for new learners. Recommendation: HSK 3.0, with the handwriting list driving
+   writing-from-memory; keep HSK 1 Starter labelled HSK 2.0.
+6. Teacher: who, and on what terms.
