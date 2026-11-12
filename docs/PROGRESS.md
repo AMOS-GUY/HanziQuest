@@ -652,5 +652,5 @@ See `docs/M11_STAGING_AUDIT.md`.
   code; noted in LOCAL_CI.md. Its disposable databases were dropped; none are left.
 - The dev preview was restarted (its `.next` had been deleted) and is healthy on the local
   database (readiness 200, migrations ok).
-- The next roadmap (M12–M16) was proposed for owner review in docs/ROADMAP.md; nothing implemented.
+- The next roadmap (M12–M17) was proposed for owner review in docs/ROADMAP.md; nothing implemented.
 - Nothing touched Neon or Render. No secrets, no spending.
