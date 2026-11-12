@@ -207,7 +207,18 @@ export async function getCharacterForLearner(hanzi: string) {
   const strokeData = character.hasStrokeData
     ? ((await loadStrokeJson(prisma, [hanzi]))[hanzi] ?? null)
     : null;
-  return { ...character, strokeData };
+  return { ...character, vocabulary: uniqueByVocabulary(character.vocabulary), strokeData };
+}
+
+/**
+ * One entry per word. A word that uses the character more than once (谢谢, 爸爸) has one
+ * link row per position, so the join returns it several times (M13 audit). Keeps first order.
+ */
+export function uniqueByVocabulary<T extends { vocabulary: { id: string } }>(
+  rows: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => !seen.has(r.vocabulary.id) && (seen.add(r.vocabulary.id), true));
 }
 
 /** Free-writing exercises for a review round, in the given order. */
