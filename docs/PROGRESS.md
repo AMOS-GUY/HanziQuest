@@ -782,3 +782,6 @@ See `docs/M11_STAGING_AUDIT.md`.
 - Erasure isn't described as complete across copies. M12_ERASURE_REVIEW.md separates the
   primary database, backups, restored databases, the ledger, feedback, exports and paper
   records.
+- Final local CI at `ed1cb51` (run `20261112T153405-60d6`): **exit 0, 25 PASS, 0 FAIL,
+  4 BLOCKED (age, Docker x3), 2 NOT RUN (Firefox advisory, report upload)**. GitHub Actions:
+  BLOCKED by the account billing restriction, not run.
