@@ -63,8 +63,9 @@ it before running the pilot._
    something else), press **Clear** and redo it before recording. Tick any **Observations**
    that apply (fixed choices; there is no free-text field, by design).
 7. Thank them. Optionally ask: "Did any feedback seem wrong or unfair to you?" and note the
-   answers in Admin → Feedback, as kind "Handwriting", with no name **and no code** (feedback
-   isn't erased with a participant's samples).
+   answers **on paper only**, kept with the paper key. Don't enter pilot feedback in Admin →
+   Feedback: the app can't erase it with the participant's samples
+   (docs/M12_ERASURE_REVIEW.md).
 
 Each tester gets every pilot character written correctly twice (once normally, once small or
 fast) plus one deliberate error. The error types rotate per tester, so across five testers

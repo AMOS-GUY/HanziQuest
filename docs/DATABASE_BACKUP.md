@@ -120,6 +120,48 @@ The owner is responsible for:
   CI drill (when CI runs) and by the first staging backup after approval.
 - The RTO figures are estimates until a real drill is timed.
 
+## Restores and handwriting erasure (M12, D-061, D-062)
+
+A backup taken before a pilot participant's data was erased still contains their samples, and
+restoring it **brings them back** (proved by `npm run drill:backup`, section 4). So every
+restore is **gated**: `db:restore` commits a pending `ErasureLedgerGate` row **before** it
+loads any data. `/api/health` returns 503 (`erasureGate: "pending"`) until the signed erasure
+ledger is applied, including after an interrupted or failed restore. Deploys wait for `/api/health`, so a gated database can't take traffic.
+
+- After every erasure, export the ledger (needs the owner's `ERASURE_LEDGER_KEY`) and keep two
+  copies outside the repository: `npm run handwriting:erasures -- --export <file>`.
+- Restore in one step: `npm run db:restore -- --in <backup> --target <url> --erasure-ledger <file>`.
+  The ledger is verified **before** any data is loaded, so a missing, unsigned, corrupted,
+  incomplete, duplicated or tampered ledger restores nothing and the target stays gated. It's
+  applied right after the data commits.
+- Or restore, then `npm run handwriting:erasures -- --apply <file> --target <url>`.
+- Check: `npm run handwriting:erasures -- --status --target <url>` (exit 3 while gated).
+  `db:verify` reports the gate and doesn't compare the gate table (restore adds a row to it by
+  design).
+- If the ledger is lost, rebuild it from the live database or from any backup taken after the
+  erasure (`--from-backup`). The full recovery order is in
+  [M12_ERASURE_REVIEW.md](M12_ERASURE_REVIEW.md), "Rebuilding a lost ledger". The signing key's
+  lifecycle is described there too. The key is never stored with the database or its backups.
+- Erasure is complete in backups only once every backup older than the erasure has expired or
+  been purged. Promise participants a deletion window at least as long as backup retention.
+
+**`backup.yml` restore verification (fixed 2026-11-12, D-065).** The step used to set
+`DATABASE_URL` to the restore target, which `db:restore` refuses ("Target equals DATABASE_URL"),
+so it would have failed on its first run; the workflow had never run. Now:
+
+- `npm run db:check-restore-target` runs first. It refuses unless the target is local, named
+  `hq_restore_verify…`, and is neither the backup source nor `DATABASE_URL`.
+- The step then creates `hq_restore_verify` on the runner's own PostgreSQL service.
+- `db:restore` and `db:verify` run with `DATABASE_URL` set to the runner's scratch `drill`
+  database.
+- Triggers (manual only), the protected environment, `db:environment` and the secrets are
+  unchanged.
+- The restored database never serves traffic, so its erasure gate may stay pending.
+
+`npm run drill:backup-workflow` checks all of this locally on disposable databases. It can't
+check GitHub's runner, its `psql` client, the `postgres:17` service, the environment protection
+or the encryption step.
+
 ## Restore safety (M11)
 
 `db:restore` refuses or rolls back, leaving the target empty, in every case below.

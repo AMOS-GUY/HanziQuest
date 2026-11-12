@@ -170,63 +170,110 @@ export async function requireRecordingConsent(tx: Tx, code: string) {
  */
 export async function eraseParticipant(prisma: PrismaClient, actor: Actor, raw: unknown) {
   const input = erasureInputSchema.parse(raw);
-  const code = input.participantCode;
-  return prisma.$transaction(async (tx) => {
-    let participant = await tx.pilotParticipant.findUnique({ where: { code } });
-    if (participant) {
-      await lockParticipant(tx, participant.id);
-    } else {
-      // Samples recorded before M12 have no participant row. Erase them by code and leave a
-      // tombstone so the code is blocked like any other.
-      const legacy = await tx.handwritingSample.count({ where: { participantCode: code } });
-      if (!legacy) throw new DomainError("not_found", "No participant or samples with that code.");
-      participant = await tx.pilotParticipant.create({
-        data: { code, createdById: actor.id },
-      });
-    }
-    const where = { OR: [{ participantId: participant.id }, { participantCode: code }] };
-    const ids = (await tx.handwritingSample.findMany({ where, select: { id: true } })).map(
-      (s) => s.id,
-    );
-    const redacted = ids.length
-      ? await tx.auditLog.updateMany({
-          where: { entityType: "HandwritingSample", entityId: { in: ids } },
-          data: { before: Prisma.DbNull, after: { redacted: "participant-erasure" } },
-        })
-      : { count: 0 };
-    const deleted = await tx.handwritingSample.deleteMany({ where });
-    const revoked = await tx.pilotConsent.updateMany({
-      where: { participantId: participant.id, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    const wasActive = participant.status === "ACTIVE";
-    await tx.pilotParticipant.update({
-      where: { id: participant.id },
-      data: {
-        status: wasActive
-          ? input.reason === "WITHDRAWAL"
-            ? "WITHDRAWN"
-            : "RETENTION_ENDED"
-          : participant.status,
-        erasedAt: new Date(),
-      },
-    });
-    const counts = {
-      samplesDeleted: deleted.count,
-      auditEntriesRedacted: redacted.count,
-      consentsRevoked: revoked.count,
-    };
-    await recordAudit(tx, {
+  return prisma.$transaction((tx) =>
+    eraseInTransaction(tx, {
+      code: input.participantCode,
+      reason: input.reason,
       actorId: actor.id,
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+      requireExisting: true,
       action: "handwriting.participant.erase",
+    }),
+  );
+}
+
+/** The single erasure path, shared by the lab action and the ledger re-apply. */
+export async function eraseInTransaction(
+  tx: Tx,
+  o: {
+    code: string;
+    reason: ErasureReason;
+    actorId: string | null;
+    ip?: string | null;
+    userAgent?: string | null;
+    /** The lab refuses unknown codes; a ledger re-apply blocks them anyway. */
+    requireExisting: boolean;
+    action: string;
+    /** Ledger re-apply: skip the per-code audit entry when nothing changed (idempotent). */
+    auditOnlyIfChanged?: boolean;
+  },
+) {
+  const { code } = o;
+  let participant = await tx.pilotParticipant.findUnique({ where: { code } });
+  let createdTombstone = false;
+  if (participant) {
+    await lockParticipant(tx, participant.id);
+    participant = await tx.pilotParticipant.findUniqueOrThrow({ where: { id: participant.id } });
+  } else {
+    createdTombstone = true;
+    // Samples recorded before M12 have no participant row (and a restored backup may predate
+    // the code). Erase by code and leave a tombstone so the code is blocked like any other.
+    const legacy = await tx.handwritingSample.count({ where: { participantCode: code } });
+    if (!legacy && o.requireExisting)
+      throw new DomainError("not_found", "No participant or samples with that code.");
+    participant = await tx.pilotParticipant.create({
+      data: { code, createdById: o.actorId },
+    });
+  }
+  const where = { OR: [{ participantId: participant.id }, { participantCode: code }] };
+  const ids = (await tx.handwritingSample.findMany({ where, select: { id: true } })).map(
+    (s) => s.id,
+  );
+  const redacted = ids.length
+    ? await tx.auditLog.updateMany({
+        where: { entityType: "HandwritingSample", entityId: { in: ids } },
+        data: { before: Prisma.DbNull, after: { redacted: "participant-erasure" } },
+      })
+    : { count: 0 };
+  const deleted = await tx.handwritingSample.deleteMany({ where });
+  const revoked = await tx.pilotConsent.updateMany({
+    where: { participantId: participant.id, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  const wasActive = participant.status === "ACTIVE";
+  await tx.pilotParticipant.update({
+    where: { id: participant.id },
+    data: {
+      status: wasActive
+        ? o.reason === "WITHDRAWAL"
+          ? "WITHDRAWN"
+          : "RETENTION_ENDED"
+        : participant.status,
+      // Keep the first erasure date when re-applying (idempotent).
+      erasedAt: !wasActive && participant.erasedAt ? participant.erasedAt : new Date(),
+    },
+  });
+  // Feedback isn't linked to participants and is free text, so it's never deleted
+  // automatically (a learner's unrelated feedback could contain "P01"). Erasure reports how
+  // many entries mention the code so a person can review them (M12 privacy review).
+  const feedbackToReview = await tx.feedback.count({
+    where: {
+      OR: [
+        { message: { contains: code, mode: "insensitive" } },
+        { staffNote: { contains: code, mode: "insensitive" } },
+      ],
+    },
+  });
+  const counts = {
+    samplesDeleted: deleted.count,
+    auditEntriesRedacted: redacted.count,
+    consentsRevoked: revoked.count,
+    feedbackToReview,
+  };
+  const changed =
+    createdTombstone || wasActive || deleted.count > 0 || revoked.count > 0 || redacted.count > 0;
+  if (changed || !o.auditOnlyIfChanged)
+    await recordAudit(tx, {
+      actorId: o.actorId,
+      action: o.action,
       entityType: "PilotParticipant",
       entityId: participant.id,
-      after: { participant: code, reason: input.reason, ...counts },
-      ipAddress: actor.ip,
-      userAgent: actor.userAgent,
+      after: { participant: code, reason: o.reason, ...counts },
+      ipAddress: o.ip ?? null,
+      userAgent: o.userAgent ?? null,
     });
-    return { code, reason: input.reason, ...counts };
-  });
+  return { code, reason: o.reason, changed, ...counts };
 }
 
 /** Lab overview: every participant code with its status, consent and sample count. */

@@ -8,6 +8,9 @@
  *   old schema. A database that is *ahead* of the code (after a rollback) is fine, because
  *   migrations are additive (expand, then contract).
  *
+ * - Erasure gate (M12, D-062): a restored database is not ready until the handwriting erasure
+ *   ledger has been re-applied, so erased participant data can't come back into service.
+ *
  * Responses reveal no configuration, connection details or personal data.
  */
 import fs from "node:fs";
@@ -24,6 +27,8 @@ export interface Readiness {
   pendingMigrations?: number;
   /** Whether the database belongs to this deployment (M11, D-054). */
   databaseEnvironment?: MarkerState;
+  /** Present only when not ok: a restore is waiting for the erasure ledger (D-062). */
+  erasureGate?: "pending" | "unknown";
 }
 
 let cached: string[] | null | undefined;
@@ -51,11 +56,27 @@ export async function checkReadiness(
   expected: readonly string[] | null,
   environment: DeploymentEnvironment | null = null,
 ): Promise<Readiness> {
-  const base = await checkSchema(prisma, expected);
+  const schema = await checkSchema(prisma, expected);
+  const base = schema.migrations === "ok" ? await withErasureGate(prisma, schema) : schema;
   if (!environment || base.database !== "ok") return base;
   // A staging app must never serve a production database, or the reverse.
   const databaseEnvironment = await markerState(prisma, environment);
   return { ...base, ok: base.ok && databaseEnvironment === "ok", databaseEnvironment };
+}
+
+/** Fails readiness while any restore gate is pending. Fails closed if it can't tell. */
+async function withErasureGate(
+  prisma: Pick<PrismaClient, "$queryRaw">,
+  base: Readiness,
+): Promise<Readiness> {
+  try {
+    const rows = await prisma.$queryRaw<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM "ErasureLedgerGate"
+      WHERE "ledgerAppliedAt" IS NULL`;
+    return rows[0]?.n ? { ...base, ok: false, erasureGate: "pending" } : base;
+  } catch {
+    return { ...base, ok: false, erasureGate: "unknown" };
+  }
 }
 
 async function checkSchema(

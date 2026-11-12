@@ -2,6 +2,50 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-12 — Erasure ledger safeguards, feedback, public repository
+
+**D-062 · Restored databases are gated until the signed erasure ledger is applied.**
+`db:restore` commits a pending `ErasureLedgerGate` row before loading any data, so an
+interrupted or failed restore stays blocked. Readiness returns 503 while any gate is pending,
+and deploys and monitors already depend on readiness. The ledger is canonical, counted,
+checksummed and HMAC-signed with an owner-held `ERASURE_LEDGER_KEY`. The key lives in the
+owner's password manager, with a sealed paper copy stored apart from the ledger. It is never in
+Git, the database, backups, the platform or logs. The ledger is verified before any write and
+applied in one transaction that clears the gate. **There is no unsigned path:** a gate clears
+only through a verified ledger. An earlier draft's audited "clear without a ledger" command was
+removed before release; its unused columns await a contract migration. Exports merge, never
+shrink or move dates later, and keep the previous file. A lost ledger is rebuilt, signed, from
+the live database, later backups or the paper record. Re-applying is idempotent and keeps the
+first erasure date.
+
+**D-065 · Restore verification uses its own disposable database.** `backup.yml` restored into
+the database it also used as `DATABASE_URL`, which `db:restore` refuses, so it would have failed
+on its first run. It now restores into a separate `hq_restore_verify` database on the runner,
+after `db:check-restore-target` has refused any target that could be the backup source, the
+app database or a hosted database. Owner-authorised, narrowly scoped: triggers, environment
+protection and secrets are unchanged.
+
+**D-063 · Pilot feedback stays on paper.** Feedback isn't linked to participants, and pattern
+matching can neither find every identifying entry nor safely delete matches. Erasure only
+counts entries that contain the code, and that count isn't described as erasure. In-app pilot
+feedback needs a participant-linked model first.
+
+**D-064 · Commits use the GitHub noreply address.** The repository is public. Earlier commits
+expose the owner's personal email in author metadata. History isn't rewritten without the
+owner's approval (it changes every SHA and breaks PR links). This repository's git config now
+uses the noreply address.
+
+## 2026-11-12 — Public repository, CI restored, erasure review
+
+**D-061 · Erasure is re-applied after restores from an erasure ledger.** Backups taken before an
+erasure still hold the samples, and the drill proved a restore brings them back. Erased codes
+(code, reason, date; no handwriting) are exported to a ledger kept outside the repository and
+re-applied to any restored database before it serves traffic, through the same erasure code
+path. The tool refuses to write the ledger inside the public repository except under ignored
+folders. Feedback is never erased by pattern (it could match unrelated learner text); erasure
+reports matching entries for review instead. Erasure isn't described as complete until the
+checklist in M12_ERASURE_REVIEW.md is done.
+
 ## 2026-11-12 — M12 pilot privacy and M14 provenance infrastructure
 
 **D-057 · Pilot consent is a versioned record, and the form's approval is a code gate.**
