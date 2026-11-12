@@ -18,7 +18,7 @@ import { hasPermission } from "@/lib/permissions/permissions";
 import { checkReadiness, expectedMigrations } from "@/features/operations/health";
 import {
   applyLedger,
-  clearGatesWithoutLedger,
+  entriesFromPaperRecord,
   erasedEntries,
   LedgerError,
   pendingRestoreGates,
@@ -546,21 +546,92 @@ describe("erasure ledger and restore gate", () => {
     expect(await pendingRestoreGates(prisma)).toBe(0);
   });
 
-  it("recovery without a ledger clears the gate only with a recorded reason", async () => {
-    await prisma.erasureLedgerGate.create({ data: { backupName: "no-ledger.ndjson.gz" } });
-    await expect(clearGatesWithoutLedger(prisma, "too short")).rejects.toThrow();
-    expect(await pendingRestoreGates(prisma)).toBe(1);
-    const cleared = await clearGatesWithoutLedger(
-      prisma,
-      "Ledger lost; rebuilt from the paper key and every listed code erased again",
+  it("an interrupted application rolls back completely, stays gated, and recovers on retry", async () => {
+    const first = code();
+    const second = code();
+    for (const c of [first, second]) {
+      await recordConsent(prisma, collector, consent(c));
+      await recordSample(prisma, collector, sample(c));
+    }
+    await prisma.erasureLedgerGate.create({ data: { backupName: "interrupted.ndjson.gz" } });
+    const ledger = signLedger(
+      [first, second].map((c) => ({
+        code: c,
+        reason: "WITHDRAWAL" as const,
+        erasedAt: new Date().toISOString(),
+      })),
+      "test",
+      KEY,
     );
-    expect(cleared).toBe(1);
+    // Fail inside the transaction after the first code has been erased (a crash or a dropped
+    // connection at that point).
+    let updates = 0;
+    const failing = {
+      $transaction: (fn: (tx: unknown) => Promise<unknown>, options?: object) =>
+        prisma.$transaction(
+          (tx) =>
+            fn(
+              new Proxy(tx, {
+                get(target, prop, receiver) {
+                  const value = Reflect.get(target, prop, receiver) as object;
+                  if (prop !== "pilotParticipant") return value;
+                  return new Proxy(value, {
+                    get(t, p, r) {
+                      const fn2 = Reflect.get(t, p, r) as (...a: unknown[]) => unknown;
+                      if (p !== "update") return fn2;
+                      return (...a: unknown[]) => {
+                        updates += 1;
+                        if (updates === 2) throw new Error("simulated interruption");
+                        return fn2.apply(t, a);
+                      };
+                    },
+                  });
+                },
+              }),
+            ),
+          options,
+        ),
+    } as unknown as typeof prisma;
+    await expect(applyLedger(failing, ledger, KEY)).rejects.toThrow("simulated interruption");
+    // Nothing was committed: the first code's samples are back to their state, still gated.
+    for (const c of [first, second])
+      expect(await prisma.handwritingSample.count({ where: { participantCode: c } })).toBe(1);
+    expect(await pendingRestoreGates(prisma)).toBe(1);
+    expect((await checkReadiness(prisma, expectedMigrations())).ok).toBe(false);
+
+    // Recovery: apply again.
+    const r = await applyLedger(prisma, ledger, KEY);
+    expect(r).toMatchObject({ codesChanged: 2, samplesDeleted: 2, gatesCleared: 1 });
+    expect((await checkReadiness(prisma, expectedMigrations())).ok).toBe(true);
+  });
+
+  it("never stores the signing key in the database", async () => {
+    const c = code();
+    await applyLedger(
+      prisma,
+      signLedger([{ code: c, reason: "WITHDRAWAL", erasedAt: new Date().toISOString() }], "t", KEY),
+      KEY,
+    );
+    const rows = await prisma.auditLog.findMany({
+      where: { action: { startsWith: "handwriting." } },
+      select: { after: true, before: true },
+    });
+    expect(JSON.stringify(rows)).not.toContain(KEY);
+    const gates = await prisma.erasureLedgerGate.findMany();
+    expect(JSON.stringify(gates)).not.toContain(KEY);
+  });
+
+  it("rebuilds from the paper record as a signed ledger (no unsigned path)", async () => {
+    const c = code();
+    await recordConsent(prisma, collector, consent(c));
+    await recordSample(prisma, collector, sample(c));
+    await prisma.erasureLedgerGate.create({ data: { backupName: "paper.ndjson.gz" } });
+    const entries = entriesFromPaperRecord(
+      `# withdrawals\n${c.toLowerCase()} WITHDRAWAL 2026-11-12\n`,
+    );
+    await applyLedger(prisma, signLedger(entries, "paper-record", KEY), KEY);
+    expect(await prisma.handwritingSample.count({ where: { participantCode: c } })).toBe(0);
     expect(await pendingRestoreGates(prisma)).toBe(0);
-    expect(
-      await prisma.auditLog.count({
-        where: { action: "handwriting.erasure-ledger.cleared-without-ledger" },
-      }),
-    ).toBeGreaterThan(0);
   });
 });
 

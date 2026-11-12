@@ -202,6 +202,7 @@ Target public beta: **2026-12-08**.
 - [ ] **GitHub Actions on PR #22 / `02a6b68` never started** ("recent account payments have failed or your spending limit…"): queued before the repository became public. Needs a new run
 - [x] Erasure privacy review (D-061, [M12_ERASURE_REVIEW.md](M12_ERASURE_REVIEW.md)): restoring an older backup brings erased samples back (drill-proven), fixed procedurally with the erasure ledger (`handwriting:erasures`); feedback mentioning a code is reported for review; exports and backups need the manual checklist. **Erasure is not complete everywhere until that checklist is done**
 - [x] Erasure ledger safeguards (D-062): restores gated (readiness 503) until a signed, verified ledger is applied in one transaction; never-shrinking exports; rebuild from backups; audited no-ledger recovery. Pilot feedback on paper (D-063); noreply commits (D-064); docs/PUBLIC_REPOSITORY.md
+- [x] Restore gate committed before any data (interrupted or failed restores stay blocked); no unsigned clearance path; key lifecycle documented; reconstruction preserves every historical erasure with its date (a time-zone bug in rebuilding from backups found by the drill and fixed); `backup.yml` restore verification fixed (D-065) and checked locally by `drill:backup-workflow`
 - [ ] **GitHub Actions BLOCKED** by an account-level billing restriction (not a code failure); `ci:local` is the verification on record meanwhile
 - [ ] **Not built:** pilot report with intervals (protocol item 3), optional participant bands (4), LAN pilot mode (6), printable checklist (7), admin review queue page, learner-facing edition label, fixing the 3 content warnings
 - [ ] **Owner:** approve the consent form (then flip `ownerApproved`), fill in its blanks, approve register entries
@@ -754,3 +755,30 @@ See `docs/M11_STAGING_AUDIT.md`.
   That's a pre-existing workflow bug needing owner review (DATABASE_BACKUP.md).
 - GitHub Actions: BLOCKED by an account billing restriction. Nothing bypassed, no billing
   changes.
+
+### 2026-11-12 — Session 17 (ledger hardening, backup.yml fix)
+
+- Local CI at `9dc5763` (run `20261112T150518-7763`): exit 0, 25 PASS, 0 FAIL, 4 BLOCKED (age,
+  Docker x3), 2 NOT RUN (Firefox advisory, report upload).
+- The restore gate is now committed before any data loads. The ledger is verified after the
+  gate, so a missing, unsigned, corrupted, tampered or wrong-key ledger, or an interrupted
+  load, leaves the target blocked. Retrying into the same target works.
+- The draft "clear without a ledger" command was removed: there is no unsigned path. The paper
+  record is now a signed source (`--from-codes`).
+- Exports go through `writeLedgerFile`: the existing file must verify, entries are merged (never
+  shrink, never move a date later), the old file is kept and the new one written atomically.
+- The drill found a real bug: rebuilding from a backup read zoneless timestamps as local time,
+  shifting dates by 8 hours here. Fixed, with a unit test that also runs under another time
+  zone.
+- Tests:
+  - unit: ledger integrity, files and the paper record; restore-target guard; readiness gate
+  - integration: an interrupted application (an injected failure part-way) rolls back and
+    stays gated, then recovers; the key never reaches the database
+  - backup drill section 4: 26 checks
+  - `drill:backup-workflow`: 13 checks
+- `backup.yml` fix (owner-authorised): a separate `hq_restore_verify` database and the
+  `db:check-restore-target` guard. Triggers, environment and secrets are unchanged. GitHub's
+  runner, `psql`, the `postgres:17` service and encryption can't be checked locally.
+- Erasure isn't described as complete across copies. M12_ERASURE_REVIEW.md separates the
+  primary database, backups, restored databases, the ledger, feedback, exports and paper
+  records.

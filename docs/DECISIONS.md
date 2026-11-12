@@ -5,14 +5,25 @@ Newest first. Each entry: decision, why, consequences.
 ## 2026-11-12 — Erasure ledger safeguards, feedback, public repository
 
 **D-062 · Restored databases are gated until the signed erasure ledger is applied.**
-`db:restore` writes a pending `ErasureLedgerGate` row in the restore transaction, and readiness
-returns 503 while any is pending. Deploys and monitors already depend on readiness. The ledger
-is canonical, counted, checksummed and HMAC-signed with an owner-held `ERASURE_LEDGER_KEY`
-(never in the repository or on the platform). It is verified before any write, and applied in
-one transaction that clears the gate. Exports merge and never shrink, and keep the previous
-file. A lost ledger is rebuilt from the live database or any later backup. The last resort,
-clearing the gate without a ledger, needs a reason and a typed confirmation and is audited.
-Re-applying is idempotent and keeps the first erasure date.
+`db:restore` commits a pending `ErasureLedgerGate` row before loading any data, so an
+interrupted or failed restore stays blocked. Readiness returns 503 while any gate is pending,
+and deploys and monitors already depend on readiness. The ledger is canonical, counted,
+checksummed and HMAC-signed with an owner-held `ERASURE_LEDGER_KEY`. The key lives in the
+owner's password manager, with a sealed paper copy stored apart from the ledger. It is never in
+Git, the database, backups, the platform or logs. The ledger is verified before any write and
+applied in one transaction that clears the gate. **There is no unsigned path:** a gate clears
+only through a verified ledger. An earlier draft's audited "clear without a ledger" command was
+removed before release; its unused columns await a contract migration. Exports merge, never
+shrink or move dates later, and keep the previous file. A lost ledger is rebuilt, signed, from
+the live database, later backups or the paper record. Re-applying is idempotent and keeps the
+first erasure date.
+
+**D-065 · Restore verification uses its own disposable database.** `backup.yml` restored into
+the database it also used as `DATABASE_URL`, which `db:restore` refuses, so it would have failed
+on its first run. It now restores into a separate `hq_restore_verify` database on the runner,
+after `db:check-restore-target` has refused any target that could be the backup source, the
+app database or a hosted database. Owner-authorised, narrowly scoped: triggers, environment
+protection and secrets are unchanged.
 
 **D-063 · Pilot feedback stays on paper.** Feedback isn't linked to participants, and pattern
 matching can neither find every identifying entry nor safely delete matches. Erasure only

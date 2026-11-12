@@ -285,9 +285,32 @@ async function handwritingState(url: string, code: string) {
 
 async function erasureSurvivesRestore() {
   console.log("4. Erasure survives a restore (erasure ledger and restore gate)");
-  const code = "TESTDRILL1";
+  const [codeA, codeB] = ["TESTDRILL1", "TESTDRILL2"];
   const env = { ERASURE_LEDGER_KEY: LEDGER_KEY };
-  const erasures = (args: string[]) => tsx("scripts/handwriting-erasures.ts", args, env);
+  const noKey = { ERASURE_LEDGER_KEY: "" };
+  const erasures = (args: string[], e = env) => tsx("scripts/handwriting-erasures.ts", args, e);
+  const restore = (args: string[], e: Record<string, string> = env) =>
+    tsx("scripts/db-restore.ts", args, e);
+  /** Readiness is blocked: a pending gate (`--status` exits 3). */
+  const gated = (url: string) => {
+    const s = erasures(["--status", "--target", url]);
+    return !s.ok && /PENDING/.test(s.output);
+  };
+  const eraseOnLive = (url: string, code: string) => {
+    const request = file(`erase-${code}.json`);
+    fs.writeFileSync(
+      request,
+      JSON.stringify(
+        signLedger(
+          [{ code, reason: "WITHDRAWAL", erasedAt: new Date().toISOString() }],
+          "drill",
+          LEDGER_KEY,
+        ),
+      ),
+    );
+    return erasures(["--apply", request, "--target", url]);
+  };
+
   const live = await freshTarget("erasure-live");
   const seeded = cli([PRISMA, "db", "seed"], {
     MIGRATE_DATABASE_URL: live,
@@ -296,147 +319,224 @@ async function erasureSurvivesRestore() {
     SEED_ADMIN_PASSWORD: "drill-only-password-1234",
   });
   if (!seeded.ok) throw new Error("seed failed for the erasure drill");
-  await seedHandwriting(live, code);
+  await seedHandwriting(live, codeA);
+  await seedHandwriting(live, codeB);
   const before = file("before-erasure.ndjson.gz");
   check(
-    "backup taken while the participant's samples exist",
+    "backup taken while both participants' samples exist",
     tsx("scripts/db-backup.ts", ["--source", live, "--out", before]).ok,
   );
 
-  // Erase on the live database through the shared erasure path (a signed one-entry ledger).
-  const request = file("erase-request.json");
-  fs.writeFileSync(
-    request,
-    JSON.stringify(
-      signLedger(
-        [{ code, reason: "WITHDRAWAL", erasedAt: new Date().toISOString() }],
-        "drill",
-        LEDGER_KEY,
-      ),
-    ),
-  );
-  const erased = erasures(["--apply", request, "--target", live]);
-  const afterErase = await handwritingState(live, code);
+  // Two erasures at different times, with a backup in between.
+  const erasedA = eraseOnLive(live, codeA);
+  const afterA = await handwritingState(live, codeA);
   check(
     "erasure on the live database: samples gone, code withdrawn, consent revoked, audit redacted",
-    erased.ok &&
-      afterErase.samples === 0 &&
-      afterErase.status === "WITHDRAWN" &&
-      afterErase.activeConsents === 0 &&
-      afterErase.auditMentions === 0,
-    JSON.stringify(afterErase),
+    erasedA.ok &&
+      afterA.samples === 0 &&
+      afterA.status === "WITHDRAWN" &&
+      afterA.activeConsents === 0 &&
+      afterA.auditMentions === 0,
+    JSON.stringify(afterA),
   );
+  const between = file("between-erasures.ndjson.gz");
+  tsx("scripts/db-backup.ts", ["--source", live, "--out", between]);
+  await new Promise((r) => setTimeout(r, 20));
+  eraseOnLive(live, codeB);
+  const after = file("after-erasures.ndjson.gz");
+  tsx("scripts/db-backup.ts", ["--source", live, "--out", after]);
 
   const ledger = file("ledger.json");
   const exported = erasures(["--export", ledger, "--source", live]);
+  const verified = erasures(["--verify", ledger]);
   check(
-    "signed ledger exported with the erased code",
-    exported.ok && fs.readFileSync(ledger, "utf8").includes(code),
+    "signed ledger exported with both erasures and verifies",
+    exported.ok && verified.ok && /2 code\(s\)/.test(verified.output),
+    exported.ok ? "" : exported.output.slice(-200),
   );
-  const again = erasures(["--export", ledger, "--source", live]);
-  const backups = fs
-    .readdirSync(work)
-    .filter((f) => f.startsWith("ledger.json.") && f.endsWith(".bak"));
+  const liveDates = JSON.parse(fs.readFileSync(ledger, "utf8")) as {
+    entries: { code: string; erasedAt: string }[];
+  };
+
+  // Keys: missing or wrong keys verify nothing, and there's no unsigned mode.
+  const missingKey = erasures(["--verify", ledger], noKey);
+  const wrongKey = erasures(["--verify", ledger], { ERASURE_LEDGER_KEY: "w".repeat(40) });
   check(
-    "re-exporting merges (never shrinks) and keeps the previous file",
-    again.ok && /1 erased code/.test(again.output) && backups.length === 1,
+    "missing key and wrong key: the ledger doesn't verify",
+    !missingKey.ok &&
+      /ERASURE_LEDGER_KEY/.test(missingKey.output) &&
+      !wrongKey.ok &&
+      /signature/.test(wrongKey.output),
   );
-  check("the ledger verifies", erasures(["--verify", ledger]).ok);
-  const unsigned = tsx("scripts/handwriting-erasures.ts", ["--verify", ledger], {
-    ERASURE_LEDGER_KEY: "",
-  });
   check(
-    "without the key nothing verifies",
-    !unsigned.ok && /ERASURE_LEDGER_KEY/.test(unsigned.output),
+    "the key never appears in tool output",
+    ![exported, verified, missingKey, wrongKey].some((r) => r.output.includes(LEDGER_KEY)),
+  );
+
+  // Reconstruction from a later backup keeps every historical erasure and its first date.
+  const rebuilt = file("rebuilt.json");
+  const rb = erasures(["--export", rebuilt, "--from-backup", after]);
+  const rebuiltEntries = (
+    JSON.parse(fs.readFileSync(rebuilt, "utf8")) as {
+      entries: { code: string; erasedAt: string }[];
+    }
+  ).entries;
+  check(
+    "rebuilt from the latest backup: every erasure, with its original date",
+    rb.ok && JSON.stringify(rebuiltEntries) === JSON.stringify(liveDates.entries),
+    rb.ok ? JSON.stringify(rebuiltEntries.map((e) => e.code)) : rb.output.slice(-200),
+  );
+  // An older backup only knows the first erasure; exporting it into the ledger can't shrink it.
+  const partial = erasures(["--export", ledger, "--from-backup", between]);
+  const merged = erasures(["--verify", ledger]);
+  check(
+    "exporting an older backup into the ledger keeps every recorded erasure",
+    partial.ok &&
+      /2 erased code\(s\) \(2 before, 0 added\)/.test(partial.output) &&
+      /2 code/.test(merged.output),
+    partial.output.slice(-200),
+  );
+  const tamperedFile = file("tampered.json");
+  const t = JSON.parse(fs.readFileSync(ledger, "utf8")) as { entries: { code: string }[] };
+  t.entries[0]!.code = "TESTDRILL9";
+  fs.writeFileSync(tamperedFile, JSON.stringify(t));
+  const overwrite = erasures(["--export", tamperedFile, "--source", live]);
+  check(
+    "a ledger that doesn't verify is never overwritten",
+    !overwrite.ok && fs.readFileSync(tamperedFile, "utf8") === JSON.stringify(t),
+  );
+  const resigned = file("resigned.json");
+  fs.writeFileSync(
+    resigned,
+    JSON.stringify(
+      signLedger(
+        [{ code: codeA, reason: "WITHDRAWAL", erasedAt: new Date().toISOString() }],
+        "drill",
+        "a-different-key-".repeat(3),
+      ),
+    ),
   );
 
   // Restore WITHOUT the ledger: the data comes back, but the database is gated.
   const restored = await freshTarget("erasure-restored");
-  const r = tsx("scripts/db-restore.ts", ["--in", before, "--target", restored]);
-  const resurrected = await handwritingState(restored, code);
+  const r = restore(["--in", before, "--target", restored]);
+  const resurrected = await handwritingState(restored, codeA);
   check(
-    "restoring the older backup brings the erased samples back (the risk)",
+    "restoring the older backup brings the erased samples back (the risk)…",
     r.ok && resurrected.samples === 2 && resurrected.status === "ACTIVE",
     JSON.stringify(resurrected),
   );
-  const pending = erasures(["--status", "--target", restored]);
   check(
-    "…and gates it: restore gate pending (readiness 503)",
-    !pending.ok && /PENDING/.test(pending.output) && /Erasure gate PENDING/.test(r.output),
+    "…and gates it (readiness blocked)",
+    gated(restored) && /Erasure gate PENDING/.test(r.output),
   );
-  const verified = tsx("scripts/db-verify.ts", ["--backup", before, "--target", restored]);
+  const dbv = tsx("scripts/db-verify.ts", ["--backup", before, "--target", restored]);
   check(
     "db:verify still matches the backup and reports the pending gate",
-    verified.ok && /erasure gate: 1 pending/.test(verified.output),
-    verified.ok ? "" : verified.output.slice(-300),
+    dbv.ok && /erasure gate: 1 pending/.test(dbv.output),
+    dbv.ok ? "" : dbv.output.slice(-300),
   );
 
-  const tampered = file("tampered.json");
-  const t = JSON.parse(fs.readFileSync(ledger, "utf8")) as { entries: { code: string }[] };
-  t.entries[0]!.code = "TESTDRILL9";
-  fs.writeFileSync(tampered, JSON.stringify(t));
-  const refused = erasures(["--apply", tampered, "--target", restored]);
-  const stillThere = await handwritingState(restored, code);
-  check(
-    "a tampered ledger is refused and changes nothing",
-    !refused.ok && stillThere.samples === 2 && stillThere.status === "ACTIVE",
-    refused.output.trim().split("\n").at(-1)?.slice(0, 120),
-  );
+  // Failed applications change nothing and leave the gate pending.
+  for (const [name, args, e] of [
+    ["tampered ledger", ["--apply", tamperedFile, "--target", restored], env],
+    ["invalid signature", ["--apply", resigned, "--target", restored], env],
+    ["missing signing key", ["--apply", ledger, "--target", restored], noKey],
+    ["missing ledger file", ["--apply", file("nope.json"), "--target", restored], env],
+  ] as const) {
+    const res = erasures([...args], e);
+    const s = await handwritingState(restored, codeA);
+    check(
+      `apply with a ${name}: refused, nothing changed, still gated`,
+      !res.ok && s.samples === 2 && s.status === "ACTIVE" && gated(restored),
+      res.output.trim().split("\n").at(-1)?.slice(0, 100),
+    );
+  }
 
+  // Recovery after the failures.
   const applied = erasures(["--apply", ledger, "--target", restored]);
-  const final = await handwritingState(restored, code);
+  const final = await handwritingState(restored, codeA);
+  const finalB = await handwritingState(restored, codeB);
   check(
-    "applying the ledger erases them again, blocks the code and clears the gate",
+    "recovery: the ledger erases both again, blocks the codes and clears the gate",
     applied.ok &&
       final.samples === 0 &&
+      finalB.samples === 0 &&
       final.status === "WITHDRAWN" &&
+      finalB.status === "WITHDRAWN" &&
       final.activeConsents === 0 &&
       final.auditMentions === 0 &&
-      erasures(["--status", "--target", restored]).ok,
-    JSON.stringify(final),
+      !gated(restored),
+    JSON.stringify({ final, finalB }),
   );
   const twice = erasures(["--apply", ledger, "--target", restored]);
-  check("re-applying is idempotent", twice.ok && /0 changed, 0 sample/.test(twice.output));
-
-  // One-step restore with the ledger, and a tampered ledger refused before restoring anything.
-  const oneStep = await freshTarget("erasure-onestep");
-  const r2 = tsx(
-    "scripts/db-restore.ts",
-    ["--in", before, "--target", oneStep, "--erasure-ledger", ledger],
-    env,
+  check(
+    "repeated application is idempotent",
+    twice.ok && /0 changed, 0 sample/.test(twice.output) && !gated(restored),
   );
-  const s2 = await handwritingState(oneStep, code);
+
+  // db:restore --erasure-ledger: one step, and each failure leaves nothing restored but gated.
+  const oneStep = await freshTarget("erasure-onestep");
+  const r2 = restore(["--in", before, "--target", oneStep, "--erasure-ledger", ledger]);
+  const s2 = await handwritingState(oneStep, codeA);
   check(
     "db:restore --erasure-ledger restores and re-erases in one step, gate cleared",
-    r2.ok &&
-      s2.samples === 0 &&
-      s2.status === "WITHDRAWN" &&
-      erasures(["--status", "--target", oneStep]).ok,
+    r2.ok && s2.samples === 0 && s2.status === "WITHDRAWN" && !gated(oneStep),
     r2.ok ? JSON.stringify(s2) : r2.output.slice(-300),
   );
-  const badTarget = await freshTarget("erasure-badledger");
-  const r3 = tsx(
-    "scripts/db-restore.ts",
-    ["--in", before, "--target", badTarget, "--erasure-ledger", tampered],
-    env,
-  );
+  for (const [name, ledgerArg, e] of [
+    ["an invalid signature", resigned, env],
+    ["a tampered ledger", tamperedFile, env],
+    ["a missing signing key", ledger, noKey],
+    ["a missing ledger file", file("nope.json"), env],
+  ] as const) {
+    const t2 = await freshTarget(`erasure-bad-${name.replace(/\W+/g, "-")}`);
+    const res = restore(["--in", before, "--target", t2, "--erasure-ledger", ledgerArg], e);
+    check(
+      `db:restore with ${name}: nothing restored, gate pending`,
+      !res.ok && (await rowCount(t2)) === 0 && gated(t2),
+      res.output.trim().split("\n").at(-1)?.slice(0, 100),
+    );
+  }
+
+  // Interrupted restore: the load fails part-way (an orphaned row near the end), rolls back,
+  // and the gate committed beforehand keeps the target blocked. Then recover into the same target.
+  const lines = readLines(before);
+  const broken = file("interrupted.ndjson.gz");
+  const lc = lines.findIndex((l) => (JSON.parse(l) as { t?: string }).t === "LessonCharacter");
+  const orphan = JSON.parse(lines[lc]!) as { t: string; r: unknown[] };
+  const header = JSON.parse(lines[0]!) as {
+    tables: { table: string; rows: number; checksum?: string; columns: { name: string }[] }[];
+  };
+  const cols = header.tables.find((x) => x.table === "LessonCharacter")!.columns.map((c) => c.name);
+  orphan.r[cols.indexOf("characterId")] = "missing-character";
+  writeLines(broken, [...lines.slice(0, lc), JSON.stringify(orphan), ...lines.slice(lc + 1)]);
+  const interrupted = await freshTarget("erasure-interrupted");
+  const ri = restore(["--in", broken, "--target", interrupted]);
   check(
-    "db:restore with a tampered ledger restores nothing",
-    !r3.ok && (await rowCount(badTarget)) === 0,
+    "interrupted restore: rolled back, nothing restored, gate pending",
+    !ri.ok && (await rowCount(interrupted)) === 0 && gated(interrupted),
+  );
+  const retry = restore(["--in", before, "--target", interrupted, "--erasure-ledger", ledger]);
+  check(
+    "recovery after the interrupted restore: same target, data restored, erasures re-applied, gate cleared",
+    retry.ok &&
+      (await rowCount(interrupted)) > 0 &&
+      (await handwritingState(interrupted, codeA)).samples === 0 &&
+      !gated(interrupted),
+    retry.ok ? "" : retry.output.slice(-300),
   );
 
-  // Lost ledger: rebuild it from a backup taken after the erasure (its tombstones).
-  const after = file("after-erasure.ndjson.gz");
-  tsx("scripts/db-backup.ts", ["--source", live, "--out", after]);
-  const rebuilt = file("rebuilt.json");
-  const rb = erasures(["--export", rebuilt, "--from-backup", after]);
+  // Lost ledger: rebuilt from the latest backup, applied to a restore of the oldest one.
   const recovered = await freshTarget("erasure-recovered");
-  tsx("scripts/db-restore.ts", ["--in", before, "--target", recovered]);
+  restore(["--in", before, "--target", recovered]);
   const ra = erasures(["--apply", rebuilt, "--target", recovered]);
   check(
-    "a lost ledger is rebuilt from a later backup and works",
-    rb.ok && ra.ok && (await handwritingState(recovered, code)).samples === 0,
-    rb.ok ? "" : rb.output.slice(-200),
+    "a lost ledger rebuilt from a later backup recovers every erasure",
+    ra.ok &&
+      (await handwritingState(recovered, codeA)).samples === 0 &&
+      (await handwritingState(recovered, codeB)).samples === 0 &&
+      !gated(recovered),
   );
 
   const inRepo = erasures(["--export", "docs/ledger.json", "--source", live]);

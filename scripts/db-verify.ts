@@ -64,7 +64,7 @@ async function reportGate(b: pg.Client) {
   );
   if (!exists.rows[0]!.ok) return;
   const r = await b.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM "${GATE_TABLE}" WHERE "ledgerAppliedAt" IS NULL AND NOT "clearedWithoutLedger"`,
+    `SELECT count(*)::int AS n FROM "${GATE_TABLE}" WHERE "ledgerAppliedAt" IS NULL`,
   );
   console.log(
     r.rows[0]!.n

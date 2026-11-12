@@ -72,7 +72,7 @@ async function withErasureGate(
   try {
     const rows = await prisma.$queryRaw<{ n: number }[]>`
       SELECT count(*)::int AS n FROM "ErasureLedgerGate"
-      WHERE "ledgerAppliedAt" IS NULL AND NOT "clearedWithoutLedger"`;
+      WHERE "ledgerAppliedAt" IS NULL`;
     return rows[0]?.n ? { ...base, ok: false, erasureGate: "pending" } : base;
   } catch {
     return { ...base, ok: false, erasureGate: "unknown" };

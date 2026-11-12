@@ -194,6 +194,17 @@ export async function erasedEntries(prisma: PrismaClient): Promise<LedgerEntry[]
 }
 
 /**
+ * Backups carry timestamps as their exact database text, without a zone (Prisma stores UTC),
+ * e.g. "2026-11-12 10:00:00.123". Parse those as UTC, never as local time.
+ */
+function utcTimestamp(text: string) {
+  const zoneless = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(text);
+  const d = new Date(zoneless ? `${text.replace(" ", "T")}Z` : text);
+  if (Number.isNaN(d.getTime())) throw new LedgerError("corrupted", `Unreadable date "${text}".`);
+  return d.toISOString();
+}
+
+/**
  * Entries from a backup's `PilotParticipant` rows (for rebuilding a lost ledger). Takes the
  * rows already read from the file.
  */
@@ -206,15 +217,39 @@ export function entriesFromBackupRows(
       .map((r) => ({
         code: r.code,
         reason: r.status === "WITHDRAWN" ? ("WITHDRAWAL" as const) : ("RETENTION_ENDED" as const),
-        erasedAt: new Date(r.erasedAt ?? r.updatedAt).toISOString(),
+        erasedAt: utcTimestamp(r.erasedAt ?? r.updatedAt),
       })),
   );
+}
+
+/**
+ * Entries from the paper record of withdrawals (last-resort rebuild, still signed): one line per
+ * code, `CODE REASON YYYY-MM-DD`, reason WITHDRAWAL or RETENTION_ENDED. Blank lines and lines
+ * starting with "#" are ignored. Any malformed or duplicated line rejects the whole file.
+ */
+export function entriesFromPaperRecord(text: string): LedgerEntry[] {
+  const entries: LedgerEntry[] = [];
+  text.split(/\r?\n/).forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) return;
+    const [code, reason, date, ...rest] = line.split(/\s+/);
+    const parsed = entrySchema.safeParse({
+      code: code?.toUpperCase(),
+      reason,
+      erasedAt: /^\d{4}-\d{2}-\d{2}$/.test(date ?? "") ? `${date}T00:00:00.000Z` : date,
+    });
+    if (rest.length || !parsed.success)
+      throw new LedgerError("corrupted", `Line ${i + 1} isn't "CODE REASON YYYY-MM-DD".`);
+    entries.push(parsed.data);
+  });
+  assertNoDuplicates(entries);
+  return canonicalEntries(entries);
 }
 
 /** Pending restore gates (readiness is 503 while any exist). */
 export async function pendingRestoreGates(prisma: Pick<PrismaClient, "erasureLedgerGate">) {
   return prisma.erasureLedgerGate.count({
-    where: { ledgerAppliedAt: null, clearedWithoutLedger: false },
+    where: { ledgerAppliedAt: null },
   });
 }
 
@@ -242,7 +277,7 @@ export async function applyLedger(prisma: PrismaClient, raw: unknown, key: strin
         if (r.changed) changed.push(entry.code);
       }
       const gates = await tx.erasureLedgerGate.updateMany({
-        where: { ledgerAppliedAt: null, clearedWithoutLedger: false },
+        where: { ledgerAppliedAt: null },
         data: {
           ledgerAppliedAt: new Date(),
           ledgerSha256: ledger.entriesSha256,
@@ -266,26 +301,4 @@ export async function applyLedger(prisma: PrismaClient, raw: unknown, key: strin
     },
     { timeout: 120_000 },
   );
-}
-
-/**
- * Recovery only (no ledger can be found or rebuilt): clears pending gates with a recorded
- * reason. Audited. Erased samples in the restored data may remain; the caller is told so.
- */
-export async function clearGatesWithoutLedger(prisma: PrismaClient, reason: string) {
-  const text = reason.trim();
-  if (text.length < 20) throw new Error("Give a reason of at least 20 characters for the record.");
-  return prisma.$transaction(async (tx) => {
-    const gates = await tx.erasureLedgerGate.updateMany({
-      where: { ledgerAppliedAt: null, clearedWithoutLedger: false },
-      data: { clearedWithoutLedger: true, clearanceReason: text.slice(0, 500) },
-    });
-    await recordAudit(tx, {
-      actorId: null,
-      action: "handwriting.erasure-ledger.cleared-without-ledger",
-      entityType: "System",
-      after: { gatesCleared: gates.count, reason: text.slice(0, 500) },
-    });
-    return gates.count;
-  });
 }

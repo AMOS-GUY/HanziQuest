@@ -1,19 +1,22 @@
 /**
  * Handwriting erasure ledger (M12 privacy review; docs/M12_ERASURE_REVIEW.md, D-061, D-062).
- * Every command needs ERASURE_LEDGER_KEY (the owner's signing key, never in the repository).
+ * Every command needs ERASURE_LEDGER_KEY, the owner's signing key, supplied in the process
+ * environment at the time of use. It is never in the repository, a committed file, the
+ * database, the platform or a log. There is no unsigned mode.
  *
- *   --export <file> [--source <url>]        Sign the erased codes of a database (default
- *                                            DATABASE_URL). If <file> exists it is verified and
- *                                            merged (a ledger never shrinks), and the old file is
- *                                            kept as <file>.<timestamp>.bak.
- *   --export <file> --from-backup <backup>  Rebuild from a backup's tombstones (lost ledger).
+ *   --export <file> [sources]               Sign the erased codes into <file>. Sources (any
+ *                                            number, merged):
+ *       --source <url>                        a database's tombstones (default DATABASE_URL
+ *                                            when no other source is given)
+ *       --from-backup <backup.ndjson.gz>      a backup's tombstones (repeatable)
+ *       --from-codes <paper-record.txt>       the paper record, `CODE REASON YYYY-MM-DD` per line
+ *                                            If <file> exists it must verify; its entries are
+ *                                            kept (a ledger never shrinks, dates never move
+ *                                            later) and the old file is kept as a .bak.
  *   --verify <file>                         Check integrity only.
- *   --status --target <url>                 Pending restore gates.
+ *   --status --target <url>                 Pending restore gates (exit code 3 while gated).
  *   --apply <file> --target <url>           Verify, then re-apply to a restored database in one
  *                                            transaction and clear its restore gate.
- *   --clear-without-ledger --target <url> --reason "<why>" --confirm "erased data may return"
- *                                            Recovery only, after every way of rebuilding the
- *                                            ledger has failed. Audited.
  * The ledger may not be written inside the repository except under the git-ignored .local/ or
  * backups/ folders: the repository is public.
  */
@@ -25,20 +28,29 @@ import zlib from "node:zlib";
 import { createPrismaClient } from "../src/lib/database/client";
 import {
   applyLedger,
-  clearGatesWithoutLedger,
   entriesFromBackupRows,
+  entriesFromPaperRecord,
   erasedEntries,
   mergeEntries,
   pendingRestoreGates,
-  signLedger,
   verifyLedger,
   type LedgerEntry,
 } from "../src/features/handwriting/erasure-ledger";
 import { arg } from "./lib/db-tools";
+import { writeLedgerFile } from "./lib/erasure-ledger-file";
 
 const REPO = path.resolve(__dirname, "..");
 const ALLOWED_IN_REPO = [path.join(REPO, ".local"), path.join(REPO, "backups")];
 const key = () => process.env.ERASURE_LEDGER_KEY;
+
+/** Every value of a repeatable flag. */
+function args(name: string) {
+  const out: string[] = [];
+  process.argv.forEach((a, i) => {
+    if (a === `--${name}` && process.argv[i + 1]) out.push(process.argv[i + 1]!);
+  });
+  return out;
+}
 
 function safeOutput(file: string) {
   const full = path.resolve(file);
@@ -97,36 +109,30 @@ function target() {
 
 async function exportLedger(out: string) {
   const file = safeOutput(out);
-  const fromBackup = arg("from-backup");
-  let fresh: LedgerEntry[];
-  let source: string;
-  if (fromBackup) {
-    fresh = await backupTombstones(fromBackup);
-    source = `backup:${path.basename(fromBackup)}`;
-  } else {
-    const url = arg("source") ?? process.env.DATABASE_URL;
-    if (!url) throw new Error("No source database (DATABASE_URL or --source).");
+  const lists: LedgerEntry[][] = [];
+  const sources: string[] = [];
+  for (const b of args("from-backup")) {
+    lists.push(await backupTombstones(b));
+    sources.push(`backup:${path.basename(b)}`);
+  }
+  for (const c of args("from-codes")) {
+    lists.push(entriesFromPaperRecord(fs.readFileSync(path.resolve(c), "utf8")));
+    sources.push("paper-record");
+  }
+  const url = arg("source") ?? (lists.length ? undefined : process.env.DATABASE_URL);
+  if (url) {
     const prisma = createPrismaClient(url);
     try {
-      fresh = await erasedEntries(prisma);
+      lists.push(await erasedEntries(prisma));
     } finally {
       await prisma.$disconnect();
     }
-    source = "live-database";
+    sources.push("live-database");
   }
-  let entries = fresh;
-  if (fs.existsSync(file)) {
-    // Never shrink: the existing ledger must verify, and all its entries are kept.
-    const existing = verifyLedger(fs.readFileSync(file, "utf8"), key());
-    entries = mergeEntries(existing.entries, fresh);
-    source = "merged";
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    fs.copyFileSync(file, `${file}.${stamp}.bak`);
-  }
-  const ledger = signLedger(entries, source, key());
-  fs.writeFileSync(file, JSON.stringify(ledger, null, 2) + "\n", { mode: 0o600 });
+  if (!lists.length) throw new Error("No source: give --source, --from-backup or --from-codes.");
+  const r = writeLedgerFile(file, mergeEntries(...lists), sources.join("+"), key());
   console.log(
-    `Erasure ledger: ${ledger.count} erased code(s), sha256 ${ledger.entriesSha256.slice(0, 12)}…, written to ${file}`,
+    `Erasure ledger: ${r.ledger.count} erased code(s) (${r.previousCount} before, ${r.added} added), sha256 ${r.ledger.entriesSha256.slice(0, 12)}…, written to ${file}${r.backupFile ? `; previous kept as ${path.basename(r.backupFile)}` : ""}`,
   );
 }
 
@@ -135,12 +141,10 @@ async function main() {
   const input = arg("apply");
   const check = arg("verify");
   const commands =
-    [out, input, check].filter(Boolean).length +
-    (process.argv.includes("--status") ? 1 : 0) +
-    (process.argv.includes("--clear-without-ledger") ? 1 : 0);
+    [out, input, check].filter(Boolean).length + (process.argv.includes("--status") ? 1 : 0);
   if (commands !== 1)
     throw new Error(
-      'Usage: --export <file> [--source <url> | --from-backup <file>] | --verify <file> | --status --target <url> | --apply <file> --target <url> | --clear-without-ledger --target <url> --reason <text> --confirm "erased data may return"',
+      "Usage: --export <file> [--source <url>] [--from-backup <file>]... [--from-codes <file>] | --verify <file> | --status --target <url> | --apply <file> --target <url>",
     );
 
   if (out) return exportLedger(out);
@@ -165,20 +169,11 @@ async function main() {
       if (pending) process.exitCode = 3;
       return;
     }
-    if (input) {
-      // Verified (structure, completeness, duplicates, checksum, signature) before any write.
-      const text = fs.readFileSync(path.resolve(input), "utf8");
-      const r = await applyLedger(prisma, text, key());
-      console.log(
-        `Erasure ledger applied: ${r.entries} code(s), ${r.codesChanged} changed, ${r.samplesDeleted} sample(s) deleted, ${r.gatesCleared} restore gate(s) cleared.`,
-      );
-      return;
-    }
-    if (arg("confirm") !== "erased data may return")
-      throw new Error('Recovery without a ledger needs --confirm "erased data may return".');
-    const cleared = await clearGatesWithoutLedger(prisma, arg("reason") ?? "");
+    // Verified (structure, completeness, duplicates, checksum, signature) before any write.
+    const text = fs.readFileSync(path.resolve(input!), "utf8");
+    const r = await applyLedger(prisma, text, key());
     console.log(
-      `${cleared} restore gate(s) cleared WITHOUT a ledger. Samples erased after this backup was taken may be present again: follow docs/M12_ERASURE_REVIEW.md, "If the ledger is unavailable".`,
+      `Erasure ledger applied: ${r.entries} code(s), ${r.codesChanged} changed, ${r.samplesDeleted} sample(s) deleted, ${r.gatesCleared} restore gate(s) cleared.`,
     );
   } finally {
     await prisma.$disconnect();

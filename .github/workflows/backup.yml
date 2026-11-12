@@ -46,7 +46,11 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TARGET: ${{ inputs.environment || 'production' }}
-      RESTORE_URL: postgresql://drill:drill@localhost:5432/drill
+      # Restore verification goes into a SEPARATE, disposable database on the runner's own
+      # PostgreSQL service, created below; never the backup source and never DATABASE_URL.
+      RESTORE_URL: postgresql://drill:drill@localhost:5432/hq_restore_verify
+      # Tools that read DATABASE_URL use the runner's scratch database, not the restore target.
+      SCRATCH_URL: postgresql://drill:drill@localhost:5432/drill
     steps:
       - name: Secrets are configured
         env:
@@ -80,7 +84,12 @@ jobs:
           DATABASE_URL="$DB" npm run db:backup -- --source "$DB" --out backup/plain.ndjson.gz
 
       - name: Restore into a disposable database and verify
+        env:
+          DB: ${{ secrets.DIRECT_DATABASE_URL }}
         run: |
+          # Refuse unless the target is a separate, disposable, local database (prints no URL).
+          DATABASE_URL="$SCRATCH_URL" npm run db:check-restore-target -- --source "$DB" --target "$RESTORE_URL"
+          PGPASSWORD=drill psql -h localhost -U drill -d drill -v ON_ERROR_STOP=1 -c 'CREATE DATABASE hq_restore_verify'
           # Apply exactly the migrations the backup was taken at (main may be ahead of production).
           node -e '
             const fs=require("fs"),zlib=require("zlib");
@@ -89,8 +98,10 @@ jobs:
             for (const d of fs.readdirSync("prisma/migrations",{withFileTypes:true}))
               if (d.isDirectory() && !keep.has(d.name)) fs.rmSync("prisma/migrations/"+d.name,{recursive:true});'
           MIGRATE_DATABASE_URL="$RESTORE_URL" DATABASE_URL="$RESTORE_URL" npx prisma migrate deploy
-          DATABASE_URL="$RESTORE_URL" npm run db:restore -- --in backup/plain.ndjson.gz --target "$RESTORE_URL"
-          DATABASE_URL="$RESTORE_URL" npm run db:verify -- --backup backup/plain.ndjson.gz --target "$RESTORE_URL"
+          # This throwaway database never serves traffic, so its erasure gate (D-062) may stay
+          # pending; --pre-gate-backup only matters for backups older than the gate migration.
+          DATABASE_URL="$SCRATCH_URL" npm run db:restore -- --in backup/plain.ndjson.gz --target "$RESTORE_URL" --pre-gate-backup
+          DATABASE_URL="$SCRATCH_URL" npm run db:verify -- --backup backup/plain.ndjson.gz --target "$RESTORE_URL"
 
       - name: Encrypt and remove the plain copy
         env:
