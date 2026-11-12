@@ -201,6 +201,8 @@ Target public beta: **2026-12-08**.
 - [x] `npm run ci:local` at `8ebbb70` (run `20261112T132843-2d56`): **exit 0, 25 PASS, 4 BLOCKED (age, Docker ×3), 2 NOT RUN (Firefox advisory, report upload), 0 FAIL**. The first run failed one e2e: the admin import fixture didn't cite a registered source (the new rule working) and the lab test reused ink; both fixed. GitHub Actions not run (quota)
 - [ ] **GitHub Actions on PR #22 / `02a6b68` never started** ("recent account payments have failed or your spending limit…"): queued before the repository became public. Needs a new run
 - [x] Erasure privacy review (D-061, [M12_ERASURE_REVIEW.md](M12_ERASURE_REVIEW.md)): restoring an older backup brings erased samples back (drill-proven), fixed procedurally with the erasure ledger (`handwriting:erasures`); feedback mentioning a code is reported for review; exports and backups need the manual checklist. **Erasure is not complete everywhere until that checklist is done**
+- [x] Erasure ledger safeguards (D-062): restores gated (readiness 503) until a signed, verified ledger is applied in one transaction; never-shrinking exports; rebuild from backups; audited no-ledger recovery. Pilot feedback on paper (D-063); noreply commits (D-064); docs/PUBLIC_REPOSITORY.md
+- [ ] **GitHub Actions BLOCKED** by an account-level billing restriction (not a code failure); `ci:local` is the verification on record meanwhile
 - [ ] **Not built:** pilot report with intervals (protocol item 3), optional participant bands (4), LAN pilot mode (6), printable checklist (7), admin review queue page, learner-facing edition label, fixing the 3 content warnings
 - [ ] **Owner:** approve the consent form (then flip `ownerApproved`), fill in its blanks, approve register entries
 - [ ] **Not done here:** no participants recruited, no real handwriting, no thresholds changed, nothing on Neon or Render
@@ -724,3 +726,31 @@ See `docs/M11_STAGING_AUDIT.md`.
   feedback that mentions the code. LOCAL_CI.md now describes local CI as complementary.
 - Nothing merged, deployed or provisioned; Neon and Render untouched; no participants, no real
   handwriting, no threshold changes.
+
+### 2026-11-12 — Session 16 (erasure ledger safeguards)
+
+- Local CI at `65e61f6` (run `20261112T144222-7102`) passed: exit 0, 25 PASS, 4 BLOCKED,
+  2 NOT RUN, 0 FAIL. Evidence is kept in `.local/`.
+- Restore gate: `db:restore` writes a pending `ErasureLedgerGate` row in the restore
+  transaction; readiness is 503 until the ledger is applied; `db:verify` reports the gate
+  instead of comparing that table. New expand-only migration `m12_erasure_ledger_gate`.
+- Ledger: canonical entries, count, SHA-256 and HMAC (owner-held `ERASURE_LEDGER_KEY`),
+  verified before any write, applied in one transaction that clears the gate. Exports merge
+  and never shrink, keeping the previous file. Rebuild from any later backup. Idempotent (no
+  per-code audit when nothing changes; the first erasure date is kept). Recovery without a
+  ledger needs a reason and a typed confirmation, and is audited.
+- Tests: 9 new unit tests (corrupted, incomplete, duplicated, changed, re-hashed removal, wrong
+  or missing key, order, merge, backup rebuild) and 5 integration tests (gate and readiness,
+  idempotence, a bad ledger changes nothing, unknown code blocked, no-ledger recovery). Backup
+  drill section 4: 16 checks, including a one-step restore and a tampered ledger that restores
+  nothing.
+- Feedback: erasure only counts mentions, which is not erasure, so pilot feedback stays on
+  paper (D-063).
+- Public repository: future commits use the GitHub noreply address (repo-local config). The
+  existing author-email exposure is documented; history is not rewritten. Settings
+  recommendations are in docs/PUBLIC_REPOSITORY.md.
+- Found, not fixed: `backup.yml`'s restore step passes `DATABASE_URL` equal to `--target`,
+  which `db:restore` refuses, so the off-site verification would fail on its first run.
+  That's a pre-existing workflow bug needing owner review (DATABASE_BACKUP.md).
+- GitHub Actions: BLOCKED by an account billing restriction. Nothing bypassed, no billing
+  changes.

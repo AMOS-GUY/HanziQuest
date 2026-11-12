@@ -9,14 +9,21 @@ import { DomainError, type Actor } from "@/features/administration/services";
 import { loadStrokeData } from "@/features/curriculum/stroke-data";
 import { CURRENT_PILOT_CONSENT_VERSION, currentConsentForm } from "@/features/handwriting/consent";
 import {
-  applyErasureLedger,
   eraseParticipant,
-  exportErasureLedger,
   participantOverview,
   recordConsent,
 } from "@/features/handwriting/participants";
 import { analyseSamples, recordSample } from "@/features/handwriting/samples";
 import { hasPermission } from "@/lib/permissions/permissions";
+import { checkReadiness, expectedMigrations } from "@/features/operations/health";
+import {
+  applyLedger,
+  clearGatesWithoutLedger,
+  erasedEntries,
+  LedgerError,
+  pendingRestoreGates,
+  signLedger,
+} from "@/features/handwriting/erasure-ledger";
 import { ensureRoles, testPrisma, uniqueEmail } from "./helpers";
 
 const prisma = testPrisma();
@@ -398,8 +405,25 @@ describe("privacy review: feedback and restored backups", () => {
     expect(await prisma.feedback.findUnique({ where: { id: fb.id } })).not.toBeNull();
     await prisma.feedback.delete({ where: { id: fb.id } });
   });
+});
 
-  it("exports a ledger of erased codes and re-applies it to resurrected data", async () => {
+describe("erasure ledger and restore gate", () => {
+  const KEY = "integration-test-ledger-key-0123456789abcdef";
+  const ledgerFor = async (codes: string[]) => {
+    const all = await erasedEntries(prisma);
+    return signLedger(
+      all.filter((e) => codes.includes(e.code)),
+      "test",
+      KEY,
+    );
+  };
+
+  afterAll(async () => {
+    // Leave no pending gate behind: readiness tests share this database.
+    await prisma.erasureLedgerGate.deleteMany({});
+  });
+
+  it("re-applies a signed ledger to resurrected data and clears the restore gate", async () => {
     const c = code();
     const { participant, consent: k } = await recordConsent(prisma, collector, consent(c));
     const { sampleId } = await recordSample(prisma, collector, sample(c));
@@ -409,12 +433,15 @@ describe("privacy review: feedback and restored backups", () => {
       reason: "WITHDRAWAL",
       confirmCode: c,
     });
-    const ledger = await exportErasureLedger(prisma);
-    const entry = ledger.entries.find((e) => e.code === c);
-    expect(entry).toMatchObject({ reason: "WITHDRAWAL" });
+    const erasedAt = (await prisma.pilotParticipant.findUniqueOrThrow({ where: { code: c } }))
+      .erasedAt;
+    const ledger = await ledgerFor([c]);
+    expect(ledger.entries).toEqual([
+      { code: c, reason: "WITHDRAWAL", erasedAt: erasedAt!.toISOString() },
+    ]);
     expect(JSON.stringify(ledger)).not.toMatch(/strokes|points/);
 
-    // Simulate restoring a backup taken before the erasure: the old rows come back.
+    // Simulate restoring a backup taken before the erasure: the old rows come back, gated.
     await prisma.pilotParticipant.update({
       where: { id: participant.id },
       data: { status: "ACTIVE", erasedAt: null },
@@ -427,43 +454,113 @@ describe("privacy review: feedback and restored backups", () => {
         deviceInfo: snapshot.deviceInfo ?? undefined,
       },
     });
-    expect(await prisma.handwritingSample.count({ where: { participantCode: c } })).toBe(1);
+    await prisma.erasureLedgerGate.create({ data: { backupName: "test.ndjson.gz" } });
+    expect(await checkReadiness(prisma, expectedMigrations())).toMatchObject({
+      ok: false,
+      erasureGate: "pending",
+    });
 
-    const results = await applyErasureLedger(prisma, { ...ledger, entries: [entry] });
-    expect(results[0]!.samplesDeleted).toBe(1);
+    const r = await applyLedger(prisma, JSON.stringify(ledger), KEY);
+    expect(r).toMatchObject({ entries: 1, codesChanged: 1, samplesDeleted: 1, gatesCleared: 1 });
     expect(await prisma.handwritingSample.count({ where: { participantCode: c } })).toBe(0);
     expect(await domainCode(recordSample(prisma, collector, sample(c)))).toBe("forbidden");
+    expect(await pendingRestoreGates(prisma)).toBe(0);
+    expect((await checkReadiness(prisma, expectedMigrations())).ok).toBe(true);
     const reapply = await prisma.auditLog.findFirst({
       where: { action: "handwriting.participant.erase-reapply", entityId: participant.id },
     });
     expect(reapply?.actorId).toBeNull();
   });
 
-  it("re-applying blocks a code the restored database has never seen", async () => {
+  it("is idempotent: another apply changes nothing and keeps the first erasure date", async () => {
     const c = code();
-    await applyErasureLedger(prisma, {
-      format: "hanziquest-erasure-ledger",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      entries: [{ code: c, reason: "RETENTION_ENDED", erasedAt: new Date().toISOString() }],
+    await recordConsent(prisma, collector, consent(c));
+    await recordSample(prisma, collector, sample(c));
+    await eraseParticipant(prisma, collector, {
+      participantCode: c,
+      reason: "WITHDRAWAL",
+      confirmCode: c,
     });
+    const before = await prisma.pilotParticipant.findUniqueOrThrow({ where: { code: c } });
+    const ledger = JSON.stringify(await ledgerFor([c]));
+    const perCode = () =>
+      prisma.auditLog.count({
+        where: { action: "handwriting.participant.erase-reapply", entityId: before.id },
+      });
+    const audits = await perCode();
+    const r1 = await applyLedger(prisma, ledger, KEY);
+    const r2 = await applyLedger(prisma, ledger, KEY);
+    expect(r1.codesChanged).toBe(0);
+    expect(r2.codesChanged).toBe(0);
+    expect(await perCode()).toBe(audits);
+    const after = await prisma.pilotParticipant.findUniqueOrThrow({ where: { code: c } });
+    expect(after.erasedAt).toEqual(before.erasedAt);
+    expect(after.status).toBe("WITHDRAWN");
+  });
+
+  it("blocks a code the restored database has never seen", async () => {
+    const c = code();
+    const ledger = signLedger(
+      [{ code: c, reason: "RETENTION_ENDED", erasedAt: new Date().toISOString() }],
+      "test",
+      KEY,
+    );
+    await applyLedger(prisma, ledger, KEY);
     const row = await prisma.pilotParticipant.findUniqueOrThrow({ where: { code: c } });
     expect(row.status).toBe("RETENTION_ENDED");
     expect(await domainCode(recordConsent(prisma, collector, consent(c)))).toBe("conflict");
   });
 
-  it("rejects a malformed ledger without erasing anything", async () => {
-    await expect(applyErasureLedger(prisma, { entries: [{ code: "P01" }] })).rejects.toThrow();
-    await expect(
-      applyErasureLedger(prisma, {
-        format: "hanziquest-erasure-ledger",
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        entries: [
-          { code: "jane@example.com", reason: "WITHDRAWAL", erasedAt: new Date().toISOString() },
-        ],
+  it("changes nothing for a corrupted, incomplete, duplicated, tampered or unsigned ledger", async () => {
+    const victim = code();
+    await recordConsent(prisma, collector, consent(victim));
+    await recordSample(prisma, collector, sample(victim));
+    await prisma.erasureLedgerGate.create({ data: { backupName: "bad-ledger.ndjson.gz" } });
+    const good = signLedger(
+      [{ code: victim, reason: "WITHDRAWAL", erasedAt: new Date().toISOString() }],
+      "test",
+      KEY,
+    );
+    const text = JSON.stringify(good);
+    const cases: [string, unknown, string | undefined][] = [
+      ["truncated", text.slice(0, text.length - 20), KEY],
+      ["incomplete", { ...good, count: 2 }, KEY],
+      ["duplicated", { ...good, count: 2, entries: [...good.entries, ...good.entries] }, KEY],
+      [
+        "entry changed",
+        { ...good, entries: [{ ...good.entries[0]!, reason: "RETENTION_ENDED" }] },
+        KEY,
+      ],
+      ["signed with another key", signLedger(good.entries, "test", "x".repeat(40)), KEY],
+      ["no key", good, undefined],
+    ];
+    for (const [name, raw, key] of cases)
+      await expect(applyLedger(prisma, raw, key), name).rejects.toBeInstanceOf(LedgerError);
+    // Nothing was erased and the gate is still pending.
+    expect(await prisma.handwritingSample.count({ where: { participantCode: victim } })).toBe(1);
+    expect(
+      (await prisma.pilotParticipant.findUniqueOrThrow({ where: { code: victim } })).status,
+    ).toBe("ACTIVE");
+    expect(await pendingRestoreGates(prisma)).toBe(1);
+    await applyLedger(prisma, good, KEY);
+    expect(await pendingRestoreGates(prisma)).toBe(0);
+  });
+
+  it("recovery without a ledger clears the gate only with a recorded reason", async () => {
+    await prisma.erasureLedgerGate.create({ data: { backupName: "no-ledger.ndjson.gz" } });
+    await expect(clearGatesWithoutLedger(prisma, "too short")).rejects.toThrow();
+    expect(await pendingRestoreGates(prisma)).toBe(1);
+    const cleared = await clearGatesWithoutLedger(
+      prisma,
+      "Ledger lost; rebuilt from the paper key and every listed code erased again",
+    );
+    expect(cleared).toBe(1);
+    expect(await pendingRestoreGates(prisma)).toBe(0);
+    expect(
+      await prisma.auditLog.count({
+        where: { action: "handwriting.erasure-ledger.cleared-without-ledger" },
       }),
-    ).rejects.toThrow();
+    ).toBeGreaterThan(0);
   });
 });
 

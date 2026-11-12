@@ -184,7 +184,7 @@ export async function eraseParticipant(prisma: PrismaClient, actor: Actor, raw: 
 }
 
 /** The single erasure path, shared by the lab action and the ledger re-apply. */
-async function eraseInTransaction(
+export async function eraseInTransaction(
   tx: Tx,
   o: {
     code: string;
@@ -195,14 +195,18 @@ async function eraseInTransaction(
     /** The lab refuses unknown codes; a ledger re-apply blocks them anyway. */
     requireExisting: boolean;
     action: string;
+    /** Ledger re-apply: skip the per-code audit entry when nothing changed (idempotent). */
+    auditOnlyIfChanged?: boolean;
   },
 ) {
   const { code } = o;
   let participant = await tx.pilotParticipant.findUnique({ where: { code } });
+  let createdTombstone = false;
   if (participant) {
     await lockParticipant(tx, participant.id);
     participant = await tx.pilotParticipant.findUniqueOrThrow({ where: { id: participant.id } });
   } else {
+    createdTombstone = true;
     // Samples recorded before M12 have no participant row (and a restored backup may predate
     // the code). Erase by code and leave a tombstone so the code is blocked like any other.
     const legacy = await tx.handwritingSample.count({ where: { participantCode: code } });
@@ -236,7 +240,8 @@ async function eraseInTransaction(
           ? "WITHDRAWN"
           : "RETENTION_ENDED"
         : participant.status,
-      erasedAt: new Date(),
+      // Keep the first erasure date when re-applying (idempotent).
+      erasedAt: !wasActive && participant.erasedAt ? participant.erasedAt : new Date(),
     },
   });
   // Feedback isn't linked to participants and is free text, so it's never deleted
@@ -256,78 +261,19 @@ async function eraseInTransaction(
     consentsRevoked: revoked.count,
     feedbackToReview,
   };
-  await recordAudit(tx, {
-    actorId: o.actorId,
-    action: o.action,
-    entityType: "PilotParticipant",
-    entityId: participant.id,
-    after: { participant: code, reason: o.reason, ...counts },
-    ipAddress: o.ip ?? null,
-    userAgent: o.userAgent ?? null,
-  });
-  return { code, reason: o.reason, ...counts };
-}
-
-/**
- * Erasure ledger (M12 privacy review). A backup taken before an erasure still holds the erased
- * samples, so restoring it would bring them back. The ledger lists every erased code (codes,
- * reasons and dates only: no handwriting). Export it from the live database after each erasure
- * and before any restore; re-apply it to the restored database before it serves traffic.
- * Keep it outside the repository, with the paper key.
- */
-export const erasureLedgerSchema = z.strictObject({
-  format: z.literal("hanziquest-erasure-ledger"),
-  version: z.literal(1),
-  exportedAt: z.iso.datetime(),
-  entries: z.array(
-    z.strictObject({
-      code: participantCodeSchema,
-      reason: z.enum(ERASURE_REASONS),
-      erasedAt: z.iso.datetime(),
-    }),
-  ),
-});
-export type ErasureLedger = z.infer<typeof erasureLedgerSchema>;
-
-export async function exportErasureLedger(prisma: PrismaClient): Promise<ErasureLedger> {
-  const rows = await prisma.pilotParticipant.findMany({
-    where: { status: { not: "ACTIVE" } },
-    orderBy: { code: "asc" },
-    select: { code: true, status: true, erasedAt: true, updatedAt: true },
-  });
-  return {
-    format: "hanziquest-erasure-ledger",
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    entries: rows.map((r) => ({
-      code: r.code,
-      reason: r.status === "WITHDRAWN" ? "WITHDRAWAL" : "RETENTION_ENDED",
-      erasedAt: (r.erasedAt ?? r.updatedAt).toISOString(),
-    })),
-  };
-}
-
-/**
- * Re-applies a ledger (after a restore). Idempotent: an already erased code with no samples
- * is a no-op apart from its audit entry. One transaction per code; audited as the system.
- */
-export async function applyErasureLedger(prisma: PrismaClient, raw: unknown) {
-  const ledger = erasureLedgerSchema.parse(raw);
-  const results = [];
-  for (const entry of ledger.entries) {
-    results.push(
-      await prisma.$transaction((tx) =>
-        eraseInTransaction(tx, {
-          code: entry.code,
-          reason: entry.reason,
-          actorId: null,
-          requireExisting: false,
-          action: "handwriting.participant.erase-reapply",
-        }),
-      ),
-    );
-  }
-  return results;
+  const changed =
+    createdTombstone || wasActive || deleted.count > 0 || revoked.count > 0 || redacted.count > 0;
+  if (changed || !o.auditOnlyIfChanged)
+    await recordAudit(tx, {
+      actorId: o.actorId,
+      action: o.action,
+      entityType: "PilotParticipant",
+      entityId: participant.id,
+      after: { participant: code, reason: o.reason, ...counts },
+      ipAddress: o.ip ?? null,
+      userAgent: o.userAgent ?? null,
+    });
+  return { code, reason: o.reason, changed, ...counts };
 }
 
 /** Lab overview: every participant code with its status, consent and sample count. */

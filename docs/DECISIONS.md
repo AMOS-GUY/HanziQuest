@@ -2,6 +2,28 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-12 — Erasure ledger safeguards, feedback, public repository
+
+**D-062 · Restored databases are gated until the signed erasure ledger is applied.**
+`db:restore` writes a pending `ErasureLedgerGate` row in the restore transaction, and readiness
+returns 503 while any is pending. Deploys and monitors already depend on readiness. The ledger
+is canonical, counted, checksummed and HMAC-signed with an owner-held `ERASURE_LEDGER_KEY`
+(never in the repository or on the platform). It is verified before any write, and applied in
+one transaction that clears the gate. Exports merge and never shrink, and keep the previous
+file. A lost ledger is rebuilt from the live database or any later backup. The last resort,
+clearing the gate without a ledger, needs a reason and a typed confirmation and is audited.
+Re-applying is idempotent and keeps the first erasure date.
+
+**D-063 · Pilot feedback stays on paper.** Feedback isn't linked to participants, and pattern
+matching can neither find every identifying entry nor safely delete matches. Erasure only
+counts entries that contain the code, and that count isn't described as erasure. In-app pilot
+feedback needs a participant-linked model first.
+
+**D-064 · Commits use the GitHub noreply address.** The repository is public. Earlier commits
+expose the owner's personal email in author metadata. History isn't rewritten without the
+owner's approval (it changes every SHA and breaks PR links). This repository's git config now
+uses the noreply address.
+
 ## 2026-11-12 — Public repository, CI restored, erasure review
 
 **D-061 · Erasure is re-applied after restores from an erasure ledger.** Backups taken before an

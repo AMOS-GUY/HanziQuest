@@ -116,7 +116,10 @@ describe("GET /api/health (readiness)", () => {
   });
 
   it("reports ok when the database answers and every migration is applied", async () => {
-    queryRaw.mockResolvedValueOnce([{ "?column?": 1 }]).mockResolvedValueOnce(applied(shipped));
+    queryRaw
+      .mockResolvedValueOnce([{ "?column?": 1 }])
+      .mockResolvedValueOnce(applied(shipped))
+      .mockResolvedValueOnce([{ n: 0 }]); // no pending erasure gate
     const response = await health();
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
@@ -159,8 +162,33 @@ describe("GET /api/health (readiness)", () => {
   it("stays ready when the database is ahead of the code (after a rollback)", async () => {
     queryRaw
       .mockResolvedValueOnce([{ "?column?": 1 }])
-      .mockResolvedValueOnce(applied([...shipped, "29991231000000_future"]));
+      .mockResolvedValueOnce(applied([...shipped, "29991231000000_future"]))
+      .mockResolvedValueOnce([{ n: 0 }]);
     expect((await health()).status).toBe(200);
+  });
+
+  it("returns 503 while a restored database waits for the erasure ledger (D-062)", async () => {
+    queryRaw
+      .mockResolvedValueOnce([{ "?column?": 1 }])
+      .mockResolvedValueOnce(applied(shipped))
+      .mockResolvedValueOnce([{ n: 1 }]);
+    const response = await health();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      status: "degraded",
+      migrations: "ok",
+      erasureGate: "pending",
+    });
+  });
+
+  it("fails closed when the erasure gate can't be read", async () => {
+    queryRaw
+      .mockResolvedValueOnce([{ "?column?": 1 }])
+      .mockResolvedValueOnce(applied(shipped))
+      .mockRejectedValueOnce(new Error("relation does not exist"));
+    const response = await health();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ erasureGate: "unknown" });
   });
 
   it("returns 503 without details when the database is down", async () => {

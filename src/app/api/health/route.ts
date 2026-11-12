@@ -22,6 +22,7 @@ export async function GET() {
       migrations: readiness.migrations,
       ...(readiness.pendingMigrations ? { pendingMigrations: readiness.pendingMigrations } : {}),
       environment: environment ?? "development",
+      ...(readiness.erasureGate ? { erasureGate: readiness.erasureGate } : {}),
       ...(readiness.databaseEnvironment
         ? { databaseEnvironment: readiness.databaseEnvironment }
         : {}),

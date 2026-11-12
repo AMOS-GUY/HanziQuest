@@ -101,8 +101,10 @@ npm run content:validate
 - Handwriting lab (M12): samples need an unrevoked `PilotConsent` for the current form version
   (`features/handwriting/consent.ts`). Real codes are refused while `ownerApproved` is false; only
   the owner approves the form. Erasure (`features/handwriting/participants.ts`) is the only way
-  to delete samples. No free text in the lab (D-057 to D-059). After any database restore,
-  re-apply the erasure ledger (`npm run handwriting:erasures -- --apply`, D-061).
+  to delete samples. No free text in the lab (D-057 to D-059). Every restore is gated
+  (readiness 503) until the signed erasure ledger is applied (`db:restore --erasure-ledger` or
+  `handwriting:erasures --apply`; key `ERASURE_LEDGER_KEY`, owner-held, D-061/D-062). Pilot
+  feedback stays on paper (D-063). Commit with the GitHub noreply address (D-064).
 - Curriculum sources (M14): content files cite ids from `content/sources.json`. Never add an HSK
   level tag or an `OFFICIAL_LIST` source without owner approval (D-060).
 - The service worker (`public/sw.js`) registers in production builds only. Bump `VERSION` in it

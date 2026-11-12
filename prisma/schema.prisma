@@ -1277,3 +1277,24 @@ model PasswordResetToken {
   @@index([userId])
   @@index([expiresAt])
 }
+
+/// Restore gate for handwriting erasure (M12 privacy review, D-062). `db:restore` writes a
+/// pending row into every restored database. Readiness returns 503 while any row is pending,
+/// so a restored database can't serve traffic until the erasure ledger has been re-applied
+/// (`npm run handwriting:erasures -- --apply`), or the owner has recorded, with a reason, that
+/// no ledger exists. No FKs; excluded from `db:verify` comparisons (its rows differ by design).
+model ErasureLedgerGate {
+  id                   String    @id @default(cuid())
+  restoredAt           DateTime  @default(now())
+  /// Base name of the backup file restored (no path).
+  backupName           String?
+  ledgerAppliedAt      DateTime?
+  /// SHA-256 of the applied ledger's entries, and how many codes it held.
+  ledgerSha256         String?
+  ledgerEntries        Int?
+  /// Set only by the audited "no ledger available" recovery path.
+  clearedWithoutLedger Boolean   @default(false)
+  clearanceReason      String?
+
+  @@index([ledgerAppliedAt])
+}

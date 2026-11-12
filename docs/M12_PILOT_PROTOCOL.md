@@ -294,12 +294,12 @@ character gets five of the six error types.
   no handwriting. **What erasure can't reach**, so the collector must handle it by hand:
   - exported files (`?strokes=1`) on any machine
   - database backups: erased samples stay in backups until those expire, and **restoring an
-    older backup brings them back** unless the erasure ledger is re-applied
-    (`npm run handwriting:erasures`). The consent form's deletion window must be at least the
+    older backup brings them back**. Every restore is therefore gated (readiness 503) until the
+    signed erasure ledger is re-applied (`npm run handwriting:erasures`, D-062). The consent form's deletion window must be at least the
     backup retention, or backups must be purged
-  - Admin → Feedback entries: they aren't linked to codes and are never deleted automatically.
-    Erasure reports how many mention the code, for a person to review. Keep pilot feedback
-    anonymous (no code in it), or keep it on paper with the key
+  - Admin → Feedback entries: they aren't linked to codes, and erasure doesn't delete them; it
+    only counts entries that contain the code, which is not erasure. **For this pilot, collect
+    participant feedback on paper only**, kept with the paper key and destroyed with it
 
   The full surface-by-surface review and the erasure checklist are in
   [M12_ERASURE_REVIEW.md](M12_ERASURE_REVIEW.md).

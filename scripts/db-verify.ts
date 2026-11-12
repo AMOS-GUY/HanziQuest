@@ -52,9 +52,31 @@ async function readHeader(file: string): Promise<BackupHeader> {
   throw new Error("Empty backup file");
 }
 
+/**
+ * The erasure restore gate (D-062) differs by design: every restore adds a pending row. It is
+ * reported separately instead of compared.
+ */
+const GATE_TABLE = "ErasureLedgerGate";
+
+async function reportGate(b: pg.Client) {
+  const exists = await b.query<{ ok: boolean }>(
+    `SELECT to_regclass('"${GATE_TABLE}"') IS NOT NULL AS ok`,
+  );
+  if (!exists.rows[0]!.ok) return;
+  const r = await b.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM "${GATE_TABLE}" WHERE "ledgerAppliedAt" IS NULL AND NOT "clearedWithoutLedger"`,
+  );
+  console.log(
+    r.rows[0]!.n
+      ? `  ! erasure gate: ${r.rows[0]!.n} pending (readiness 503 until the erasure ledger is applied)`
+      : "  ✓ erasure gate: none pending",
+  );
+}
+
 async function compareWithSource(a: pg.Client, b: pg.Client) {
   console.log("Tables (rows, checksum) against the source:");
   for (const t of await listTables(a)) {
+    if (t === GATE_TABLE) continue;
     const [x, y] = await Promise.all([tableChecksum(a, t), tableChecksum(b, t)]);
     if (x.rows !== y.rows || x.checksum !== y.checksum)
       fail(
@@ -73,13 +95,14 @@ async function compareWithBackup(header: BackupHeader, b: pg.Client) {
   console.log("Tables (rows, checksum) against the backup header:");
   const inBackup = new Set(header.tables.map((t) => t.table));
   for (const t of header.tables) {
+    if (t.table === GATE_TABLE) continue;
     const y = await tableChecksum(b, t.table);
     if (y.rows !== t.rows || (t.checksum && y.checksum !== t.checksum))
       fail(`${t.table}: backup ${t.rows}/${t.checksum?.slice(0, 8) ?? "-"} vs target ${y.rows}`);
     else console.log(`  ✓ ${t.table}: ${t.rows}${t.checksum ? "" : " (rows only)"}`);
   }
   for (const t of await listTables(b)) {
-    if (inBackup.has(t)) continue;
+    if (inBackup.has(t) || t === GATE_TABLE) continue;
     const y = await tableChecksum(b, t);
     if (y.rows > 0) fail(`${t}: ${y.rows} rows in the target but not in the backup`);
   }
@@ -183,6 +206,7 @@ async function main() {
       await compareWithBackup(header, b);
     }
     await checkForeignKeys(b);
+    await reportGate(b);
   } finally {
     await Promise.all([b.end(), a?.end()]);
   }

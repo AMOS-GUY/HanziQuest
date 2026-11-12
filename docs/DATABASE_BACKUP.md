@@ -120,19 +120,35 @@ The owner is responsible for:
   CI drill (when CI runs) and by the first staging backup after approval.
 - The RTO figures are estimates until a real drill is timed.
 
-## Restores and handwriting erasure (M12)
+## Restores and handwriting erasure (M12, D-061, D-062)
 
 A backup taken before a pilot participant's data was erased still contains their samples, and
-restoring it **brings them back** (proved by `npm run drill:backup`, section 4). So:
+restoring it **brings them back** (proved by `npm run drill:backup`, section 4). So every
+restore is **gated**: `db:restore` writes a pending `ErasureLedgerGate` row in the same
+transaction, and `/api/health` returns 503 (`erasureGate: "pending"`) until the signed erasure
+ledger is applied. Deploys wait for `/api/health`, so a gated database can't take traffic.
 
-- after every erasure, export the erasure ledger and keep it outside the repository:
-  `npm run handwriting:erasures -- --export <file>`
-- after **every** restore, before the database serves traffic, re-apply it:
-  `npm run handwriting:erasures -- --apply <file> --target <restored url>`
-- erasure is complete in backups only once every backup older than the erasure has expired or
+- After every erasure, export the ledger (needs the owner's `ERASURE_LEDGER_KEY`) and keep two
+  copies outside the repository: `npm run handwriting:erasures -- --export <file>`.
+- Restore in one step: `npm run db:restore -- --in <backup> --target <url> --erasure-ledger <file>`.
+  The ledger is verified **before** anything is restored, so a corrupted, incomplete,
+  duplicated or tampered ledger restores nothing. It's applied right after the commit.
+- Or restore, then `npm run handwriting:erasures -- --apply <file> --target <url>`.
+- Check: `npm run handwriting:erasures -- --status --target <url>` (exit 3 while gated).
+  `db:verify` reports the gate and doesn't compare the gate table (restore adds a row to it by
+  design).
+- If the ledger is lost, rebuild it from the live database or from any backup taken after the
+  erasure (`--from-backup`). The full recovery order is in
+  [M12_ERASURE_REVIEW.md](M12_ERASURE_REVIEW.md), "If the ledger is unavailable".
+- Erasure is complete in backups only once every backup older than the erasure has expired or
   been purged. Promise participants a deletion window at least as long as backup retention.
 
-Details and the full checklist: [M12_ERASURE_REVIEW.md](M12_ERASURE_REVIEW.md).
+**Known issue in `backup.yml`:** this predates M12 and the workflow has never run. Its restore
+step sets `DATABASE_URL` to the same URL as `--target`. `db:restore` refuses that ("Target
+equals DATABASE_URL") unless `--i-know-this-is-the-app-database` is passed, so the off-site
+restore verification would fail on its first run. That needs an owner-reviewed workflow
+change; the workflow hasn't been edited here. The disposable database it restores into never
+serves traffic, so its erasure gate can stay pending.
 
 ## Restore safety (M11)
 
