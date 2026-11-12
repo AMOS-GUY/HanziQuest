@@ -37,6 +37,12 @@ What the flags do:
   commit. It then deletes `.next`, `test-results` and `playwright-report` first.
 - **Stop the dev server** (`npm run dev` or the app preview) before a `--fresh` run: deleting
   `.next` breaks a running dev server.
+- **Run it in a terminal you keep open** (or as a background task from the start). On Windows,
+  a run whose console is detached part-way, for example a tool that moves a command to the
+  background at a timeout, can fail its next child process with exit code `3221225794`
+  (`0xC0000142`, DLL initialisation failed). That is the environment, not the code: re-run.
+  It happened once on 2026-11-12 (run `20261112T105125-3842`, step 16); the backup drill passed
+  when re-run on its own.
 - **Exit code:** 0 when no required step failed, 1 otherwise. BLOCKED steps and the advisory
   Firefox step don't change it, exactly as in CI. Required checks are never skipped silently:
   every BLOCKED or NOT RUN step is listed with its reason.

@@ -165,7 +165,8 @@ Target public beta: **2026-12-08**.
 - [x] Runbooks: DEPLOYMENT, ROLLBACK, DATABASE_BACKUP, PRODUCTION_OPERATIONS
 - [x] Invite-only and `PASSWORD_RESET_LINKS` off preserved; the reset procedure still a draft
 - [ ] **Not observed:** GitHub Actions (including the new docker start-up test), Docker locally, Firefox
-- [ ] **Owner:** review and merge the M10 PR; accounts, environment, secrets and first deployment (DEPLOYMENT.md)
+- [x] Merged to `main` (PR #16)
+- [ ] **Owner:** accounts, environment, secrets and first deployment (DEPLOYMENT.md)
 
 ### M11 — Supervised staging deployment: preparation (2026-11-11, `feature/m11-staging-deployment`)
 
@@ -176,13 +177,16 @@ Target public beta: **2026-12-08**.
 - [x] Restore rejects tampered content; migration and backup drills (local and CI)
 - [x] Staging acceptance suite: 12/12 against a local staging rehearsal
 - [ ] **Not done:** any real staging resource, deploy or acceptance run (owner approval); GitHub Actions results; Docker; `age` round trip
-- [ ] **Owner:** review and merge the M11 PR; approve provisioning steps 1–7 (M11_STAGING_ARCHITECTURE.md)
+- [x] Merged to `main` (PRs #17–#19); Neon staging project created by the owner and verified read-only (empty, unmarked, not migrated)
+- [ ] **Owner:** approve provisioning steps 1–7 (M11_STAGING_ARCHITECTURE.md)
 
-### Local CI while GitHub Actions is exhausted (2026-11-12, `feature/local-ci`)
+### Local CI while GitHub Actions is exhausted (2026-11-12, `feature/local-ci`) ✅ merged
 
 - [x] Workflow audit: every `ci.yml` step mapped to a local command (docs/LOCAL_CI.md); the deploy and backup workflows are documented as not reproducible
 - [x] `npm run ci:local`: disposable local databases, refuses hosted or staging databases, PASS/FAIL/BLOCKED/NOT RUN per step, masked logs
 - [x] Final fresh runs at `ee05d63` and `c0ac9be`: **exit 0, 25 PASS, 5 BLOCKED, 1 NOT RUN, 0 FAIL** each
+- [x] **Merged to `main` as `9d28431` (PR #20)**, merge tree identical to the verified `169431a`. No GitHub check ran on it (quota).
+- [x] Post-merge check on `main`: preflight refusals, lint/format/types, backup drill, no leftover databases, dev preview healthy
 - [ ] **BLOCKED here:** `age` round trip, Firefox e2e, the `docker` job (local process-level equivalents pass). Free ways to obtain them are documented; installing them is the owner's decision.
 - [ ] **GitHub CI not run** (minutes exhausted until 2026-12-01); resume steps in docs/LOCAL_CI.md
 
@@ -635,3 +639,18 @@ See `docs/M11_STAGING_AUDIT.md`.
   fresh run at `c0ac9be` (`20261112T102916-7fba`): same result, PostgreSQL 18.6 reported, no
   disposable databases left behind.
 - Not done: GitHub CI (quota), Docker, `age`, Firefox. Nothing touched Neon or Render. No secrets.
+
+### 2026-11-12 — Session 13 (post-merge audit, roadmap)
+
+- PR #20 merged as `9d28431`; local `main` synced. The runner code on `main` is byte-identical
+  to `c0ac9be`, which had a full fresh run (exit 0), so no new full run was needed.
+- Post-merge checks on `main`: ESLint, Prettier and the type check pass; the preflight refuses a
+  hosted URL in each of the four database variables and any variable holding the staging host.
+- An accidental full `--fresh` run was started and then stopped. It reported a FAIL at step 16
+  (exit code `0xC0000142`, Windows failed to start a child process after the console detached).
+  `npm run drill:backup` on its own passed every check, so this was the environment, not the
+  code; noted in LOCAL_CI.md. Its disposable databases were dropped; none are left.
+- The dev preview was restarted (its `.next` had been deleted) and is healthy on the local
+  database (readiness 200, migrations ok).
+- The next roadmap (M12–M16) was proposed for owner review in docs/ROADMAP.md; nothing implemented.
+- Nothing touched Neon or Render. No secrets, no spending.
