@@ -13,6 +13,7 @@ import path from "node:path";
 import { loadStrokeData } from "../src/features/curriculum/stroke-data";
 import { validateCurriculumContent } from "../src/features/curriculum/validate-content";
 import { sourceRegister } from "../src/features/curriculum/sources";
+import { confusableDiagnostics } from "../src/features/curriculum/confusable-diagnostics";
 import { importCurriculumContent } from "../src/features/curriculum/import-content";
 import { createPrismaClient } from "../src/lib/database/client";
 import {
@@ -50,6 +51,10 @@ async function main() {
     process.exit(1);
   }
   console.log("Validation passed.");
+  // M13: advisory confusable-character check (synthetic ink); never fails validation or import.
+  if (command !== "coverage")
+    for (const line of confusableDiagnostics(result.content, loadStrokeData).lines)
+      console.log(line);
   if (command === "validate") return;
 
   if (command === "coverage") {
