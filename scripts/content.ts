@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { loadStrokeData } from "../src/features/curriculum/stroke-data";
 import { validateCurriculumContent } from "../src/features/curriculum/validate-content";
+import { sourceRegister } from "../src/features/curriculum/sources";
 import { importCurriculumContent } from "../src/features/curriculum/import-content";
 import { createPrismaClient } from "../src/lib/database/client";
 import {
@@ -37,7 +38,7 @@ async function main() {
   }
 
   const input = JSON.parse(fs.readFileSync(path.resolve(file), "utf8"));
-  const result = validateCurriculumContent(input, loadStrokeData);
+  const result = validateCurriculumContent(input, loadStrokeData, sourceRegister());
   for (const issue of result.issues) {
     console.log(`${issue.severity.toUpperCase().padEnd(7)} ${issue.path}: ${issue.message}`);
   }

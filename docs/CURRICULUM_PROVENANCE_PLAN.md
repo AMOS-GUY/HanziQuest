@@ -4,6 +4,24 @@
 changed.** No HSK list, dictionary or example data enters the repository until its source and
 licence are recorded and approved (sections 3 and 4).
 
+## Implementation status (2026-11-12, branch `feature/m12-pilot-privacy`, not merged)
+
+The infrastructure of section 4a is built. **No content was added and no HSK membership is
+claimed.** Every register entry is PENDING owner approval.
+
+| 4a item                    | Status                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Source register         | **Done.** `content/sources.json` (2 entries: team authoring and `hanzi-writer-data`), schema and checks in `src/features/curriculum/sources.ts`. The CLI and the admin import validate against it: unknown ids, fields a source may not supply, and REVIEWED/VERIFIED content on unapproved or unknown-licence sources are errors. Bundled at build time |
+| 2. HSK 1 Starter honestly  | **Done.** The comment and `source` now say the selection was "informed by" HSK 2.0 Level 1 and that the list document wasn't recorded. The curriculum cites `hanziquest-authored`. No words, readings or lessons changed; the same 3 warnings remain                                                                                                     |
+| 3. Edition model           | **Done (schema and rules).** Nullable `hsk20Level`, `hsk30Level`, `hsk30Handwriting` on characters and words (null = no claim). Tags in a content file need an approved `OFFICIAL_LIST` source, and an HSK 2.0 curriculum may not carry items tagged only for HSK 3.0, or the reverse. The learner-facing edition label isn't built                      |
+| 4. Example format          | **Done.** `example` per word with its own `sourceRef` and verification, stored in the existing example columns plus `exampleSourceRef` and `exampleVerification`. Examples edited in the admin become team-authored and PROVISIONAL                                                                                                                      |
+| 5. Review metadata         | **Partly.** Raising verification in the admin records `reviewerRole` (a role, never a name) and `reviewedAt`; returning to PROVISIONAL clears them; VERIFIED with an unknown licence is refused. `npm run content:provenance` reports unreviewed and unsourced items. **The admin review queue page isn't built**                                        |
+| 6. Fix the 3 warnings      | **Not done**: it changes lessons, so it waits for the teacher review rather than being done blind                                                                                                                                                                                                                                                        |
+| 7. Edition mapping dry run | **Done.** `npm run content:provenance -- --compare a.txt b.txt` (pure `compareLists`), tested on synthetic fixtures only                                                                                                                                                                                                                                 |
+
+Existing database rows have empty `sourceRefs` until the next import of their curriculum; the
+report counts them as "noSource". Nothing was imported into any shared database.
+
 ## 1. Current state (checked 2026-11-12)
 
 - **One curriculum, `hsk-2-0-starter-v1`** (HSK 1 Starter):

@@ -87,6 +87,7 @@ async function doImport(
       version: c.version,
       description: c.description,
       source: c.source,
+      sourceRefs: c.sourceRefs ?? [],
       licenseStatus: c.licenseStatus,
       verification: c.verification,
       status: options.publishNewLessons ? "PUBLISHED" : "DRAFT",
@@ -96,6 +97,7 @@ async function doImport(
       name: c.name,
       description: c.description,
       source: c.source,
+      sourceRefs: c.sourceRefs ?? [],
       licenseStatus: c.licenseStatus,
       verification: c.verification,
     },
@@ -123,7 +125,13 @@ async function doImport(
     let def = fileDef;
     const current = await tx.character.findUnique({
       where: { hanzi },
-      select: { pinyin: true, pinyinAlternatives: true, meaning: true, verification: true },
+      select: {
+        pinyin: true,
+        pinyinAlternatives: true,
+        meaning: true,
+        verification: true,
+        sourceRefs: true,
+      },
     });
     if (
       current &&
@@ -149,6 +157,23 @@ async function doImport(
       summary.revised.push(hanzi);
     }
     effective.set(hanzi, { pinyin: def.pinyin, meaning: def.meaning });
+    const refs = [...(c.sourceRefs ?? []), ...(fileDef.sourceRefs ?? [])];
+    // Edition tags are set only when the file gives them (never cleared by an untagged file),
+    // and like readings they can't downgrade a more verified record.
+    const tags =
+      fileDef.editions && (!current || mayOverwrite(current.verification, c.verification))
+        ? {
+            ...(fileDef.editions.hsk20Level !== undefined && {
+              hsk20Level: fileDef.editions.hsk20Level,
+            }),
+            ...(fileDef.editions.hsk30Level !== undefined && {
+              hsk30Level: fileDef.editions.hsk30Level,
+            }),
+            ...(fileDef.editions.hsk30Handwriting !== undefined && {
+              hsk30Handwriting: fileDef.editions.hsk30Handwriting,
+            }),
+          }
+        : {};
     const record = await tx.character.upsert({
       where: { hanzi },
       create: {
@@ -161,8 +186,10 @@ async function doImport(
         strokeCount: strokes?.strokes.length ?? null,
         hasStrokeData: strokes !== null,
         source: c.source,
+        sourceRefs: unique(refs),
         licenseStatus: c.licenseStatus,
         verification: c.verification,
+        ...tags,
       },
       update: {
         pinyin: def.pinyin,
@@ -170,6 +197,8 @@ async function doImport(
         meaning: def.meaning,
         strokeCount: strokes?.strokes.length ?? null,
         hasStrokeData: strokes !== null,
+        sourceRefs: unique([...(current?.sourceRefs ?? []), ...refs]),
+        ...tags,
       },
     });
     characterIds.set(hanzi, record.id);
@@ -239,6 +268,7 @@ async function doImport(
             word,
             characterIds,
             c.source,
+            c.sourceRefs ?? [],
             c.licenseStatus,
             c.verification,
             summary,
@@ -456,6 +486,7 @@ async function upsertWord(
   word: ContentWord,
   characterIds: Map<string, string>,
   defaultSource: string,
+  defaultRefs: readonly string[],
   licenseStatus: CurriculumContent["curriculum"]["licenseStatus"],
   verification: CurriculumContent["curriculum"]["verification"],
   summary: ImportSummary,
@@ -463,7 +494,14 @@ async function upsertWord(
 ): Promise<string> {
   const current = await tx.vocabulary.findUnique({
     where: { simplified_pinyin: { simplified: word.simplified, pinyin: word.pinyin } },
-    select: { id: true, meaning: true, partOfSpeech: true, verification: true },
+    select: {
+      id: true,
+      meaning: true,
+      partOfSpeech: true,
+      verification: true,
+      sourceRefs: true,
+      exampleVerification: true,
+    },
   });
   const differs =
     current !== null &&
@@ -475,6 +513,28 @@ async function upsertWord(
     await snapshot(tx, "Vocabulary", current.id, current, word.simplified, authorId);
     summary.revised.push(word.simplified);
   }
+  const refs = [...defaultRefs, ...(word.sourceRefs ?? [])];
+  const tags =
+    word.editions && (!current || mayOverwrite(current.verification, verification))
+      ? {
+          ...(word.editions.hsk20Level !== undefined && { hsk20Level: word.editions.hsk20Level }),
+          ...(word.editions.hsk30Level !== undefined && { hsk30Level: word.editions.hsk30Level }),
+        }
+      : {};
+  // An example is written only when the file has one and it doesn't replace a more verified
+  // example; the stored example always carries its source and verification.
+  const example =
+    word.example &&
+    (!current?.exampleVerification ||
+      mayOverwrite(current.exampleVerification, word.example.verification))
+      ? {
+          exampleZh: word.example.zh,
+          examplePinyin: word.example.pinyin,
+          exampleEn: word.example.en,
+          exampleSourceRef: word.example.sourceRef,
+          exampleVerification: word.example.verification,
+        }
+      : {};
   const record = await tx.vocabulary.upsert({
     where: { simplified_pinyin: { simplified: word.simplified, pinyin: word.pinyin } },
     create: {
@@ -484,16 +544,24 @@ async function upsertWord(
       meaning: word.meaning,
       partOfSpeech: word.partOfSpeech,
       source: word.source ?? defaultSource,
+      sourceRefs: unique(refs),
       licenseStatus,
       verification,
+      ...tags,
+      ...example,
     },
-    update: keep
-      ? {}
-      : {
-          meaning: word.meaning,
-          partOfSpeech: word.partOfSpeech,
-          source: word.source ?? defaultSource,
-        },
+    update: {
+      ...(keep
+        ? {}
+        : {
+            meaning: word.meaning,
+            partOfSpeech: word.partOfSpeech,
+            source: word.source ?? defaultSource,
+          }),
+      sourceRefs: unique([...(current?.sourceRefs ?? []), ...refs]),
+      ...tags,
+      ...example,
+    },
   });
   const chars = [...word.simplified];
   await tx.vocabularyCharacter.deleteMany({ where: { vocabularyId: record.id } });
@@ -560,4 +628,8 @@ async function snapshot(
       authorId: authorId ?? null,
     },
   });
+}
+
+function unique(xs: readonly string[]) {
+  return [...new Set(xs)];
 }

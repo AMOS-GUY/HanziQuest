@@ -13,6 +13,7 @@ import {
   validateCurriculumContent,
 } from "../src/features/curriculum/validate-content";
 import { contentQualityReport } from "../src/features/curriculum/quality";
+import { sourceRegister } from "../src/features/curriculum/sources";
 import { createPrismaClient } from "../src/lib/database/client";
 
 async function main() {
@@ -22,7 +23,7 @@ async function main() {
   const file =
     args.find((a, i) => !a.startsWith("--") && i !== outIndex + 1) ?? "content/hsk1-starter.json";
   const raw = JSON.parse(fs.readFileSync(path.resolve(file), "utf8"));
-  const result = validateCurriculumContent(raw, loadStrokeData);
+  const result = validateCurriculumContent(raw, loadStrokeData, sourceRegister());
   const lines: string[] = [];
   const push = (...l: string[]) => lines.push(...l);
 

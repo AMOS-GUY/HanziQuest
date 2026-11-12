@@ -1,12 +1,13 @@
 {
-  "$comment": "HanziQuest HSK 1 starter curriculum. Word selection follows the HSK 2.0 Level 1 vocabulary list (a public list of 150 words). Pinyin, English glosses, grouping into units/lessons and all exercises are authored by HanziQuest and are PROVISIONAL until reviewed by a qualified Chinese teacher. Stroke data comes from hanzi-writer-data (Make Me a Hanzi, Arphic Public License). This is not official HSK course material.",
+  "$comment": "HanziQuest HSK 1 starter curriculum. Word selection was informed by HSK 2.0 Level 1 vocabulary; the exact list document used was not recorded, so no HSK level membership is claimed (docs/CURRICULUM_PROVENANCE_PLAN.md). Pinyin, English glosses, grouping into units/lessons and all exercises are authored by HanziQuest and are PROVISIONAL until reviewed by a qualified Chinese teacher. Stroke data comes from hanzi-writer-data (Make Me a Hanzi, Arphic Public License). This is not official HSK course material.",
   "curriculum": {
     "slug": "hsk-2-0-starter-v1",
     "name": "HSK 1 Starter",
     "framework": "HSK_2_0",
     "version": "starter-1",
     "description": "A first path through HSK 1 vocabulary and the characters inside it.",
-    "source": "Word selection: HSK 2.0 Level 1 vocabulary list. Glosses, pinyin and structure: HanziQuest (provisional).",
+    "source": "Word selection informed by HSK 2.0 Level 1 vocabulary (list document not recorded). Glosses, pinyin and structure: HanziQuest (provisional).",
+    "sourceRefs": ["hanziquest-authored"],
     "licenseStatus": "ORIGINAL",
     "verification": "PROVISIONAL"
   },

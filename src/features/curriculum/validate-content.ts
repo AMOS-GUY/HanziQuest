@@ -1,6 +1,7 @@
 import { curriculumContentSchema, type CurriculumContent } from "./content-schema";
 import type { StrokeData } from "./stroke-data";
 import { checkWordReadings } from "./readings";
+import { checkSources, type SourceRegister } from "./sources";
 
 /** Pedagogical limits; exceeding them is a warning, not an error. */
 export const CONTENT_LIMITS = {
@@ -138,6 +139,8 @@ function countChunkSyllables(chunk: string): number {
 export function validateCurriculumContent(
   input: unknown,
   lookupStrokes: (hanzi: string) => StrokeData | null,
+  /** The source register (M14). Imports always pass it; unit fixtures may omit it. */
+  register?: SourceRegister,
 ): ContentValidationResult {
   const issues: ContentIssue[] = [];
   const parsed = curriculumContentSchema.safeParse(input);
@@ -342,6 +345,8 @@ export function validateCurriculumContent(
       });
     }
   }
+
+  if (register) issues.push(...checkSources(content, register));
 
   return {
     ok: !issues.some((i) => i.severity === "error"),

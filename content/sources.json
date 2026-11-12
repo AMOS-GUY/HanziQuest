@@ -1,0 +1,34 @@
+{
+  "$comment": "HanziQuest source register (M14, docs/CURRICULUM_PROVENANCE_PLAN.md). Every external input to curriculum content is registered here with its licence and what it may supply. Content files cite these ids. Approval is the owner's: every entry is PENDING until the owner approves it, and PENDING sources may back PROVISIONAL content only. No HSK list is registered: the exact HSK 2.0 Level 1 list document behind the starter selection was never recorded, so no HSK level membership is claimed.",
+  "sources": [
+    {
+      "id": "hanziquest-authored",
+      "title": "HanziQuest team authoring (pinyin, glosses, lesson structure, exercises)",
+      "kind": "AUTHORED",
+      "publisher": "HanziQuest",
+      "licenseStatus": "ORIGINAL",
+      "license": "Original work of the HanziQuest project",
+      "obligations": [],
+      "provides": ["reading", "gloss", "structure", "exercises", "example"],
+      "approval": { "status": "PENDING" },
+      "notes": "Not reviewed by a qualified teacher. Items resting on it stay PROVISIONAL until reviewed through the admin workflow."
+    },
+    {
+      "id": "hanzi-writer-data-2.0.1",
+      "title": "hanzi-writer-data 2.0.1 (derived from Make Me a Hanzi)",
+      "kind": "DATASET",
+      "publisher": "Make Me a Hanzi project / hanzi-writer-data",
+      "edition": "2.0.1",
+      "url": "https://github.com/chanind/hanzi-writer-data",
+      "licenseStatus": "OPEN_LICENSE",
+      "license": "Arphic Public License",
+      "obligations": [
+        "Show attribution to Make Me a Hanzi and Arphic Technology (shown on the Learn page)",
+        "Keep the licence text with the data (node_modules/hanzi-writer-data/ARPHICPL.TXT)"
+      ],
+      "provides": ["strokes"],
+      "approval": { "status": "PENDING" },
+      "notes": "In use since the first milestones and recorded in docs/CURRICULUM.md. The importer attaches stroke data automatically; content files don't cite it."
+    }
+  ]
+}

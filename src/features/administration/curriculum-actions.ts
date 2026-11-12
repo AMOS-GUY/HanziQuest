@@ -11,6 +11,7 @@ import type { Permission } from "@/lib/permissions/permissions";
 import { recordAudit } from "@/lib/audit";
 import { loadStrokeData } from "@/features/curriculum/stroke-data";
 import { validateCurriculumContent } from "@/features/curriculum/validate-content";
+import { sourceRegister } from "@/features/curriculum/sources";
 import { formatImportPreview, previewCurriculumImport } from "@/features/curriculum/import-preview";
 import { importCurriculumContent } from "@/features/curriculum/import-content";
 import { DomainError, type Actor } from "./services";
@@ -210,7 +211,7 @@ function parseImport(formData: FormData) {
   } catch {
     return { error: "This is not valid JSON." } as const;
   }
-  const result = validateCurriculumContent(json, loadStrokeData);
+  const result = validateCurriculumContent(json, loadStrokeData, sourceRegister());
   return { result } as const;
 }
 

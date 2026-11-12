@@ -4,6 +4,13 @@
 and no real handwriting has been collected.** Nothing in this protocol changes the evaluation
 engine or its thresholds.
 
+**Implementation status (2026-11-12, branch `feature/m12-pilot-privacy`, not merged):** the
+privacy items of section 10 (1 erasure, 2 versioned consent, 5 structured observations instead
+of notes, 8 prompt check) are built and tested. Items 3, 4, 6 and 7 are not built. **The app
+refuses consent and recording for real codes (P01–P05) until the owner approves the consent
+form** (`ownerApproved` in `src/features/handwriting/consent.ts`); only `TEST…` rehearsal codes
+work today. What erasure does and doesn't reach is in section 8.
+
 This protocol is more detailed than `HANDWRITING_PILOT.md`, the short operator guide that
 already exists, and replaces it for M12 once approved. The full validation study, which is the
 only basis for changing thresholds, is a separate later step (M13, see "Pilot vs validation"
@@ -143,28 +150,39 @@ app.
 >
 > Session collector: ____________ Consent form version: v0.1
 
-**Recording consent in the app.** Today the app stores only `consentConfirmed = true`. M12
-implementation should also store the consent form version per sample (section 10, item 2).
-The collector ticks the lab's consent box only after the form is signed.
+**Recording consent in the app (implemented).** After the form is signed, the collector
+records it under **Participants and consent** in the lab: the code, the date signed and a
+confirmation that the signed paper is in front of them. The app stores a `PilotConsent` row
+(form version, signing time, which staff account recorded it) and audits it. It then:
+
+- refuses to record any sample for a code without an unrevoked acceptance of the **current**
+  form version. A new form version needs a new signature and a new acceptance
+- links every sample to the consent it was recorded under (`consentId`)
+- refuses an unknown or superseded version, a signing date in the future or over a year old,
+  and a second acceptance of the same version
+- refuses every non-`TEST` code while the current form isn't owner-approved
+
+The per-sample consent tick remains as a reminder; it is no longer the record of consent.
 
 ## 5. Data collected per attempt
 
 All of the following is already captured by the lab (`HandwritingSample`), except where marked
 _planned_.
 
-| Field                                                              | Content                                                                                                         | Personal-data note                                                                                                    |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `participantCode`                                                  | `P01`–`P05` (the validator allows letters, digits and `-`, up to 16)                                            | pseudonymous; the key is kept on paper only                                                                           |
-| `characterId`, `category`, `shouldAccept`, `writtenHanzi`, `style` | the prompt: target character, correct or which deliberate error, the look-alike if any, normal or small-or-fast | none                                                                                                                  |
-| `strokes`                                                          | normalised points `{x, y, t}` per stroke; `t` is ms since the start of the drawing                              | biometric-adjacent; no pressure, tilt or absolute timestamps per point                                                |
-| `inputDevice`, `canvasSizePx`                                      | finger, stylus, mouse or trackpad; the box size                                                                 | none                                                                                                                  |
-| `deviceInfo`                                                       | screen size, pixel ratio, coarse or fine pointer, browser family, OS family (no full user agent)                | coarse by design, to limit fingerprinting                                                                             |
-| `engineVersion`, `band`, `score`, `identityVerified`               | the verdict at collection time; metrics are recomputed with the current engine                                  | none                                                                                                                  |
-| `collectorId`, `createdAt`                                         | the staff account that recorded it; the time                                                                    | staff data                                                                                                            |
-| `notes`                                                            | optional free text                                                                                              | **risk:** collectors must not type names or identifying details. The protocol forbids it; M12 adds a warning (item 5) |
-| `consentConfirmed`                                                 | must be true                                                                                                    |                                                                                                                       |
-| _planned:_ `consentVersion`                                        | for example `pilot-v0.1`                                                                                        |                                                                                                                       |
-| _planned, optional:_ participant bands                             | experience band and handedness, only with the optional consent box                                              | coarse; stored once per code, not per sample                                                                          |
+| Field                                                              | Content                                                                                                                                                                                                               | Personal-data note                                                                  |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `participantCode`                                                  | `P01`–`P05` (the validator allows letters, digits and `-`, up to 16)                                                                                                                                                  | pseudonymous; the key is kept on paper only                                         |
+| `characterId`, `category`, `shouldAccept`, `writtenHanzi`, `style` | the prompt: target character, correct or which deliberate error, the look-alike if any, normal or small-or-fast                                                                                                       | none                                                                                |
+| `strokes`                                                          | normalised points `{x, y, t}` per stroke; `t` is ms since the start of the drawing                                                                                                                                    | biometric-adjacent; no pressure, tilt or absolute timestamps per point              |
+| `inputDevice`, `canvasSizePx`                                      | finger, stylus, mouse or trackpad; the box size                                                                                                                                                                       | none                                                                                |
+| `deviceInfo`                                                       | screen size, pixel ratio, coarse or fine pointer, browser family, OS family (no full user agent)                                                                                                                      | coarse by design, to limit fingerprinting                                           |
+| `engineVersion`, `band`, `score`, `identityVerified`               | the verdict at collection time; metrics are recomputed with the current engine                                                                                                                                        | none                                                                                |
+| `collectorId`, `createdAt`                                         | the staff account that recorded it; the time                                                                                                                                                                          | staff data                                                                          |
+| `observations`                                                     | zero or more fixed choices (hesitated, restarted, used undo, unsure of the character, misunderstood the instruction, made a different error than asked, wrote outside the box, device lag or palm touch, interrupted) | none: free text is refused, so names can't be typed in. `style` is a fixed list too |
+| `notes`                                                            | **no longer written** (M12). Requests carrying `notes` are rejected. The column stays for pre-M12 rows until a contract migration drops it                                                                            | erased with the participant                                                         |
+| `consentConfirmed`                                                 | must be true                                                                                                                                                                                                          |                                                                                     |
+| `participantId`, `consentId`                                       | links to the participant code and to the consent acceptance (form version and signing time) the sample was recorded under                                                                                             | pseudonymous                                                                        |
+| _planned, optional:_ participant bands                             | experience band and handedness, only with the optional consent box                                                                                                                                                    | coarse; stored once per code, not per sample                                        |
 
 No audio, video, photos, names, emails or IP addresses are stored with samples. Staff actions
 are audited as usual.
@@ -260,10 +278,27 @@ character gets five of the six error types.
     comes first, then deleted or kept only with renewed consent
   - the paper key is destroyed at the same time
   - aggregate reports are kept
-- **Withdrawal:** a participant gives their code. Within the stated number of days, all their
-  samples are deleted and the deletion is audited, and their feedback entries are removed. Today
-  there is no lab function to delete one participant's samples, so it must be built and
-  tested before P01 (section 10, item 1).
+- **Withdrawal (implemented):** a participant gives their code. A Super Admin uses **Withdraw
+  or end retention (erase)** in the lab, types the code twice and picks the reason (withdrawal or
+  end of retention). In one transaction the app:
+  - deletes every sample for the code, including pre-M12 samples matched by code alone
+  - redacts the sample audit entries (they keep the action and time, and lose the code and
+    character)
+  - revokes the consent and marks the code WITHDRAWN or RETENTION_ENDED, so it can never record
+    or give consent again (a new code is needed)
+  - writes one audit entry with the counts only
+
+  Recording and erasure lock the same participant row, so a sample can't slip in during an
+  erasure. **What erasure keeps:** the code itself, its status and its consent rows (version,
+  signing time, revocation time) as the record that consent was given and withdrawn. They hold
+  no handwriting. **What erasure can't reach**, so the collector must handle it by hand:
+  - exported files (`?strokes=1`) on any machine
+  - database backups: erased samples stay in backups until those expire. The consent form's
+    deletion window must be at least the backup retention, or backups must be purged
+  - Admin → Feedback entries: they aren't linked to codes. Keep pilot feedback anonymous
+    (no code in it), or keep it on paper with the key
+  - the paper key and signed form
+
 - **Breach or mistake:** if a name or identifying detail is found in a sample note, delete that
   note or sample and record what happened in PROGRESS.md (no personal detail in the record).
 
@@ -282,24 +317,24 @@ approvals and on GitHub Actions returning (2026-12-01).
 
 Each item is local-only and needs no staging or spending.
 
-1. **Withdrawal:** delete all samples for a participant code, with an audit entry in the same
-   transaction. A Super Admin action, with a confirmation step and integration tests.
-2. **Consent version:** a `consentVersion` field on samples (expand-only migration created with
-   `prisma migrate dev` locally). The lab records the current version and refuses recording
-   without it.
+1. **Withdrawal: done.** Erasure by code (section 8), Super Admin only (`handwriting:erase`),
+   typed confirmation, one transaction with an audit entry, integration-tested.
+2. **Consent version: done,** as a `PilotConsent` table rather than a column on samples, so that
+   a signing time, a revocation and a new version can be recorded. Expand-only migration
+   `20261112125646_m12_pilot_consent_and_provenance`.
 3. **Pilot report with intervals:** `npm run handwriting:report -- --pilot` adds Wilson 95 %
    intervals, per-participant and per-device breakdowns, and the line "exploratory pilot,
    n = 5, not an accuracy estimate". Unit-tested on fixtures.
 4. **Optional participant bands:** experience band and handedness per code, stored only when the
    optional consent box was initialled. The owner decides whether to build this or keep it on
    paper.
-5. **Notes guard:** a warning next to the notes field, plus a check that rejects strings that look
-   like an email address or phone number.
+5. **Notes guard: done, more strictly than planned.** Free-text notes and free-text styles are
+   gone. The lab takes fixed observations and a fixed style list, and rejects any other field.
 6. **LAN pilot mode** (only if option A): design and security review first, then implement it with
    tests showing it's refused under `APP_ENV`, for public addresses and in production builds.
 7. **Rehearsal checklist and session script:** a one-page printable version of sections 6–8.
-8. **Prompt check:** a test asserting that the rotation covers each error type 10 times across
-   P01–P05 and that every look-alike is in the candidate set.
+8. **Prompt check: done** (`tests/unit/provenance-and-pilot.test.ts`): each error type appears
+   10 times across P01–P05, and every pilot character and look-alike has stroke data.
 
 Estimated effort: 3–5 development days (plus 1–2 for item 6). Owner: approvals, recruiting, about
 3 hours of sessions.

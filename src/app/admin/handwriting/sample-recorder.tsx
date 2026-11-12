@@ -13,6 +13,12 @@ import {
   type RecordSampleResult,
 } from "@/features/handwriting/lab-actions";
 import { CATEGORY_LABEL, SAMPLE_CATEGORIES } from "@/features/handwriting/validation";
+import {
+  OBSERVATION_LABEL,
+  OBSERVATIONS,
+  SAMPLE_STYLES,
+  type Observation,
+} from "@/features/handwriting/sample-options";
 import { cn } from "@/lib/utilities/cn";
 
 const select =
@@ -82,7 +88,8 @@ export function SampleRecorder({
   const [category, setCategory] = useState<(typeof SAMPLE_CATEGORIES)[number]>("CORRECT");
   const [written, setWritten] = useState("");
   const [device, setDevice] = useState("finger");
-  const [style, setStyle] = useState("");
+  const [style, setStyle] = useState("normal");
+  const [observations, setObservations] = useState<Observation[]>([]);
   const [consent, setConsent] = useState(false);
   const [strokes, setStrokes] = useState<InkStroke[]>([]);
   const [result, setResult] = useState<RecordSampleResult>();
@@ -109,6 +116,7 @@ export function SampleRecorder({
         category,
         writtenHanzi: category === "WRONG_CHARACTER" ? written : null,
         style: style || null,
+        observations,
         inputDevice: device,
         canvasSizePx: Math.round(box.current?.getBoundingClientRect().width ?? 0) || undefined,
         deviceInfo: deviceFacts(),
@@ -118,6 +126,7 @@ export function SampleRecorder({
       setResult(r);
       if (r.ok) {
         setStrokes([]);
+        setObservations([]);
         setCanvasKey((k) => k + 1);
       }
     });
@@ -196,14 +205,44 @@ export function SampleRecorder({
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="lab-style">Style note (optional)</Label>
-          <Input
+          <Label htmlFor="lab-style">Style</Label>
+          <select
             id="lab-style"
+            className={select}
             value={style}
             onChange={(e) => setStyle(e.target.value)}
-            placeholder="fast, small, left-handed…"
-          />
+          >
+            {SAMPLE_STYLES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
         </div>
+        <fieldset className="flex flex-col gap-1.5 sm:col-span-2">
+          <legend className="mb-1 text-sm font-bold">Observations (optional)</legend>
+          <p className="text-muted-foreground text-xs">
+            Fixed choices only: the lab doesn&apos;t take free-text notes, so no names or
+            identifying details can be stored with a sample.
+          </p>
+          <div className="grid gap-1 sm:grid-cols-2">
+            {OBSERVATIONS.map((o) => (
+              <label key={o} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={observations.includes(o)}
+                  onChange={(e) =>
+                    setObservations((list) =>
+                      e.target.checked ? [...list, o] : list.filter((x) => x !== o),
+                    )
+                  }
+                />
+                {OBSERVATION_LABEL[o]}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <label className="flex items-start gap-2 text-sm sm:col-span-2">
           <input
             type="checkbox"
@@ -211,8 +250,8 @@ export function SampleRecorder({
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
           />
-          The participant agreed to their handwriting being stored for testing, as described in the
-          collection procedure.
+          The participant&apos;s signed consent is recorded above, and they&apos;re happy to
+          continue.
         </label>
       </div>
 

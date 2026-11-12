@@ -17,7 +17,14 @@ export const GET = handleApi(async (request: Request) => {
   if (withStrokes) {
     const raw = await prisma.handwritingSample.findMany({
       where: { id: { in: samples.map((s) => s.id) } },
-      select: { id: true, strokes: true, style: true, canvasSizePx: true, writtenHanzi: true },
+      select: {
+        id: true,
+        strokes: true,
+        style: true,
+        canvasSizePx: true,
+        writtenHanzi: true,
+        observations: true,
+      },
     });
     const byId = new Map(raw.map((r) => [r.id, r]));
     rows = samples.map((s) => ({ ...s, ...byId.get(s.id) }));

@@ -2,6 +2,35 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-12 — M12 pilot privacy and M14 provenance infrastructure
+
+**D-057 · Pilot consent is a versioned record, and the form's approval is a code gate.**
+`PilotParticipant` (code and status only) and `PilotConsent` (form version, signing time,
+recording staff account, revocation). Samples link to both and are recorded only under an
+unrevoked acceptance of the current version, checked inside the recording transaction under a
+row lock. While `ownerApproved` is false for the current form
+(`features/handwriting/consent.ts`), only `TEST…` codes can be given consent, so real
+handwriting can't be collected until the owner approves the form through a reviewed change.
+
+**D-058 · Erasure deletes handwriting, redacts audit content and keeps a tombstone.** Erasing a
+code (withdrawal or end of retention, `handwriting:erase`, Super Admin only) deletes all its
+samples, including pre-M12 rows matched by code, replaces the content of their audit entries
+with a redaction marker, revokes consent and blocks the code for good. The code, status and
+consent rows stay as the record of consent and withdrawal; they hold no handwriting. Exports,
+backups, feedback entries and the paper key are outside the app's reach and are handled by
+procedure (M12_PILOT_PROTOCOL.md section 8).
+
+**D-059 · Free text is removed from the lab.** Observations and styles are fixed lists, and the
+recording schema is strict, so an unknown field (including `notes`) is rejected. The `notes`
+column stays for pre-M12 rows (expand, then contract) and is erased with the participant.
+
+**D-060 · Curriculum sources are registered; edition tags need an approved official list.**
+`content/sources.json`, bundled at build time, records each source's licence, what it may
+supply and the owner's approval. Content files cite ids; validation rejects unknown ids and
+fields a source may not supply. PENDING sources may back PROVISIONAL content only. HSK level
+tags are nullable (null means no claim) and need an approved `OFFICIAL_LIST` entry, so none
+exist yet. Review metadata stores a role, never a name.
+
 ## 2026-11-11 — M11 staging preparation
 
 **D-053 · Every deployment names itself (`APP_ENV`).** `staging` or `production`, fatal if

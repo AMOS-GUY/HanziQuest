@@ -145,6 +145,29 @@ enum HandwritingSampleCategory {
   POOR_SHAPE
 }
 
+/// Lifecycle of a pilot participant code (M12). Only ACTIVE codes with current consent may
+/// have samples recorded. WITHDRAWN and RETENTION_ENDED are tombstones: the code's samples
+/// have been erased and the code can never collect again.
+enum PilotParticipantStatus {
+  ACTIVE
+  WITHDRAWN
+  RETENTION_ENDED
+}
+
+/// Fixed collector observations about one sample (M12). Replaces free-text notes so that no
+/// names or identifying details can be typed into the lab.
+enum HandwritingObservation {
+  HESITATED
+  RESTARTED
+  USED_UNDO
+  UNSURE_OF_CHARACTER
+  INSTRUCTION_MISUNDERSTOOD
+  DIFFERENT_ERROR_THAN_ASKED
+  WROTE_OUTSIDE_BOX
+  DEVICE_LAG_OR_PALM_TOUCH
+  INTERRUPTED
+}
+
 enum BillingInterval {
   MONTH
   YEAR
@@ -215,6 +238,8 @@ model User {
   paymentTransactions PaymentTransaction[]
   entitlements        Entitlement[]
   handwritingSamples  HandwritingSample[]
+  pilotParticipants   PilotParticipant[]
+  pilotConsents       PilotConsent[]
   feedback            Feedback[]
   invite              BetaInvite?                @relation("InviteRedemptions", fields: [inviteId], references: [id], onDelete: SetNull)
   passwordResets      PasswordResetToken[]
@@ -326,6 +351,8 @@ model Curriculum {
   description   String?
   status        PublicationStatus   @default(DRAFT)
   source        String
+  /// Ids of entries in the source register (content/sources.json) (M14).
+  sourceRefs    String[]            @default([])
   licenseStatus LicenseStatus       @default(UNKNOWN)
   verification  VerificationStatus  @default(PROVISIONAL)
   publishedAt   DateTime?
@@ -414,8 +441,19 @@ model Character {
   strokeCount        Int?
   hasStrokeData      Boolean            @default(false)
   source             String
+  /// Ids of entries in the source register (content/sources.json) this record draws on (M14).
+  sourceRefs         String[]           @default([])
   licenseStatus      LicenseStatus      @default(UNKNOWN)
   verification       VerificationStatus @default(PROVISIONAL)
+  /// Per-standard membership tags (M14). Null means "not tagged", never "not in the level".
+  /// Set only from a registered, approved list source.
+  hsk20Level         Int?
+  hsk30Level         Int?
+  /// HSK 3.0 handwriting list membership (null: not tagged).
+  hsk30Handwriting   Boolean?
+  /// Who last raised verification (a role, never a name) and when (M14).
+  reviewerRole       String?
+  reviewedAt         DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -465,21 +503,32 @@ model CharacterAsset {
 
 /// A word (one or more characters). Tracked separately from character mastery.
 model Vocabulary {
-  id            String             @id @default(cuid())
-  simplified    String
-  traditional   String?
-  pinyin        String
-  meaning       String
-  partOfSpeech  String?
-  audioUrl      String?
-  exampleZh     String?
-  examplePinyin String?
-  exampleEn     String?
-  source        String
-  licenseStatus LicenseStatus      @default(UNKNOWN)
-  verification  VerificationStatus @default(PROVISIONAL)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id                  String              @id @default(cuid())
+  simplified          String
+  traditional         String?
+  pinyin              String
+  meaning             String
+  partOfSpeech        String?
+  audioUrl            String?
+  exampleZh           String?
+  examplePinyin       String?
+  exampleEn           String?
+  /// Source register id for the example sentence (M14).
+  exampleSourceRef    String?
+  exampleVerification VerificationStatus?
+  source              String
+  /// Ids of entries in the source register (content/sources.json) this record draws on (M14).
+  sourceRefs          String[]            @default([])
+  licenseStatus       LicenseStatus       @default(UNKNOWN)
+  verification        VerificationStatus  @default(PROVISIONAL)
+  /// Per-standard membership tags (M14). Null means "not tagged". Set only from a registered,
+  /// approved list source.
+  hsk20Level          Int?
+  hsk30Level          Int?
+  reviewerRole        String?
+  reviewedAt          DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   characters VocabularyCharacter[]
   lessons    LessonVocabulary[]
@@ -1052,12 +1101,17 @@ model HandwritingSample {
   collectorId      String?
   /// Pseudonymous participant code chosen by the collector (e.g. "P07"). Never a name or email.
   participantCode  String
+  /// The participant record (M12). Null only for samples recorded before M12.
+  participantId    String?
+  /// The consent under which this sample was recorded (M12). Null only before M12.
+  consentId        String?
   characterId      String
   category         HandwritingSampleCategory
   /// Ground truth: should the engine accept this (EXCELLENT or GOOD)? True only for CORRECT.
   shouldAccept     Boolean
   /// For WRONG_CHARACTER samples: the character actually written.
   writtenHanzi     String?
+  /// One of the fixed prompt styles (normal, small-or-fast, deliberate-error, small, fast, large).
   style            String?
   inputDevice      String?
   canvasSizePx     Int?
@@ -1069,15 +1123,65 @@ model HandwritingSample {
   band             String
   score            Float
   identityVerified Boolean
+  /// Deprecated (M12): free text is no longer written. Kept for pre-M12 rows until a contract
+  /// migration drops it; erased with the participant's other data.
   notes            String?
+  /// Fixed collector observations (M12), instead of free text.
+  observations     HandwritingObservation[]  @default([])
   consentConfirmed Boolean
   createdAt        DateTime                  @default(now())
 
-  collector User?     @relation(fields: [collectorId], references: [id], onDelete: SetNull)
-  character Character @relation(fields: [characterId], references: [id], onDelete: Restrict)
+  collector   User?             @relation(fields: [collectorId], references: [id], onDelete: SetNull)
+  character   Character         @relation(fields: [characterId], references: [id], onDelete: Restrict)
+  participant PilotParticipant? @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  consent     PilotConsent?     @relation(fields: [consentId], references: [id], onDelete: Restrict)
 
   @@index([category])
   @@index([participantCode])
+  @@index([participantId])
+  @@index([consentId])
+}
+
+/// A pseudonymous pilot participant (M12). Holds no name, contact or demographic data: the
+/// code-to-person key and the signed consent form stay on paper, outside the app. After
+/// withdrawal the row remains as a tombstone so the code can't be reused for collection.
+model PilotParticipant {
+  id          String                 @id @default(cuid())
+  /// Upper-case code such as "P01" (letters, digits and "-", at most 16).
+  code        String                 @unique
+  status      PilotParticipantStatus @default(ACTIVE)
+  createdById String?
+  /// Set when the participant's data was erased (withdrawal or end of retention).
+  erasedAt    DateTime?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  createdBy User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  consents  PilotConsent[]
+  samples   HandwritingSample[]
+
+  @@index([status])
+}
+
+/// One acceptance of one version of the written consent form (M12), as witnessed by the
+/// collector. A new form version needs a new acceptance. Revoked on withdrawal.
+model PilotConsent {
+  id            String    @id @default(cuid())
+  participantId String
+  /// Version of the written form, e.g. "pilot-v0.1" (features/handwriting/consent.ts).
+  version       String
+  /// When the participant signed the paper form (as entered by the collector).
+  acceptedAt    DateTime
+  recordedById  String?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  participant PilotParticipant    @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  recordedBy  User?               @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  samples     HandwritingSample[]
+
+  @@unique([participantId, version])
+  @@index([participantId])
 }
 
 /// Which deployment this database belongs to ("staging" or "production"), written once when a
