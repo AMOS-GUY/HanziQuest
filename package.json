@@ -36,6 +36,7 @@
     "brand:icons": "tsx scripts/generate-icons.ts",
     "progress:rebuild": "tsx scripts/rebuild-progress.ts",
     "handwriting:report": "tsx scripts/handwriting-report.ts",
+    "handwriting:replay": "tsx scripts/handwriting-replay.ts",
     "smoke": "tsx scripts/smoke.ts",
     "db:backup": "tsx scripts/db-backup.ts",
     "db:restore": "tsx scripts/db-restore.ts",
