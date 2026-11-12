@@ -24,7 +24,10 @@ function describeUrl(raw: string) {
     neon,
     kind: !neon ? "not a Neon host" : endpoint.endsWith("-pooler") ? "pooled" : "direct",
     endpoint: neon ? endpoint.replace(/-pooler$/, "") : "(n/a)",
-    region: neon ? host.split(".").slice(1, -3).join(".") || "(unknown)" : "(n/a)",
+    // e.g. ep-x-pooler.c-7.eu-central-1.aws.neon.tech: "c-7" is a Neon cell, not the region.
+    region: neon
+      ? (host.split(".").find((l) => /^[a-z]{2}-[a-z]+-\d$/.test(l)) ?? "(unknown)")
+      : "(n/a)",
     database: decodeURIComponent(u.pathname.replace(/^\//, "")) || "(none)",
     sslmode: u.searchParams.get("sslmode") ?? "(not set)",
     local: ["localhost", "127.0.0.1", "::1", "[::1]"].includes(host),
@@ -55,9 +58,16 @@ async function main() {
     const info = await one<{ db: string; version: string; ro: string }>(
       "SELECT current_database() AS db, split_part(version(), ' ', 2) AS version, current_setting('transaction_read_only') AS ro",
     );
-    const ssl = await one<{ ssl: boolean | null }>(
-      "SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()",
-    );
+    // TLS as seen by this client. (pg_stat_ssl would describe the server's own hop, which on
+    // Neon is the internal proxy-to-compute link, not this connection.)
+    const stream = (client as unknown as { connection: { stream: unknown } }).connection.stream as {
+      encrypted?: boolean;
+      authorized?: boolean;
+      getProtocol?: () => string | null;
+    };
+    const tls = stream.encrypted
+      ? `yes, ${stream.getProtocol?.() ?? "TLS"}, certificate ${stream.authorized ? "verified" : "NOT verified"}`
+      : "NO";
     const tables = await one<{ n: number }>(
       "SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'",
     );
@@ -68,7 +78,7 @@ async function main() {
     console.log("Server:");
     console.log(`  database:   ${info!.db}`);
     console.log(`  PostgreSQL: ${info!.version}`);
-    console.log(`  TLS in use: ${ssl?.ssl === true ? "yes" : "NO"}`);
+    console.log(`  TLS in use: ${tls}`);
     console.log(`  read-only:  ${info!.ro === "on" ? "yes (this check cannot write)" : "no"}`);
     console.log("Schema:");
     console.log(`  public tables:        ${tables!.n}`);
