@@ -45,6 +45,7 @@
     "staging:migrate:status": "node --env-file=.env.staging.local node_modules/prisma/build/index.js migrate status",
     "drill:migrations": "tsx scripts/drills/migrations.ts",
     "drill:backup": "tsx scripts/drills/backup.ts",
+    "ci:local": "tsx scripts/local-ci.ts",
     "test:staging": "playwright test --config playwright.staging.config.ts",
     "ops:prune": "tsx scripts/ops-prune.ts",
     "postinstall": "prisma generate"
