@@ -178,6 +178,14 @@ Target public beta: **2026-12-08**.
 - [ ] **Not done:** any real staging resource, deploy or acceptance run (owner approval); GitHub Actions results; Docker; `age` round trip
 - [ ] **Owner:** review and merge the M11 PR; approve provisioning steps 1–7 (M11_STAGING_ARCHITECTURE.md)
 
+### Local CI while GitHub Actions is exhausted (2026-11-12, `feature/local-ci`)
+
+- [x] Workflow audit: every `ci.yml` step mapped to a local command (docs/LOCAL_CI.md); the deploy and backup workflows are documented as not reproducible
+- [x] `npm run ci:local`: disposable local databases, refuses hosted or staging databases, PASS/FAIL/BLOCKED/NOT RUN per step, masked logs
+- [x] Final fresh runs at `ee05d63` and `c0ac9be`: **exit 0, 25 PASS, 5 BLOCKED, 1 NOT RUN, 0 FAIL** each
+- [ ] **BLOCKED here:** `age` round trip, Firefox e2e, the `docker` job (local process-level equivalents pass). Free ways to obtain them are documented; installing them is the owner's decision.
+- [ ] **GitHub CI not run** (minutes exhausted until 2026-12-01); resume steps in docs/LOCAL_CI.md
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -608,3 +616,22 @@ See `docs/M11_STAGING_AUDIT.md`.
   - staging suite **12/12 on a local rehearsal**
 - **Nothing external was created, connected or deployed.** Staging needs the owner's approval
   of 7 provisioning steps ($0).
+
+### 2026-11-12 — Session 12 (local CI)
+
+- GitHub Actions minutes are exhausted until 2026-12-01. Added `npm run ci:local`, which
+  reproduces `ci.yml` (`verify` and `docker`) locally on disposable `hq_localci_*` databases.
+  The preflight refuses any non-local database or a staging host; `.env.staging.local` is never
+  loaded.
+- First run (`34bdef7`): exit 0, no code failures. Final fresh run (`ee05d63`, clean tree):
+  - exit 0: 25 PASS, 5 BLOCKED, 1 NOT RUN, 0 FAIL
+  - unit 160, integration 94; both drills, backup and restore, build and smoke pass
+  - Chromium e2e 36 passed, 18 skipped
+  - BLOCKED: `age`, Firefox (`spawn UNKNOWN`), and the three Docker steps; local
+    equivalents 23L and 24L pass
+- Local PostgreSQL 18.6 vs CI postgres:17, recorded. Fix `829cb4e`: the runner now records the
+  PostgreSQL version (reporting only).
+- Pre-PR re-verification: preflight self-tests (hosted URLs and the staging host refused), then a
+  fresh run at `c0ac9be` (`20261112T102916-7fba`): same result, PostgreSQL 18.6 reported, no
+  disposable databases left behind.
+- Not done: GitHub CI (quota), Docker, `age`, Firefox. Nothing touched Neon or Render. No secrets.
