@@ -2,6 +2,17 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-12 — Public repository, CI restored, erasure review
+
+**D-061 · Erasure is re-applied after restores from an erasure ledger.** Backups taken before an
+erasure still hold the samples, and the drill proved a restore brings them back. Erased codes
+(code, reason, date; no handwriting) are exported to a ledger kept outside the repository and
+re-applied to any restored database before it serves traffic, through the same erasure code
+path. The tool refuses to write the ledger inside the public repository except under ignored
+folders. Feedback is never erased by pattern (it could match unrelated learner text); erasure
+reports matching entries for review instead. Erasure isn't described as complete until the
+checklist in M12_ERASURE_REVIEW.md is done.
+
 ## 2026-11-12 — M12 pilot privacy and M14 provenance infrastructure
 
 **D-057 · Pilot consent is a versioned record, and the form's approval is a code gate.**

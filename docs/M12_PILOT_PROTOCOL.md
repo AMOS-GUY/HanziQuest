@@ -293,10 +293,16 @@ character gets five of the six error types.
   signing time, revocation time) as the record that consent was given and withdrawn. They hold
   no handwriting. **What erasure can't reach**, so the collector must handle it by hand:
   - exported files (`?strokes=1`) on any machine
-  - database backups: erased samples stay in backups until those expire. The consent form's
-    deletion window must be at least the backup retention, or backups must be purged
-  - Admin → Feedback entries: they aren't linked to codes. Keep pilot feedback anonymous
-    (no code in it), or keep it on paper with the key
+  - database backups: erased samples stay in backups until those expire, and **restoring an
+    older backup brings them back** unless the erasure ledger is re-applied
+    (`npm run handwriting:erasures`). The consent form's deletion window must be at least the
+    backup retention, or backups must be purged
+  - Admin → Feedback entries: they aren't linked to codes and are never deleted automatically.
+    Erasure reports how many mention the code, for a person to review. Keep pilot feedback
+    anonymous (no code in it), or keep it on paper with the key
+
+  The full surface-by-surface review and the erasure checklist are in
+  [M12_ERASURE_REVIEW.md](M12_ERASURE_REVIEW.md).
   - the paper key and signed form
 
 - **Breach or mistake:** if a name or identifying detail is found in a sample note, delete that

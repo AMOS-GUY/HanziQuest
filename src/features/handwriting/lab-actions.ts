@@ -99,6 +99,9 @@ export async function recordConsentAction(_: FormState, formData: FormData) {
 export async function eraseParticipantAction(_: FormState, formData: FormData) {
   return formAction("handwriting:erase", async (actor) => {
     const r = await eraseParticipant(prisma, actor, fields(formData));
-    return `${r.code}: ${r.samplesDeleted} sample(s) deleted, ${r.auditEntriesRedacted} audit entr${r.auditEntriesRedacted === 1 ? "y" : "ies"} redacted, consent revoked. The code is now blocked.`;
+    const feedback = r.feedbackToReview
+      ? ` ${r.feedbackToReview} feedback entr${r.feedbackToReview === 1 ? "y mentions" : "ies mention"} this code: review ${r.feedbackToReview === 1 ? "it" : "them"} in Admin → Feedback (not erased automatically).`
+      : "";
+    return `${r.code}: ${r.samplesDeleted} sample(s) deleted, ${r.auditEntriesRedacted} audit entr${r.auditEntriesRedacted === 1 ? "y" : "ies"} redacted, consent revoked. The code is now blocked.${feedback} Delete any exported files by hand.`;
   });
 }

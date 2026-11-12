@@ -120,6 +120,20 @@ The owner is responsible for:
   CI drill (when CI runs) and by the first staging backup after approval.
 - The RTO figures are estimates until a real drill is timed.
 
+## Restores and handwriting erasure (M12)
+
+A backup taken before a pilot participant's data was erased still contains their samples, and
+restoring it **brings them back** (proved by `npm run drill:backup`, section 4). So:
+
+- after every erasure, export the erasure ledger and keep it outside the repository:
+  `npm run handwriting:erasures -- --export <file>`
+- after **every** restore, before the database serves traffic, re-apply it:
+  `npm run handwriting:erasures -- --apply <file> --target <restored url>`
+- erasure is complete in backups only once every backup older than the erasure has expired or
+  been purged. Promise participants a deletion window at least as long as backup retention.
+
+Details and the full checklist: [M12_ERASURE_REVIEW.md](M12_ERASURE_REVIEW.md).
+
 ## Restore safety (M11)
 
 `db:restore` refuses or rolls back, leaving the target empty, in every case below.

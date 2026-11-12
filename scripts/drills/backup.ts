@@ -16,6 +16,9 @@
  *    f. a non-empty target.
  * 3. Encryption round trip: only if the `age` CLI is installed (CI installs it). Otherwise it is
  *    reported as skipped.
+ * 4. Erasure survives a restore (M12): synthetic TEST handwriting is backed up, erased, and the
+ *    old backup restored. The restore brings the samples back (proving the risk), and
+ *    re-applying the erasure ledger removes them again.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -209,6 +212,152 @@ async function main() {
     }
     check("a different key can't decrypt it", refused);
   }
+
+  await erasureSurvivesRestore();
+}
+
+/** Synthetic TEST participant with consent, two samples and their audit entries. */
+async function seedHandwriting(url: string, code: string) {
+  const c = new pg.Client({ connectionString: url });
+  await c.connect();
+  try {
+    const ch = await c.query<{ id: string }>(
+      `SELECT id FROM "Character" WHERE "hasStrokeData" LIMIT 1`,
+    );
+    const characterId = ch.rows[0]!.id;
+    await c.query(
+      `INSERT INTO "PilotParticipant" (id, code, status, "updatedAt") VALUES ($1, $2, 'ACTIVE', now())`,
+      [`drill-p-${code}`, code],
+    );
+    await c.query(
+      `INSERT INTO "PilotConsent" (id, "participantId", version, "acceptedAt") VALUES ($1, $2, 'pilot-v0.1', now())`,
+      [`drill-c-${code}`, `drill-p-${code}`],
+    );
+    for (const i of [1, 2]) {
+      const id = `drill-s-${code}-${i}`;
+      await c.query(
+        `INSERT INTO "HandwritingSample" (id, "participantCode", "participantId", "consentId", "characterId",
+           category, "shouldAccept", strokes, "engineVersion", band, score, "identityVerified", "consentConfirmed")
+         VALUES ($1, $2, $3, $4, $5, 'CORRECT', true, '[]', 'drill', 'GOOD', 80, true, true)`,
+        [id, code, `drill-p-${code}`, `drill-c-${code}`, characterId],
+      );
+      await c.query(
+        `INSERT INTO "AuditLog" (id, action, "entityType", "entityId", after)
+         VALUES ($1, 'handwriting.sample.record', 'HandwritingSample', $2, $3)`,
+        [`drill-a-${code}-${i}`, id, JSON.stringify({ participant: code })],
+      );
+    }
+  } finally {
+    await c.end();
+  }
+}
+
+async function handwritingState(url: string, code: string) {
+  const c = new pg.Client({ connectionString: url });
+  await c.connect();
+  try {
+    const q = async (sql: string) => (await c.query<{ v: string }>(sql, [code])).rows[0]?.v;
+    return {
+      samples: Number(
+        await q(`SELECT count(*)::text AS v FROM "HandwritingSample" WHERE "participantCode" = $1`),
+      ),
+      status: await q(`SELECT status::text AS v FROM "PilotParticipant" WHERE code = $1`),
+      activeConsents: Number(
+        await q(`SELECT count(*)::text AS v FROM "PilotConsent" k JOIN "PilotParticipant" p ON p.id = k."participantId"
+                 WHERE p.code = $1 AND k."revokedAt" IS NULL`),
+      ),
+      auditMentions: Number(
+        await q(
+          `SELECT count(*)::text AS v FROM "AuditLog" WHERE "entityType" = 'HandwritingSample' AND after::text LIKE '%' || $1 || '%'`,
+        ),
+      ),
+    };
+  } finally {
+    await c.end();
+  }
+}
+
+async function erasureSurvivesRestore() {
+  console.log("4. Erasure survives a restore (erasure ledger)");
+  const code = "TESTDRILL1";
+  const live = await freshTarget("erasure-live");
+  const seeded = cli([PRISMA, "db", "seed"], {
+    MIGRATE_DATABASE_URL: live,
+    DATABASE_URL: live,
+    SEED_ADMIN_EMAIL: "drill-admin@example.test",
+    SEED_ADMIN_PASSWORD: "drill-only-password-1234",
+  });
+  if (!seeded.ok) throw new Error("seed failed for the erasure drill");
+  await seedHandwriting(live, code);
+  const before = file("before-erasure.ndjson.gz");
+  check(
+    "backup taken while the participant's samples exist",
+    tsx("scripts/db-backup.ts", ["--source", live, "--out", before]).ok,
+  );
+
+  // Erase on the live database through the shared erasure path, then export the ledger.
+  const request = file("erase-request.json");
+  fs.writeFileSync(
+    request,
+    JSON.stringify({
+      format: "hanziquest-erasure-ledger",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      entries: [{ code, reason: "WITHDRAWAL", erasedAt: new Date().toISOString() }],
+    }),
+  );
+  const erased = tsx("scripts/handwriting-erasures.ts", ["--apply", request, "--target", live]);
+  const afterErase = await handwritingState(live, code);
+  check(
+    "erasure on the live database: samples gone, code withdrawn, consent revoked, audit redacted",
+    erased.ok &&
+      afterErase.samples === 0 &&
+      afterErase.status === "WITHDRAWN" &&
+      afterErase.activeConsents === 0 &&
+      afterErase.auditMentions === 0,
+    JSON.stringify(afterErase),
+  );
+  const ledger = file("ledger.json");
+  const exported = tsx("scripts/handwriting-erasures.ts", ["--export", ledger, "--source", live]);
+  check(
+    "ledger exported with the erased code",
+    exported.ok && fs.readFileSync(ledger, "utf8").includes(code),
+  );
+
+  const restored = await freshTarget("erasure-restored");
+  const r = tsx("scripts/db-restore.ts", ["--in", before, "--target", restored]);
+  const resurrected = await handwritingState(restored, code);
+  check(
+    "restoring the older backup brings the erased samples back (the risk)",
+    r.ok && resurrected.samples === 2 && resurrected.status === "ACTIVE",
+    JSON.stringify(resurrected),
+  );
+  const applied = tsx("scripts/handwriting-erasures.ts", ["--apply", ledger, "--target", restored]);
+  const final = await handwritingState(restored, code);
+  check(
+    "re-applying the ledger erases them again and blocks the code",
+    applied.ok &&
+      final.samples === 0 &&
+      final.status === "WITHDRAWN" &&
+      final.activeConsents === 0 &&
+      final.auditMentions === 0,
+    JSON.stringify(final),
+  );
+  const again = tsx("scripts/handwriting-erasures.ts", ["--apply", ledger, "--target", restored]);
+  check(
+    "re-applying is idempotent",
+    again.ok && (await handwritingState(restored, code)).samples === 0,
+  );
+  const inRepo = tsx("scripts/handwriting-erasures.ts", [
+    "--export",
+    "docs/ledger.json",
+    "--source",
+    live,
+  ]);
+  check(
+    "the ledger can't be written into the (public) repository",
+    !inRepo.ok && !fs.existsSync("docs/ledger.json") && /Refusing/.test(inRepo.output),
+  );
 }
 
 async function expectRejected(name: string, f: string, db: string, pattern?: RegExp) {

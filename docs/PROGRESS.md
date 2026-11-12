@@ -190,7 +190,7 @@ Target public beta: **2026-12-08**.
 - [ ] **BLOCKED here:** `age` round trip, Firefox e2e, the `docker` job (local process-level equivalents pass). Free ways to obtain them are documented; installing them is the owner's decision.
 - [ ] **GitHub CI not run** (minutes exhausted until 2026-12-01); resume steps in docs/LOCAL_CI.md
 
-### M12 pilot privacy + M14 provenance infrastructure (2026-11-12, `feature/m12-pilot-privacy`) — PR open, not merged
+### M12 pilot privacy + M14 provenance infrastructure (2026-11-12, `feature/m12-pilot-privacy`) — merged by the owner (PR #22, `02a6b68`)
 
 - [x] Versioned consent (`PilotParticipant`, `PilotConsent`): recording refused without a current, unrevoked acceptance; real codes refused until the owner approves the form (D-057)
 - [x] Participant erasure: samples (incl. pre-M12 rows), audit-content redaction, consent revoked, code blocked; one transaction, Super Admin only, typed confirmation (D-058)
@@ -199,6 +199,8 @@ Target public beta: **2026-12-08**.
 - [x] Source register, edition tags, example provenance, review metadata, `content:provenance` report and list comparison (D-060); no content added, no HSK membership claimed
 - [x] Expand-only migration `20261112125646_m12_pilot_consent_and_provenance`; `db:check-migrations` passes
 - [x] `npm run ci:local` at `8ebbb70` (run `20261112T132843-2d56`): **exit 0, 25 PASS, 4 BLOCKED (age, Docker ×3), 2 NOT RUN (Firefox advisory, report upload), 0 FAIL**. The first run failed one e2e: the admin import fixture didn't cite a registered source (the new rule working) and the lab test reused ink; both fixed. GitHub Actions not run (quota)
+- [ ] **GitHub Actions on PR #22 / `02a6b68` never started** ("recent account payments have failed or your spending limit…"): queued before the repository became public. Needs a new run
+- [x] Erasure privacy review (D-061, [M12_ERASURE_REVIEW.md](M12_ERASURE_REVIEW.md)): restoring an older backup brings erased samples back (drill-proven), fixed procedurally with the erasure ledger (`handwriting:erasures`); feedback mentioning a code is reported for review; exports and backups need the manual checklist. **Erasure is not complete everywhere until that checklist is done**
 - [ ] **Not built:** pilot report with intervals (protocol item 3), optional participant bands (4), LAN pilot mode (6), printable checklist (7), admin review queue page, learner-facing edition label, fixing the 3 content warnings
 - [ ] **Owner:** approve the consent form (then flip `ownerApproved`), fill in its blanks, approve register entries
 - [ ] **Not done here:** no participants recruited, no real handwriting, no thresholds changed, nothing on Neon or Render
@@ -701,3 +703,24 @@ See `docs/M11_STAGING_AUDIT.md`.
   and erased.
 - Not touched: thresholds, `ENGINE_VERSION`, content (only metadata wording and a source id in
   the starter file), Neon, Render, secrets, spending. No participants, no real handwriting.
+
+### 2026-11-12 — Session 15 (public repository audit, erasure review)
+
+- The repository is now public. Security audit before any new workflow run (full report kept
+  out of the repository, in `.local/`): no secret, credential, token, real database URL or
+  Neon/Render identifier in any of the 70 commits; the one pattern hit is a synthetic test
+  fixture; no staging value from `.env.staging.local` appears anywhere; the sensitive local
+  files are all ignored and were never committed. `ci.yml` uses `pull_request` (not
+  `pull_request_target`), holds no secrets and has a read-only token, so fork PRs can't reach
+  secrets; deploy and backup run only on manual dispatch with environment secrets.
+  Recommendations for the owner: protect the `staging` environment (it has no rules), require
+  approval for outside contributors' workflow runs, and use a noreply commit email.
+- The owner had merged the M12 branch as PR #22 (`02a6b68`). Its GitHub runs never started
+  (billing message, queued before the visibility change). No GitHub run has executed it yet.
+- Workflows unchanged since M11; `verify` and `docker` intact; triggers: push to `main`/`develop`
+  and every pull request.
+- Erasure review: the backup drill now proves a restore of an older backup brings erased
+  samples back, and that re-applying the new erasure ledger removes them again; erasure reports
+  feedback that mentions the code. LOCAL_CI.md now describes local CI as complementary.
+- Nothing merged, deployed or provisioned; Neon and Render untouched; no participants, no real
+  handwriting, no threshold changes.

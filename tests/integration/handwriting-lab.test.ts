@@ -9,7 +9,9 @@ import { DomainError, type Actor } from "@/features/administration/services";
 import { loadStrokeData } from "@/features/curriculum/stroke-data";
 import { CURRENT_PILOT_CONSENT_VERSION, currentConsentForm } from "@/features/handwriting/consent";
 import {
+  applyErasureLedger,
   eraseParticipant,
+  exportErasureLedger,
   participantOverview,
   recordConsent,
 } from "@/features/handwriting/participants";
@@ -375,6 +377,93 @@ describe("participant erasure and withdrawal enforcement", () => {
     });
     const after = await analyseSamples(prisma, 20_000, { includeTests: true });
     expect(after.samples.some((s) => s.participant === c)).toBe(false);
+  });
+});
+
+describe("privacy review: feedback and restored backups", () => {
+  it("reports, but never deletes, feedback that mentions an erased code", async () => {
+    const c = code();
+    await recordConsent(prisma, collector, consent(c));
+    await recordSample(prisma, collector, sample(c));
+    const fb = await prisma.feedback.create({
+      data: { kind: "HANDWRITING", message: `Pilot note for ${c}: the checker felt strict` },
+    });
+    const r = await eraseParticipant(prisma, collector, {
+      participantCode: c,
+      reason: "WITHDRAWAL",
+      confirmCode: c,
+    });
+    expect(r.feedbackToReview).toBe(1);
+    // Kept for a person to review: free text can't be erased safely by pattern.
+    expect(await prisma.feedback.findUnique({ where: { id: fb.id } })).not.toBeNull();
+    await prisma.feedback.delete({ where: { id: fb.id } });
+  });
+
+  it("exports a ledger of erased codes and re-applies it to resurrected data", async () => {
+    const c = code();
+    const { participant, consent: k } = await recordConsent(prisma, collector, consent(c));
+    const { sampleId } = await recordSample(prisma, collector, sample(c));
+    const snapshot = await prisma.handwritingSample.findUniqueOrThrow({ where: { id: sampleId } });
+    await eraseParticipant(prisma, collector, {
+      participantCode: c,
+      reason: "WITHDRAWAL",
+      confirmCode: c,
+    });
+    const ledger = await exportErasureLedger(prisma);
+    const entry = ledger.entries.find((e) => e.code === c);
+    expect(entry).toMatchObject({ reason: "WITHDRAWAL" });
+    expect(JSON.stringify(ledger)).not.toMatch(/strokes|points/);
+
+    // Simulate restoring a backup taken before the erasure: the old rows come back.
+    await prisma.pilotParticipant.update({
+      where: { id: participant.id },
+      data: { status: "ACTIVE", erasedAt: null },
+    });
+    await prisma.pilotConsent.update({ where: { id: k.id }, data: { revokedAt: null } });
+    await prisma.handwritingSample.create({
+      data: {
+        ...snapshot,
+        strokes: snapshot.strokes as object,
+        deviceInfo: snapshot.deviceInfo ?? undefined,
+      },
+    });
+    expect(await prisma.handwritingSample.count({ where: { participantCode: c } })).toBe(1);
+
+    const results = await applyErasureLedger(prisma, { ...ledger, entries: [entry] });
+    expect(results[0]!.samplesDeleted).toBe(1);
+    expect(await prisma.handwritingSample.count({ where: { participantCode: c } })).toBe(0);
+    expect(await domainCode(recordSample(prisma, collector, sample(c)))).toBe("forbidden");
+    const reapply = await prisma.auditLog.findFirst({
+      where: { action: "handwriting.participant.erase-reapply", entityId: participant.id },
+    });
+    expect(reapply?.actorId).toBeNull();
+  });
+
+  it("re-applying blocks a code the restored database has never seen", async () => {
+    const c = code();
+    await applyErasureLedger(prisma, {
+      format: "hanziquest-erasure-ledger",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      entries: [{ code: c, reason: "RETENTION_ENDED", erasedAt: new Date().toISOString() }],
+    });
+    const row = await prisma.pilotParticipant.findUniqueOrThrow({ where: { code: c } });
+    expect(row.status).toBe("RETENTION_ENDED");
+    expect(await domainCode(recordConsent(prisma, collector, consent(c)))).toBe("conflict");
+  });
+
+  it("rejects a malformed ledger without erasing anything", async () => {
+    await expect(applyErasureLedger(prisma, { entries: [{ code: "P01" }] })).rejects.toThrow();
+    await expect(
+      applyErasureLedger(prisma, {
+        format: "hanziquest-erasure-ledger",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        entries: [
+          { code: "jane@example.com", reason: "WITHDRAWAL", erasedAt: new Date().toISOString() },
+        ],
+      }),
+    ).rejects.toThrow();
   });
 });
 

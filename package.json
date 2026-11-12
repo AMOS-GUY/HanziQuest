@@ -31,6 +31,7 @@
     "content:coverage": "tsx scripts/content.ts coverage",
     "content:report": "tsx scripts/content-report.ts",
     "content:provenance": "tsx scripts/content-provenance.ts",
+    "handwriting:erasures": "tsx scripts/handwriting-erasures.ts",
     "brand:icons": "tsx scripts/generate-icons.ts",
     "progress:rebuild": "tsx scripts/rebuild-progress.ts",
     "handwriting:report": "tsx scripts/handwriting-report.ts",

@@ -1,10 +1,13 @@
-# Local CI (temporary, 2026-11-12 → 2026-12-01)
+# Local CI (complementary to GitHub Actions)
 
-The GitHub Actions minutes for this private repository are used up until **2026-12-01**, so no
-CI runs on GitHub until then. Until then, every change is verified with `npm run ci:local`. It
-reproduces `.github/workflows/ci.yml` on the development machine, in the same order, against
-disposable local databases. **It is not GitHub CI**, and nothing it reports may be described as
-"CI passed". The workflows themselves are unchanged.
+**Update 2026-11-12:** the repository is now public, so GitHub-hosted runners no longer use the
+private-repository minutes and GitHub Actions is again the CI of record. `npm run ci:local`
+stays as a complementary tool: run it before pushing, and use it when GitHub is unavailable.
+(It was introduced while the minutes were used up, 2026-11-12 → 2026-12-01.)
+
+`npm run ci:local` reproduces `.github/workflows/ci.yml` on the development machine, in the
+same order, against disposable local databases. **It is not GitHub CI**, and nothing it reports
+may be described as "CI passed". The workflows themselves are unchanged.
 
 ## Prerequisites
 
