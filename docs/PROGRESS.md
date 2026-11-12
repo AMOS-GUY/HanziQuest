@@ -182,7 +182,7 @@ Target public beta: **2026-12-08**.
 
 - [x] Workflow audit: every `ci.yml` step mapped to a local command (docs/LOCAL_CI.md); the deploy and backup workflows are documented as not reproducible
 - [x] `npm run ci:local`: disposable local databases, refuses hosted or staging databases, PASS/FAIL/BLOCKED/NOT RUN per step, masked logs
-- [x] Final fresh run at `ee05d63`: **exit 0, 25 PASS, 5 BLOCKED, 1 NOT RUN, 0 FAIL**
+- [x] Final fresh runs at `ee05d63` and `c0ac9be`: **exit 0, 25 PASS, 5 BLOCKED, 1 NOT RUN, 0 FAIL** each
 - [ ] **BLOCKED here:** `age` round trip, Firefox e2e, the `docker` job (local process-level equivalents pass). Free ways to obtain them are documented; installing them is the owner's decision.
 - [ ] **GitHub CI not run** (minutes exhausted until 2026-12-01); resume steps in docs/LOCAL_CI.md
 
@@ -631,4 +631,7 @@ See `docs/M11_STAGING_AUDIT.md`.
     equivalents 23L and 24L pass
 - Local PostgreSQL 18.6 vs CI postgres:17, recorded. Fix `829cb4e`: the runner now records the
   PostgreSQL version (reporting only).
+- Pre-PR re-verification: preflight self-tests (hosted URLs and the staging host refused), then a
+  fresh run at `c0ac9be` (`20261112T102916-7fba`): same result, PostgreSQL 18.6 reported, no
+  disposable databases left behind.
 - Not done: GitHub CI (quota), Docker, `age`, Firefox. Nothing touched Neon or Render. No secrets.

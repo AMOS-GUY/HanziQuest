@@ -164,42 +164,48 @@ version-agnostic. Still, the first GitHub run after 2026-12-01 is the real Postg
 
 ## Results
 
-**Final verification (2026-11-12): run `20261112T064912-61ef`, commit `ee05d63`,
-`npm run ci:local -- --fresh --with-firefox`.**
+**Final verification (2026-11-12): run `20261112T102916-7fba`, commit `c0ac9be` (the runner and
+docs as submitted; later commits change docs only), `npm run ci:local -- --fresh --with-firefox`.**
 
 - The working tree was clean (enforced by `--fresh`), and `.next`, `test-results` and
   `playwright-report` were removed first.
 - `origin/main` was `f079947`.
-- Node 24.18.0; local PostgreSQL 18.6 (GitHub CI: postgres:17). The run's own summary shows
-  "postgres ?" because of a reporting bug, fixed in `829cb4e`. 18.6 was measured separately on the
-  same server.
-- **Exit code 0: 25 PASS, 5 BLOCKED, 1 NOT RUN, 0 FAIL.**
+- Node 24.18.0; local PostgreSQL 18.6, reported by the runner itself (GitHub CI: postgres:17).
+- **Exit code 0: 25 PASS, 5 BLOCKED, 1 NOT RUN, 0 FAIL.** All disposable `hq_localci_*`
+  databases were dropped afterwards.
+- Before the run, the preflight was self-tested: a hosted URL in `DATABASE_URL`,
+  `TEST_DATABASE_URL`, `MIGRATE_DATABASE_URL` or `DRILL_DATABASE_URL`, or any variable containing
+  the staging host, was refused (exit 1) before anything connected. Lint, Prettier and the type
+  check pass on the runner.
 
-| #     | ci.yml step                           | Result                         | Evidence or reason                                                                                                       |
-| ----- | ------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| 00    | checkout, setup-node                  | PASS                           | clean tree, Node 24.18.0                                                                                                 |
-| 01    | Install dependencies                  | PASS                           | `npm ls --all`: the installed tree matches the lockfile (`npm ci` itself not re-run)                                     |
-| 02    | Dependency audit                      | PASS                           | 0 high/critical in production dependencies                                                                               |
-| 03    | Migration safety                      | PASS                           | 12 migrations, none destructive, none edited since `origin/main`                                                         |
-| 04    | Ephemeral auth secret                 | PASS                           | random per run                                                                                                           |
-| 05–08 | Lint, Formatting, Type check, Content | PASS                           |                                                                                                                          |
-| 09    | Unit tests                            | PASS                           | 160 tests                                                                                                                |
-| 10    | Create test database                  | PASS                           | through the `pg` driver (CI: psql)                                                                                       |
-| 11    | Integration tests                     | PASS                           | 94 tests, on the disposable test database                                                                                |
-| 12    | Migrate and seed                      | PASS                           | fresh disposable database                                                                                                |
-| 13a–d | Backup and restore drill              | PASS                           | backup, migrate restore database, restore, verify (checksums, FKs, app reads)                                            |
-| 14    | Install age                           | **BLOCKED**                    | `age` isn't installed                                                                                                    |
-| 15    | Migration drill                       | PASS                           | fresh, upgrade, pending, failure and recovery, marker, database down                                                     |
-| 16    | Backup drill                          | PASS (encryption part BLOCKED) | restore, verify, 6 corrupted or tampered cases rejected; the `age` round trip was skipped by the drill                   |
-| 17    | Production build                      | PASS                           |                                                                                                                          |
-| 18    | Playwright browser                    | PASS                           | Chromium installed                                                                                                       |
-| 19    | End-to-end tests (Chromium)           | PASS                           | **36 passed, 18 skipped, 0 failed** (5.7 min, `CI=true`)                                                                 |
-| 20    | Firefox e2e (advisory)                | **BLOCKED**                    | `browserType.launch: spawn UNKNOWN`: Firefox can't start on this machine (22 tests couldn't launch; 3 needed no browser) |
-| 21    | Smoke test                            | PASS                           | all checks on a production server (:3200)                                                                                |
-| —     | Upload Playwright report              | NOT RUN                        | no artifact store locally                                                                                                |
-| 22    | docker: build image                   | **BLOCKED**                    | no Docker                                                                                                                |
-| 23    | docker: start-up test                 | **BLOCKED**                    | no Docker. Local equivalent **23L PASS**: the image's `CMD` started; liveness ok; readiness `migrations: ok`             |
-| 24    | docker: placeholder-secret refusal    | **BLOCKED**                    | no Docker. Local equivalent **24L PASS**: exit code 1                                                                    |
+The previous fresh run (`20261112T064912-61ef`, commit `ee05d63`) had the same result. Its summary
+printed "postgres ?" because of a reporting bug, fixed in `829cb4e`.
+
+| #     | ci.yml step                           | Result                         | Evidence or reason                                                                                                            |
+| ----- | ------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| 00    | checkout, setup-node                  | PASS                           | clean tree, Node 24.18.0                                                                                                      |
+| 01    | Install dependencies                  | PASS                           | `npm ls --all`: the installed tree matches the lockfile (`npm ci` itself not re-run)                                          |
+| 02    | Dependency audit                      | PASS                           | 0 high/critical in production dependencies                                                                                    |
+| 03    | Migration safety                      | PASS                           | 12 migrations, none destructive, none edited since `origin/main`                                                              |
+| 04    | Ephemeral auth secret                 | PASS                           | random per run                                                                                                                |
+| 05–08 | Lint, Formatting, Type check, Content | PASS                           |                                                                                                                               |
+| 09    | Unit tests                            | PASS                           | 160 tests                                                                                                                     |
+| 10    | Create test database                  | PASS                           | through the `pg` driver (CI: psql)                                                                                            |
+| 11    | Integration tests                     | PASS                           | 94 tests, on the disposable test database                                                                                     |
+| 12    | Migrate and seed                      | PASS                           | fresh disposable database                                                                                                     |
+| 13a–d | Backup and restore drill              | PASS                           | backup, migrate restore database, restore, verify (checksums, FKs, app reads)                                                 |
+| 14    | Install age                           | **BLOCKED**                    | `age` isn't installed                                                                                                         |
+| 15    | Migration drill                       | PASS                           | fresh, upgrade, pending, failure and recovery, marker, database down                                                          |
+| 16    | Backup drill                          | PASS (encryption part BLOCKED) | restore, verify, 6 corrupted or tampered cases rejected; the `age` round trip was skipped by the drill                        |
+| 17    | Production build                      | PASS                           |                                                                                                                               |
+| 18    | Playwright browser                    | PASS                           | Chromium installed                                                                                                            |
+| 19    | End-to-end tests (Chromium)           | PASS                           | **36 passed, 18 skipped, 0 failed** (5.3 min, `CI=true`)                                                                      |
+| 20    | Firefox e2e (advisory)                | **BLOCKED**                    | `browserType.launch: spawn UNKNOWN`: Firefox can't start on this machine (22 couldn't launch, 2 skipped, 3 needed no browser) |
+| 21    | Smoke test                            | PASS                           | all checks on a production server (:3200)                                                                                     |
+| —     | Upload Playwright report              | NOT RUN                        | no artifact store locally                                                                                                     |
+| 22    | docker: build image                   | **BLOCKED**                    | no Docker                                                                                                                     |
+| 23    | docker: start-up test                 | **BLOCKED**                    | no Docker. Local equivalent **23L PASS**: the image's `CMD` started; liveness ok; readiness `migrations: ok`                  |
+| 24    | docker: placeholder-secret refusal    | **BLOCKED**                    | no Docker. Local equivalent **24L PASS**: exit code 1                                                                         |
 
 **Genuine failures: none.** The 18 skipped e2e tests are phone copies of desktop-only flows and
 the opt-in screenshot runs, the same as on CI.
