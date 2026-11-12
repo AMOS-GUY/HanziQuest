@@ -654,3 +654,17 @@ See `docs/M11_STAGING_AUDIT.md`.
   database (readiness 200, migrations ok).
 - The next roadmap (M12–M17) was proposed for owner review in docs/ROADMAP.md; nothing implemented.
 - Nothing touched Neon or Render. No secrets, no spending.
+- The owner approved the roadmap direction and order (M12 → M14 alongside → M15 → M13 → M16 →
+  M17). Documentation and planning only:
+  - [M12_PILOT_PROTOCOL.md](M12_PILOT_PROTOCOL.md): recruitment criteria, a draft written
+    consent form, data stored per attempt, device coverage, the generated prompt rotation,
+    privacy, retention and withdrawal, and the evaluation method with intervals
+  - [CURRICULUM_PROVENANCE_PLAN.md](CURRICULUM_PROVENANCE_PLAN.md): HSK 2.0 and 3.0
+  - ROADMAP.md now separates the 5-person exploratory pilot from the ≥ 15-person validation
+    study, and lists which work needs no staging or spending
+- Findings while planning:
+  - there is no way to delete one participant's samples (needed for withdrawal)
+  - consent is stored only as a boolean
+  - the pilot has only 10 wrong-character samples, so it cannot show the ≤ 1 % target
+  - the HSK 1 Starter file cites the HSK 2.0 list as "public" without a recorded source
+- No participants recruited, no handwriting collected, no thresholds or content changed.
