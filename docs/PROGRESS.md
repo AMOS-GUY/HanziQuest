@@ -824,3 +824,27 @@ See `docs/M11_STAGING_AUDIT.md`.
   - corrected: HANDWRITING.md's "10 testers" (the rules say 15) and the in-set qualifier;
     ROADMAP's status note
   - decision register D1–D12 and three proposed milestones in the report
+
+### 2026-11-13 — Session 19 (M13 owner review)
+
+- Verified the branch: 8 commits at `460fcca` (the handover said 7), based on the current
+  `main` `d712a82`, noreply identity throughout. No PR opened (no `gh` or GitHub sign-in); the
+  compare link and PR text are ready.
+- Regression review:
+  - synthetic ink moved byte-identical
+  - import diagnostics advisory only
+  - the engine fix independently confirmed (no change for finite input; 410/410 replays
+    identical; the former hang returns in milliseconds)
+- Found and fixed in the replay harness (`4bf68d2`):
+  - R1: `readOnlyClient` let `$extends` through, which could yield a writable client
+  - R2 and R3: silent truncation of attempts and samples
+- Tests were attributed to their exact commits; secret and participant-data scans clean.
+- Wrote [reports/2026-11-13-m13-owner-review.md](reports/2026-11-13-m13-owner-review.md):
+  - the decision register D1–D12 in full
+  - the identity investigation and a shadow-mode plan
+  - the performance bottleneck and exact pruning options (an estimated 65–77 % of alignments
+    skippable)
+  - the validation plan
+  - all findings
+  - the roadmap reconciled with M14 (M14-b still open) and M13-b
+- No grading, candidate-set, XP, mastery or SRS change; no new milestone started.
