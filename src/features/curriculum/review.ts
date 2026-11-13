@@ -134,6 +134,8 @@ interface ReviewRow {
   decision: "APPROVED" | "CHANGES_REQUESTED";
   level: Verification | null;
   reviewerRole: string;
+  /** Null once the reviewer's account is deleted (the role and decision are kept). */
+  reviewerId: string | null;
   note: string | null;
   createdAt: Date;
   snapshot: unknown;
@@ -154,6 +156,7 @@ async function reviewsFor(db: Db, type: ReviewEntityType, ids: readonly string[]
       note: true,
       createdAt: true,
       snapshot: true,
+      reviewerId: true,
     },
   })) as ReviewRow[];
   const byId = new Map<string, ReviewRow[]>();
@@ -457,11 +460,26 @@ async function curriculaContaining(
 /**
  * Did this actor change this version? Any audited change by them to the item (or, for a
  * curriculum, to its structure or any item in it), or an import of a curriculum containing it,
- * since the last approval of this item.
+ * since the last approval of a different version of this item.
  */
-async function actorAuthoredVersion(db: Db, actorId: string, type: ReviewEntityType, id: string) {
+async function actorAuthoredVersion(
+  db: Db,
+  actorId: string,
+  type: ReviewEntityType,
+  id: string,
+  fingerprint: string,
+) {
+  // The window starts at the last approval of a DIFFERENT version: every change that produced
+  // the current version happened after it. (Not the last approval of any version: once a first
+  // reviewer approves the current version, its author's earlier edits would drop out of the
+  // window and the author could verify it, D-075.)
   const lastApproval = await db.contentReview.findFirst({
-    where: { entityType: type, entityId: id, decision: "APPROVED" },
+    where: {
+      entityType: type,
+      entityId: id,
+      decision: "APPROVED",
+      fingerprint: { not: fingerprint },
+    },
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });
@@ -530,7 +548,15 @@ export async function recordReview(
           "conflict",
           "This item changed after you opened it. Reload the review queue and review the current version.",
         );
-      if (await actorAuthoredVersion(tx, actor.id, input.entityType, input.entityId))
+      if (
+        await actorAuthoredVersion(
+          tx,
+          actor.id,
+          input.entityType,
+          input.entityId,
+          version.fingerprint,
+        )
+      )
         throw new DomainError(
           "forbidden",
           "You changed or imported this version, so another reviewer has to review it.",
@@ -545,6 +571,7 @@ export async function recordReview(
             "conflict",
             `This version is already approved as ${current.verification.toLowerCase()}.`,
           );
+        if (level === "VERIFIED") assertIndependentVerification(current, actor.id);
         const blockers = await approvalBlockers(
           tx,
           input.entityType,
@@ -613,13 +640,45 @@ export async function recordReview(
   );
 }
 
+/**
+ * Independent verification (D-075). VERIFIED is a second step: the exact current version must
+ * already hold a current REVIEWED approval, recorded by a different reviewer. Applies to every
+ * role, Super Admins included. (The reviewer must also not have authored the version, and the
+ * source and licence rules apply: both are checked by the caller.)
+ */
+function assertIndependentVerification(
+  current: {
+    status: ReviewStatus;
+    verification: Verification;
+    history: readonly ReviewRow[];
+  } | null,
+  actorId: string,
+) {
+  if (!current || current.status !== "approved" || current.verification !== "REVIEWED")
+    throw new DomainError(
+      "conflict",
+      "Can't verify yet: this exact version needs a current Reviewed approval first, by another reviewer.",
+    );
+  const reviewed = current.history.find((r) => r.decision === "APPROVED")!;
+  // A deleted account (null) can't be the person verifying now.
+  if (reviewed.reviewerId === actorId)
+    throw new DomainError(
+      "forbidden",
+      "You approved this version as Reviewed, so a different reviewer has to verify it.",
+    );
+}
+
 /** The current review state of one item, or of a curriculum (status from its own history). */
 async function currentState(
   db: Db,
   type: ReviewEntityType,
   id: string,
   register: SourceRegister,
-): Promise<{ status: ReviewStatus; verification: Verification } | null> {
+): Promise<{
+  status: ReviewStatus;
+  verification: Verification;
+  history: readonly ReviewRow[];
+} | null> {
   if (type !== "CURRICULUM") return (await itemStates(db, type, [id], register)).get(id) ?? null;
   const [row, version, history] = await Promise.all([
     db.curriculum.findUnique({ where: { id }, select: { verification: true } }),
@@ -627,9 +686,11 @@ async function currentState(
     reviewsFor(db, "CURRICULUM", [id]),
   ]);
   if (!row || !version) return null;
+  const rows = history.get(id) ?? [];
   return {
     verification: row.verification,
-    status: reviewStatus(row.verification, version.fingerprint, history.get(id) ?? []),
+    history: rows,
+    status: reviewStatus(row.verification, version.fingerprint, rows),
   };
 }
 
@@ -684,6 +745,7 @@ async function approvalBlockers(
 /** An item's current review state: its version, history, and status under the source rules. */
 interface ItemState {
   id: string;
+  /** Newest first. */
   verification: Verification;
   version: ContentVersion;
   history: ReviewRow[];

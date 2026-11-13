@@ -110,7 +110,8 @@ export default async function ReviewPage({
           Approve exact versions of characters, words and curricula. An approval applies only to the
           version you see: any later change to the content or its sources returns the item to
           Provisional. You can&apos;t approve a version you changed or imported. Reviewed and
-          Verified stay distinct, and nothing is shown to learners as official.
+          Verified stay distinct: Verified needs a second reviewer, after someone else approved the
+          same version as Reviewed. Nothing is shown to learners as official.
         </p>
       </div>
 
@@ -312,7 +313,8 @@ function ReviewItem({
                   { value: "APPROVE_REVIEWED", label: "Approve as Reviewed" },
                   {
                     value: "APPROVE_VERIFIED",
-                    label: "Approve as Verified (licensed sources only)",
+                    label:
+                      "Approve as Verified (second reviewer, after Reviewed; licensed sources only)",
                   },
                 ],
               },

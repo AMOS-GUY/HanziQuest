@@ -29,6 +29,7 @@ const row = (
   decision,
   level: decision === "APPROVED" ? level : null,
   reviewerRole: "CONTENT_REVIEWER",
+  reviewerId: "r1",
   note: null,
   createdAt: new Date(),
   snapshot: {},

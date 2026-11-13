@@ -300,6 +300,31 @@ describe("approving an exact version", () => {
     });
     const w = await item("VOCABULARY", "熊", unknown);
     expect(w.blockers.VERIFIED.map((b) => b.code)).toContain("licence-unknown");
+    // REVIEWED doesn't need a known licence; a second reviewer's VERIFIED does (D-075).
+    await recordReview(
+      prisma,
+      reviewer,
+      {
+        entityType: "VOCABULARY",
+        entityId: w.entityId,
+        fingerprint: w.fingerprint,
+        decision: "APPROVE_REVIEWED",
+      },
+      unknown,
+    );
+    const refused = await recordReview(
+      prisma,
+      reviewer2,
+      {
+        entityType: "VOCABULARY",
+        entityId: w.entityId,
+        fingerprint: w.fingerprint,
+        decision: "APPROVE_VERIFIED",
+      },
+      unknown,
+    ).catch((e: unknown) => e);
+    expect((refused as Error).message).toMatch(/unknown licence/);
+    // The first reviewer can't be the second (D-075).
     expect(
       await code(
         recordReview(
@@ -314,7 +339,7 @@ describe("approving an exact version", () => {
           unknown,
         ),
       ),
-    ).toBe("conflict");
+    ).toBe("forbidden");
   });
 });
 
