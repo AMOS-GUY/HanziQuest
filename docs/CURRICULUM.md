@@ -23,15 +23,15 @@
 - **Audio:** none yet. Listening exercises stay disabled until there is verified, licensed audio.
 
 **Required before calling the content verified:** a qualified Chinese teacher must review every
-pinyin reading, tone mark and gloss. Then set `verification` to `REVIEWED`/`VERIFIED` and
-re-import.
+pinyin reading, tone mark and gloss, in Admin → Review. Content files can't declare a review
+status: they must say `PROVISIONAL` (D-074).
 
 ## Content file format
 
 The schema is in `src/features/curriculum/content-schema.ts`:
 
 - `curriculum`: slug, name, framework (`HSK_2_0` | `HSK_3_0` | `CUSTOM`), version, source,
-  licenseStatus, verification.
+  licenseStatus, verification (must be `PROVISIONAL`; anything else is rejected, D-074).
 - `level`: level number and name.
 - `characters`: a map from each character to `{ pinyin, meaning, alternatives? }`. Every
   character used by any word must be defined here.
@@ -52,8 +52,10 @@ changes.
 - **History:** every decision is kept.
 - **Progress:** shown on the review page and on Content quality, and by
   `npm run content:provenance -- --reviews`.
-- **Repeats:** a second approval of an already-approved version is refused. Raising Reviewed
-  to Verified is allowed.
+- **Repeats:** a second approval of an already-approved version is refused.
+- **Verified needs two reviewers (D-075):** someone approves the version as Reviewed, then a
+  different reviewer approves the same version as Verified. Nobody may verify what they
+  reviewed, changed or imported, Super Admins included.
 - **Withdrawing a source approval** (owner, in `content/sources.json`): once that change is
   deployed, the queue shows affected approvals as changed. Run
   `npm run content:provenance -- --reconcile` to preview, then add `--apply` to return them to
@@ -65,7 +67,7 @@ Every content file must cite at least one id from the source register,
 `content/sources.json`, in `curriculum.sourceRefs`; files without it no longer validate or
 import (CLI or admin). Characters and words may add their own `sourceRefs`, optional
 `editions` tags (HSK 2.0 level, HSK 3.0 level, HSK 3.0 handwriting) and, for words, one
-`example` with its own `sourceRef` and verification. Edition tags need an approved
+`example` with its own `sourceRef` and verification (`PROVISIONAL` only). Edition tags need an approved
 `OFFICIAL_LIST` source, and none is registered. `npm run content:provenance` reports what is
 unreviewed or unsourced. See docs/CURRICULUM_PROVENANCE_PLAN.md and D-060.
 
@@ -107,8 +109,8 @@ consistency, duplicate glosses, lesson size, and traditional forms. See
   lesson is only detached from that lesson.
 - Increments `Lesson.contentVersion` when a lesson's word list changes.
 - Publishes new lessons unless `--draft` is passed. Existing lessons keep their status.
-- **Protects reviewed content (D-038):** a less verified file never overwrites a REVIEWED or
-  VERIFIED character or word. Every change to an existing shared record gets a
+- **Protects reviewed content (D-038):** files are always PROVISIONAL (D-074), so an import
+  never overwrites a REVIEWED or VERIFIED character's or word's reading or gloss. Every change to an existing shared record gets a
   ContentRevision.
 - Learners see a curriculum's lessons only while the **curriculum** is published (D-037).
 

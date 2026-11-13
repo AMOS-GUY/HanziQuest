@@ -82,7 +82,7 @@ not VERIFIED showed "Provisional content", so reviewed content would have been m
   their first admin role.
 - **Self-review is conservative.** Any audited action by the reviewer on the item since the last
   approval counts, including publishing. That never lets an author approve, at the cost of
-  sometimes needing a second reviewer.
+  sometimes needing a second reviewer. (D-075 narrows the window to the current version.)
 - **Permission-denied admin pages stay a "soft" 404.** Rechecked. The proxy answers non-staff,
   suspended and revoked sessions with a real 404 for everything under `/admin`, including
   server-action requests. Staff without one specific permission get the not-found page with
@@ -91,13 +91,48 @@ not VERIFIED showed "Provisional content", so reviewed content would have been m
   loading UI, or to duplicate per-route permissions in the proxy. Both cost more than the
   status code is worth, so neither was done.
 
-**Open (owner):**
+**D-074 · Content files may only declare PROVISIONAL (owner decision, 2026-11-13).** This
+closes the last way to get REVIEWED or VERIFIED without the review workflow.
 
-- **VERIFIED by one reviewer:** any holder of `curriculum:review` can approve VERIFIED directly.
-  A second-reviewer rule for VERIFIED is a policy choice, not built.
-- **Imports declaring a status:** content files may still declare REVIEWED or VERIFIED. They're
-  gated by the same source rules (no source is approved today, so it can't happen yet), but they
-  bypass the version-bound review. The recommendation is to allow only PROVISIONAL in files.
+- **Schema:** `curriculum.verification` and every example's `verification` must be PROVISIONAL.
+  Any other value fails validation with "Content files may only declare PROVISIONAL. REVIEWED
+  and VERIFIED are assigned through the review workflow". Nothing is downgraded silently.
+- **Importer:** `importCurriculumContent` checks again before its transaction and throws
+  `ContentStatusError`, a `DomainError`. Nothing is written, even for a caller that skipped
+  validation.
+- **Routes covered:** the admin validate and import actions, `content:import` and
+  `content:validate`, the seed, and tests. All of them go through both checks.
+- **The one way up:** `setVerification` in `recordReview`. Every other write sets PROVISIONAL or
+  lowers a status: creation, edits, imports and reconciliation.
+- **Tests:** unit (schema), integration (validator, importer with validation skipped, the CLI),
+  and e2e (the admin import).
+- **Also fixed:** `scripts/content.ts` ignored a file path given first, so
+  `content:import -- my.json` imported the default file. It was found by the CLI test.
+
+**D-075 · VERIFIED needs two independent reviewers (owner decision, 2026-11-13).**
+
+- **First step:** a reviewer approves PROVISIONAL → REVIEWED.
+- **Second step:** a different reviewer approves REVIEWED → VERIFIED. Verifying needs a current
+  REVIEWED approval of the exact current fingerprint, and the verifier must not be the
+  reviewer who recorded it. Otherwise it's refused. A deleted reviewer account can't be the
+  verifier.
+- **No role exemption:** these rules apply to every role. Super Admins can't skip REVIEWED or
+  verify their own review.
+- **Self-review:** neither reviewer may have changed or imported the version. The window now
+  starts at the last approval of a different version. Before this fix it started at the last
+  approval of any version, so once someone approved REVIEWED, the author could have verified
+  their own version. The new test caught this.
+- **Audit:** each step is a separate `ContentReview` row and audit entry, with its own reviewer.
+- **Requirements:** the source and licence requirements apply to VERIFIED.
+- **Invalidation:** a content change or a withdrawn source approval returns the item to
+  PROVISIONAL, so both approvals stop applying.
+- **Curricula:** a curriculum is verified by the same two steps, once every item is VERIFIED.
+- **Tests (`content-status.test.ts`):** same-reviewer refusal (Super Admin included), skipping
+  REVIEWED, an author verifying, independent success with two audit entries, a stale
+  fingerprint, an unknown licence, a content change, a withdrawn source, and the curriculum.
+  Plus two races, 50 rounds each locally. Two second reviewers record exactly one VERIFIED.
+  First review vs verification: both orders occurred (verification refused in 25 of 50), and
+  every VERIFIED followed another reviewer's REVIEWED.
 
 ## 2026-11-13 — M13 handwriting diagnostics
 

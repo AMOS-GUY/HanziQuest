@@ -1,5 +1,17 @@
 # M14-b review workflow audit (2026-11-13)
 
+> **Update (owner decisions D-074 and D-075):**
+>
+> - **Content files:** they can no longer declare REVIEWED or VERIFIED. The schema and the
+>   importer both refuse it, on every route.
+> - **VERIFIED:** it needs two independent reviewers, and no role is exempt.
+> - **Bugs found by the new tests:**
+>   - The self-review window let an author verify their own version after someone else
+>     reviewed it.
+>   - `scripts/content.ts` ignored a file path given first.
+>
+> Both are fixed. See "Status injection and independent verification" below.
+
 What was checked after PR #25's first CI run, what was fixed and what remains. Decisions:
 D-070 to D-073.
 
@@ -65,6 +77,19 @@ D-070 to D-073.
   permission check. They described only the caller's own file (2 MB cap), and the proxy blocks
   non-staff, so nothing leaked. The permission is now checked first, as `validateImportAction`
   already did.
+
+## Status injection and independent verification (D-074, D-075)
+
+| Route that writes a status        | REVIEWED or VERIFIED possible?                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------ |
+| Admin validate and import actions | No: the schema rejects it, and the importer refuses again (e2e)                      |
+| `content:validate` and `:import`  | No: the same validator, then the importer (integration runs the CLI)                 |
+| Seed                              | No: validator, then importer, on `content/hsk1-starter.json` (PROVISIONAL)           |
+| Direct `importCurriculumContent`  | No: `ContentStatusError` before the transaction (integration)                        |
+| Create and edit forms             | No: creation forces PROVISIONAL; edits refuse changes (integration)                  |
+| Reconciliation                    | Only lowers to PROVISIONAL                                                           |
+| `recordReview`                    | The only way up: version-bound, independent, source rules                            |
+| Backup restore                    | Restores existing rows exactly. Not an ingestion path; guarded by the restore checks |
 
 ## Accessibility
 

@@ -228,7 +228,9 @@ Target public beta: **2026-12-08**.
 - [x] Integrity hardening (D-073): lock first in every write path; imports reconcile every non-provisional row; duplicate approvals refused; approval level must match the status; withdrawn sources handled by `content:provenance -- --reconcile [--apply]`
 - [x] Concurrency suite: 7 races plus repeat, source-withdrawal and rollback cases (50 rounds each locally, both orders observed); e2e for revoked and suspended reviewers
 - [x] Queue: 32 → 22 queries for HSK 1 Starter (item fingerprints computed once)
-- [ ] **Owner:** approve source register entries (all 183 HSK 1 Starter items are blocked until then); the teacher; the 3 content warnings; whether content files may declare REVIEWED or VERIFIED; whether VERIFIED needs a second reviewer
+- [x] Content files may only declare PROVISIONAL, checked by the schema and again by the importer (D-074, owner decision)
+- [x] VERIFIED needs two independent reviewers, for every role (D-075, owner decision); self-review window fixed; CLI file-argument bug fixed
+- [ ] **Owner:** approve source register entries (all 183 HSK 1 Starter items are blocked until then); the teacher; the 3 content warnings
 - [ ] **Kept as is (pre-existing, LOW, rechecked in D-073):** inside /admin, staff without a page's permission get the not-found page with status 200 (the loading boundary streams first). Content is withheld; non-staff and suspended accounts get a real 404 from the proxy
 
 ## Session log
