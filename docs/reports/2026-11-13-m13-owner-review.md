@@ -32,20 +32,26 @@ This review adds `4bf68d2` (replay review fixes) and a documentation commit.
 
 ### Regression review
 
-| Area                         | What I checked                                                               | Result                                                                                     |
-| ---------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Synthetic ink                | The generator moved from `tests/support` into `src`                          | **Byte-identical body** (diffed against `d712a82`); the tests re-export it unchanged       |
-| Confusable suite             | Seeds, determinism, config id, provenance, missing references                | As documented; the pinned tests pass                                                       |
-| Import preview               | Advisory only; the validation result is unchanged; e2e import still succeeds | Confirmed by unit and e2e tests                                                            |
-| Replay harness               | Isolation, truncation, privacy                                               | **Three issues found and fixed** in `4bf68d2`: R1 (MEDIUM), R2 and R3 (LOW). See section E |
-| Engine fix `5e7dfb9`         | Independent review (below)                                                   | Correct, no grading change                                                                 |
-| Character-page fix `12acede` | Dedupe keeps order; only that page's query affected                          | Correct; verified in the browser (谢谢 listed once)                                        |
+| Area                         | What I checked                                                               | Result                                                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Synthetic ink                | The generator moved from `tests/support` into `src`                          | **Byte-identical body** (diffed against `d712a82`); the tests re-export it unchanged                                           |
+| Confusable suite             | Seeds, determinism, config id, provenance, missing references                | As documented; the pinned tests pass                                                                                           |
+| Import preview               | Advisory only; the validation result is unchanged; e2e import still succeeds | Confirmed by unit and e2e tests                                                                                                |
+| Replay harness               | Isolation, truncation, privacy                                               | **Four issues found and fixed**: R1 (MEDIUM), R2 and R3 (LOW) in `4bf68d2`; R4 (MEDIUM) in the follow-up commit. See section E |
+| Engine fix `5e7dfb9`         | Independent review (below)                                                   | Correct, no grading change                                                                                                     |
+| Character-page fix `12acede` | Dedupe keeps order; only that page's query affected                          | Correct; verified in the browser (谢谢 listed once)                                                                            |
 
 **Replay isolation:**
 
-- **At run time:** every database call goes through `readOnlyClient`. After R1, only `$connect`
-  and `$disconnect` and the model read methods (`find*`, `count`, `aggregate`, `groupBy`) pass;
-  everything else throws.
+- **At run time:** every database call goes through `readOnlyClient`. After R1 and R4 the wrap
+  is recursive. Every object reachable from the client, at any depth and under string or symbol
+  keys, is wrapped. Only read methods (`find*`, `count`, `aggregate`, `groupBy`) can be called,
+  plus `$connect` and `$disconnect` at the top level. Setting, defining or deleting properties
+  throws too.
+- **Probed against the real Prisma client:** every write method, raw statement, transaction,
+  `$extends`, `_originalClient`, and the internal client under an unnamed symbol are refused.
+  The attempt count before and after is unchanged (631 to 631). That probe is now a permanent
+  integration test.
 - **In the integration test:** it snapshots these before and after replay, and requires them to
   be byte-identical:
   - the learner's attempts (including stored evaluations and ink), character results, XP,
@@ -74,13 +80,14 @@ This review adds `4bf68d2` (replay review fixes) and a documentation commit.
 
 **Test attribution:**
 
-| Commit                     | Local CI run                                                                                | Covers                                                                  |
-| -------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `d712a82` (`main`)         | `20261112T173638-ac59`: exit 0, 25 PASS, 0 FAIL, 4 BLOCKED, 2 NOT RUN                       | baseline                                                                |
-| `7850083`                  | `20261112T180316-0493`: same result; 231 unit, 126 integration, 36 e2e                      | commits 1–4 cumulatively (not run one by one)                           |
-| `4ba3ea7`                  | `20261112T183909-28ec`: same result; 235 unit, 126 integration, 36 e2e, backup drill passed | adds commits 5–7                                                        |
-| `460fcca`                  | not run separately                                                                          | docs only: 1 file, the report's CI numbers. Code identical to `4ba3ea7` |
-| this review's final commit | see section G                                                                               | adds `4bf68d2` and this document                                        |
+| Commit                     | Local CI run                                                                                                                  | Covers                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `d712a82` (`main`)         | `20261112T173638-ac59`: exit 0, 25 PASS, 0 FAIL, 4 BLOCKED, 2 NOT RUN                                                         | baseline                                                                |
+| `7850083`                  | `20261112T180316-0493`: same result; 231 unit, 126 integration, 36 e2e                                                        | commits 1–4 cumulatively (not run one by one)                           |
+| `4ba3ea7`                  | `20261112T183909-28ec`: same result; 235 unit, 126 integration, 36 e2e, backup drill passed                                   | adds commits 5–7                                                        |
+| `460fcca`                  | not run separately                                                                                                            | docs only: 1 file, the report's CI numbers. Code identical to `4ba3ea7` |
+| `e1936e4`                  | `20261113T053529-5c59`: exit 0, 25 PASS, 0 FAIL, 4 BLOCKED, 2 NOT RUN; 235 unit, 126 integration, 36 e2e, backup drill passed | adds `4bf68d2` (R1–R3) and the first version of this document           |
+| this review's final commit | see section G                                                                                                                 | adds `4bf68d2` and this document                                        |
 
 Both branch runs started from a clean tree. **GitHub Actions: not run** (billing restriction).
 
@@ -404,8 +411,11 @@ the confusable suite before adoption.
 
 With zero errors observed, the one-sided 95 % upper bound is about 3/_n_:
 
-- **Wrong-character acceptance ≤ 1 %:** about **300** wrong-character samples with at most 0–1
-  acceptances. The current minimum is "300 incorrect samples" across all error types, which
+- **Wrong-character acceptance ≤ 1 %:** about **300** wrong-character samples with **zero**
+  acceptances (the upper bound is then about 1.0 %). One acceptance in 300 gives an upper bound
+  of about 1.6 %, which misses the target; with one acceptance, about **475** samples are
+  needed. (Exact one-sided 95 % Clopper-Pearson bounds. Corrected during the review: an earlier
+  draft said "at most 0–1 acceptances" for 300.) The current minimum is "300 incorrect samples" across all error types, which
   doesn't achieve this for wrong characters alone. That's why the validation amendment (about
   300 wrong-character samples) is recommended.
 - **Structural false acceptance ≤ 2 %:** about **150** structural-error samples.
@@ -468,11 +478,12 @@ With zero errors observed, the one-sided 95 % upper bound is about 3/_n_:
 
 ### Review findings in my own replay code (fixed in `4bf68d2`)
 
-| #   | Finding                                                                                                      | Severity | Evidence                                                                                        | Status                                                                       |
-| --- | ------------------------------------------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| R1  | `readOnlyClient` let `$extends` (and `$on`) through. `$extends` returns an unwrapped client that could write | MEDIUM   | Code review; unit test (fails before the fix with a `TypeError` instead of `ReadOnlyViolation`) | **Fixed**; only `$connect` and `$disconnect` pass                            |
-| R2  | Attempt replay silently stopped at the oldest 5,000                                                          | LOW      | Code review                                                                                     | **Fixed**: `eligible` and `truncated` reported; integration test             |
-| R3  | The held-out split inherited the lab's 20,000-sample cap silently                                            | LOW      | Code review                                                                                     | **Fixed**: `stored` reported, plus an insufficiency reason; integration test |
+| #   | Finding                                                                                                                                                                                                          | Severity | Evidence                                                                                                                                  | Status                                                                                       |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| R1  | `readOnlyClient` let `$extends` (and `$on`) through. `$extends` returns an unwrapped client that could write                                                                                                     | MEDIUM   | Code review; unit test (fails before the fix with a `TypeError` instead of `ReadOnlyViolation`)                                           | **Fixed**; only `$connect` and `$disconnect` pass                                            |
+| R2  | Attempt replay silently stopped at the oldest 5,000                                                                                                                                                              | LOW      | Code review                                                                                                                               | **Fixed**: `eligible` and `truncated` reported; integration test                             |
+| R3  | The held-out split inherited the lab's 20,000-sample cap silently                                                                                                                                                | LOW      | Code review                                                                                                                               | **Fixed**: `stored` reported, plus an insufficiency reason; integration test                 |
+| R4  | The read-only wrap was one level deep and passed symbol-keyed values through. Prisma's internal client (under an unnamed symbol, and `_originalClient`) gave unwrapped model delegates whose `create` would work | MEDIUM   | A probe against the real client; unit test (fails on the old wrapper, passes on the new); integration test against the real Prisma client | **Fixed**: recursive wrap at every depth and for symbol keys; set, define and delete refused |
 
 ### Technical debt, prioritised
 

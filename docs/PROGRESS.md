@@ -848,3 +848,10 @@ See `docs/M11_STAGING_AUDIT.md`.
   - all findings
   - the roadmap reconciled with M14 (M14-b still open) and M13-b
 - No grading, candidate-set, XP, mastery or SRS change; no new milestone started.
+- R4, found while verifying the replay's isolation: `readOnlyClient` wrapped only one level and
+  passed symbol-keyed values through, so Prisma's internal client could hand back a writable
+  delegate. Now a recursive wrap, at every depth and for symbol keys. It's covered by a unit
+  test (fails on the old wrapper) and an integration test against the real client. Replay still
+  410/410 identical; synthetic baseline unchanged.
+- Corrected a statistical statement in the owner review: ≤ 1 % wrong-character acceptance needs
+  0 of about 300 (one acceptance needs about 475).
