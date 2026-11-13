@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import type { RoleKey } from "@/generated/prisma/enums";
 import { recordAudit } from "@/lib/audit";
+import { ROLE_DEFINITIONS } from "@/lib/permissions/permissions";
 import { discardResetLinks } from "@/features/account/password-reset";
 
 export interface Actor {
@@ -106,7 +107,17 @@ export async function setUserRole(
   return prisma.$transaction(async (tx) => {
     const [user, role] = await Promise.all([
       tx.user.findUnique({ where: { id: userId }, select: { id: true } }),
-      tx.role.findUnique({ where: { key: roleKey } }),
+      // Granting creates the role row from its definition if a database doesn't have it yet
+      // (a role added after the database was seeded, e.g. CONTENT_REVIEWER in M14-b). Role rows
+      // are never inserted by migrations: data in migrations would break restores into an
+      // empty, migrated database.
+      grant
+        ? tx.role.upsert({
+            where: { key: roleKey },
+            create: { key: roleKey, ...ROLE_DEFINITIONS[roleKey] },
+            update: {},
+          })
+        : tx.role.findUnique({ where: { key: roleKey } }),
     ]);
     if (!user || !role) throw new DomainError("not_found", "User or role not found");
 
