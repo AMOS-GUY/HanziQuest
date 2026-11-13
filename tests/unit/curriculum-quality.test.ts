@@ -115,15 +115,16 @@ describe("content validation (M7 rules)", () => {
     expect(messages(c)).toContainEqual(expect.stringMatching(/^warning: .*not a reading of 好/));
   });
 
-  it("refuses to mark content verified when its licence is unknown", () => {
-    const c = content();
-    c.curriculum = {
-      ...(c.curriculum as Json),
-      verification: "VERIFIED",
-      licenseStatus: "UNKNOWN",
-    };
-    expect(validateCurriculumContent(c, strokes).ok).toBe(false);
-    expect(messages(c)).toContainEqual(expect.stringMatching(/^error: .*can't be marked VERIFIED/));
+  it("refuses any declared status but PROVISIONAL, whatever the licence (D-074)", () => {
+    for (const licenseStatus of ["UNKNOWN", "ORIGINAL"])
+      for (const verification of ["REVIEWED", "VERIFIED"]) {
+        const c = content();
+        c.curriculum = { ...(c.curriculum as Json), verification, licenseStatus };
+        expect(validateCurriculumContent(c, strokes).ok).toBe(false);
+        expect(messages(c)).toContainEqual(
+          expect.stringMatching(/^error: .*may only declare PROVISIONAL.*review workflow/),
+        );
+      }
   });
 
   it("flags multi-syllable character readings and duplicate glosses", () => {

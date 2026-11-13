@@ -138,3 +138,69 @@ test("an open review form is refused once the reviewer loses the permission or i
     await setAccountStatus(email, "ACTIVE");
   }
 });
+
+test("the admin import refuses files that declare REVIEWED or VERIFIED (D-074)", async ({
+  page,
+}, testInfo) => {
+  test.skip(!!testInfo.project.use.isMobile, "Runs once");
+  await import("dotenv/config");
+  const email = uniqueEmail("status-importer");
+  await register(page, "Importer", email, throwawayPassword());
+  await completeOnboarding(page);
+  await grantRole(email, "CURRICULUM_EDITOR");
+  for (const verification of ["REVIEWED", "VERIFIED"]) {
+    const slug = `e2e-status-${verification.toLowerCase()}-${Date.now()}`;
+    await page.goto("/admin/import");
+    await page.getByLabel("Or paste the JSON").fill(
+      JSON.stringify({
+        curriculum: {
+          slug,
+          name: "Status injection",
+          framework: "CUSTOM",
+          version: slug,
+          source: "e2e",
+          sourceRefs: ["hanziquest-authored"],
+          licenseStatus: "ORIGINAL",
+          verification,
+        },
+        level: { level: 1, name: "L1" },
+        characters: { 人: { pinyin: "rén", meaning: "person" } },
+        units: [
+          {
+            slug: "u1",
+            title: "U1",
+            lessons: [
+              {
+                slug: "l1",
+                title: "L1",
+                words: [{ simplified: "人", pinyin: "rén", meaning: "person; people" }],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    await page.getByRole("button", { name: "Validate" }).click();
+    await expect(page.getByText(/may only declare PROVISIONAL/).first()).toBeVisible();
+    await expect(page.getByText("Validation passed.")).toHaveCount(0);
+    // Importing anyway is refused by the server too.
+    const importButton = page.getByRole("button", { name: "Import as drafts" });
+    if (await importButton.isVisible()) {
+      await importButton.click();
+      await expect(
+        page.getByText(/Fix the validation errors first|may only declare/).first(),
+      ).toBeVisible();
+    }
+    const { Client } = await import("pg");
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+    try {
+      const r = await client.query(`SELECT count(*)::int AS n FROM "Curriculum" WHERE slug = $1`, [
+        slug,
+      ]);
+      expect(r.rows[0].n, verification).toBe(0);
+    } finally {
+      await client.end();
+    }
+  }
+});

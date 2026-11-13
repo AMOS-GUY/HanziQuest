@@ -30,7 +30,10 @@ async function main() {
   const listIndex = rest.indexOf("--list");
   const listFile = listIndex >= 0 ? rest[listIndex + 1] : undefined;
   const file =
-    rest.find((a, i) => !a.startsWith("--") && i !== listIndex + 1) ?? "content/hsk1-starter.json";
+    // The argument after --list is the list, not the content file. (Without --list, listIndex
+    // is -1: index 0 must still count as the file.)
+    rest.find((a, i) => !a.startsWith("--") && (listIndex < 0 || i !== listIndex + 1)) ??
+    "content/hsk1-starter.json";
   if (!COMMANDS.includes(command as (typeof COMMANDS)[number])) {
     console.error(
       "Usage: content.ts <validate|import|preview|coverage> [file] [--draft] [--list words.txt]",

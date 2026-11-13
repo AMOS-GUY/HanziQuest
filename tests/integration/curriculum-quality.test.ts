@@ -20,12 +20,9 @@ import { ensureRoles, testPrisma, uniqueEmail } from "./helpers";
 const prisma = testPrisma();
 const RUN = `${Date.now()}`;
 
-type Verification = "PROVISIONAL" | "REVIEWED" | "VERIFIED";
-
 function file(opts: {
   slug: string;
   level?: number;
-  verification?: Verification;
   meaning?: string;
   lessons?: { slug: string; words: { simplified: string; pinyin: string; meaning: string }[] }[];
 }) {
@@ -38,7 +35,7 @@ function file(opts: {
         version: opts.slug,
         source: "integration test",
         licenseStatus: "ORIGINAL",
-        verification: opts.verification ?? "PROVISIONAL",
+        verification: "PROVISIONAL",
       },
       level: { level: opts.level ?? 1, name: `L${opts.level ?? 1}` },
       characters: {
@@ -136,9 +133,14 @@ describe("D-038: reviewed shared content is protected from less verified imports
     expect(JSON.stringify(exercise.prompt)).not.toContain("loong");
   });
 
-  it("lets an equally verified import update the record", async () => {
+  it("lets a provisional import update a provisional record, and keeps a revision", async () => {
+    // Content files can only be PROVISIONAL (D-074), so only provisional records take updates.
+    await prisma.character.update({
+      where: { hanzi: "龙" },
+      data: { verification: "PROVISIONAL" },
+    });
     const summary = await importFile(
-      file({ slug: `cq-c-${RUN}`, verification: "VERIFIED", meaning: "dragon; imperial symbol" }),
+      file({ slug: `cq-c-${RUN}`, meaning: "dragon; imperial symbol" }),
     );
     expect(summary.protectedKept).not.toContain("龙");
     // The previous values are kept as a content revision, attributed to the import.

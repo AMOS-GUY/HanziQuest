@@ -1,10 +1,23 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { buildEvaluationConfig } from "@/features/exercises/evaluation-config";
-import type { CurriculumContent, ContentWord } from "./content-schema";
+import {
+  CONTENT_STATUS_MESSAGE,
+  declaredStatuses,
+  type CurriculumContent,
+  type ContentWord,
+} from "./content-schema";
 import type { StrokeData } from "./stroke-data";
 import { mayOverwrite } from "./provenance";
-import { nextRevision } from "@/features/administration/services";
+import { DomainError, nextRevision } from "@/features/administration/services";
 import { lockForReview, nonProvisionalScope, reconcileReviews } from "./review";
+
+/** A content file declared a status other than PROVISIONAL (D-074). Nothing was written. */
+export class ContentStatusError extends DomainError {
+  constructor(message: string) {
+    super("conflict", message);
+    this.name = "ContentStatusError";
+  }
+}
 
 export interface ImportOptions {
   /** Publish lessons that are new in this import. Existing lessons keep their publication status. */
@@ -48,6 +61,13 @@ export async function importCurriculumContent(
   content: CurriculumContent,
   options: ImportOptions,
 ): Promise<ImportSummary> {
+  // D-074: refuse any declared status but PROVISIONAL here too, so no caller (admin action, CLI,
+  // seed, tests, future routes) can skip validation and inject REVIEWED or VERIFIED.
+  const declared = declaredStatuses(content).filter((d) => d.verification !== "PROVISIONAL");
+  if (declared.length)
+    throw new ContentStatusError(
+      `${CONTENT_STATUS_MESSAGE} Found: ${declared.map((d) => `${d.path} = ${d.verification}`).join(", ")}.`,
+    );
   return prisma.$transaction(
     async (tx) => {
       // Imports touch many reviewed rows: serialise with approvals and edits (M14-b lock order).
