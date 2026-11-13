@@ -163,7 +163,17 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
   // Content quality report
   await page.goto("/admin/content-quality");
   await expect(page.getByRole("heading", { level: 1, name: "Content quality" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "HSK 1 Starter" })).toBeVisible();
+  // Two tables name the curriculum: the quality table and (M14-b) review progress.
+  await expect(
+    page
+      .getByRole("region", { name: "Curricula quality (scrolls sideways)" })
+      .getByRole("cell", { name: "HSK 1 Starter", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Review progress (scrolls sideways)" })
+      .getByRole("cell", { name: /^HSK 1 Starter \(/ }),
+  ).toBeVisible();
 
   // Handwriting lab (M12): no recording without consent; consent, record, erase, refused.
   const code = `TEST${Date.now() % 100_000_000}`;

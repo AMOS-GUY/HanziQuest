@@ -107,6 +107,12 @@ npm run content:validate
   feedback stays on paper (D-063). Commit with the GitHub noreply address (D-064).
 - Curriculum sources (M14): content files cite ids from `content/sources.json`. Never add an HSK
   level tag or an `OFFICIAL_LIST` source without owner approval (D-060).
+- Content review (M14-b): verification changes only via `features/curriculum/review.ts`
+  (`curriculum:review`, role `CONTENT_REVIEWER`). Edits never set it. Approvals are bound to a
+  fingerprint (`review-fingerprint.ts`). Any code path that changes content, structure or
+  provenance must call `reconcileReviews` in its transaction, and take `lockForReview` before
+  writing (imports and `--reconcile` take it exclusively). Never update or delete
+  `ContentReview` rows (D-070 to D-073).
 - Handwriting diagnostics (M13): `features/handwriting/confusables.ts`, `replay.ts`,
   `features/curriculum/confusable-diagnostics.ts`. Diagnostic only: never change grading from
   them. Synthetic ink lives in `features/handwriting/synthetic-ink.ts`; its results aren't

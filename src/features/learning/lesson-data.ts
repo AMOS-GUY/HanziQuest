@@ -63,7 +63,10 @@ export async function getLessonForLearner(
           position: true,
           levelId: true,
           level: {
-            select: { name: true, curriculum: { select: { verification: true, status: true } } },
+            select: {
+              name: true,
+              curriculum: { select: { verification: true, framework: true, status: true } },
+            },
           },
         },
       },

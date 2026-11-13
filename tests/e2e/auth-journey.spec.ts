@@ -36,6 +36,9 @@ test("learner can register, see the learning path, log out and log back in", asy
   await expect(page.getByRole("heading", { name: "HSK 1 Starter" })).toBeVisible();
   await expect(page.getByText("Saying hello")).toBeVisible();
   await expect(page.getByText("Provisional content")).toBeVisible();
+  // M14-b: the edition is named, and nothing claims to be official HSK material.
+  await expect(page.getByText("HSK 2.0 edition.")).toBeVisible();
+  await expect(page.getByText(/not official HSK material/)).toBeVisible();
 
   // Learners must not reach the admin area.
   const adminResponse = await page.goto("/admin");

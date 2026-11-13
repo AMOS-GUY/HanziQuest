@@ -243,3 +243,21 @@ describe("setUserRole", () => {
     ).toBe(0);
   });
 });
+
+describe("role rows (M14-b)", () => {
+  it("granting a role whose row is missing creates it from its definition", async () => {
+    const admin = await newUser("roleadmin");
+    await grantDirect(admin, "SUPER_ADMIN");
+    const target = await newUser("rolereviewer");
+    await prisma.userRole.deleteMany({ where: { role: { key: "CONTENT_REVIEWER" } } });
+    await prisma.role.deleteMany({ where: { key: "CONTENT_REVIEWER" } });
+    const actor: Actor = { id: admin, roles: ["SUPER_ADMIN"] };
+    await setUserRole(prisma, actor, target, "CONTENT_REVIEWER", true);
+    const role = await prisma.role.findUniqueOrThrow({ where: { key: "CONTENT_REVIEWER" } });
+    expect(role.name).toBe("Content reviewer");
+    expect(await prisma.userRole.count({ where: { userId: target, roleId: role.id } })).toBe(1);
+    // Revoking never creates a row.
+    await setUserRole(prisma, actor, target, "CONTENT_REVIEWER", false);
+    expect(await prisma.userRole.count({ where: { userId: target, roleId: role.id } })).toBe(0);
+  });
+});

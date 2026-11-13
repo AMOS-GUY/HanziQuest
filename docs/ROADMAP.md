@@ -190,6 +190,13 @@ added until sources are registered and approved.
   - Development: 4–6 days for the edition model, example field, source register and admin
     review screens.
   - Content: teacher time, about 1–2 days for HSK 1 Starter.
+- **Status (2026-11-13, M14-b on `feature/m14b-review-workflow`):**
+  - **Built:** learner edition and status labels; the reviewer role and permission;
+    version-bound review with history; the review queue; progress reporting; integrity
+    hardening and a concurrency test suite (D-073).
+  - **Blocked on the owner:** approving source register entries (until then nothing can be
+    approved), the teacher, and the wording of the 3 content warnings.
+  - **Not started:** the HSK lists and the remaining 70 words.
 - **Acceptance criteria.**
   - HSK 1 Starter is REVIEWED by a named reviewer (role only in the docs), with 0 validator
     warnings.

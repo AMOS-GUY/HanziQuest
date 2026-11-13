@@ -4,11 +4,7 @@ const LICENSE = ["UNKNOWN", "OPEN_LICENSE", "LICENSED", "ORIGINAL", "PUBLIC_FACT
   value: v,
   label: v.replace("_", " ").toLowerCase(),
 }));
-const VERIFICATION = [
-  { value: "PROVISIONAL", label: "Provisional" },
-  { value: "REVIEWED", label: "Reviewed" },
-  { value: "VERIFIED", label: "Verified (shown as official)" },
-];
+// Verification isn't a form field: it changes only through the review queue (M14-b, D-071).
 
 type Values = { [key: string]: unknown };
 
@@ -56,13 +52,6 @@ export function characterFields(values: Values = {}, isNew = false): FieldSpec[]
       options: LICENSE,
       defaultValue: v.licenseStatus ?? "ORIGINAL",
     },
-    {
-      name: "verification",
-      label: "Verification",
-      type: "select",
-      options: VERIFICATION,
-      defaultValue: v.verification ?? "PROVISIONAL",
-    },
   ];
 }
 
@@ -100,13 +89,6 @@ export function vocabularyFields(values: Values = {}, isNew = false): FieldSpec[
       type: "select",
       options: LICENSE,
       defaultValue: v.licenseStatus ?? "ORIGINAL",
-    },
-    {
-      name: "verification",
-      label: "Verification",
-      type: "select",
-      options: VERIFICATION,
-      defaultValue: v.verification ?? "PROVISIONAL",
     },
   ];
 }

@@ -4,6 +4,7 @@ import type { CurriculumContent, ContentWord } from "./content-schema";
 import type { StrokeData } from "./stroke-data";
 import { mayOverwrite } from "./provenance";
 import { nextRevision } from "@/features/administration/services";
+import { lockForReview, nonProvisionalScope, reconcileReviews } from "./review";
 
 export interface ImportOptions {
   /** Publish lessons that are new in this import. Existing lessons keep their publication status. */
@@ -49,7 +50,17 @@ export async function importCurriculumContent(
 ): Promise<ImportSummary> {
   return prisma.$transaction(
     async (tx) => {
+      // Imports touch many reviewed rows: serialise with approvals and edits (M14-b lock order).
+      // Exclusive on purpose: imports write rows before they can know which items they touch,
+      // and reconciling all non-provisional rows below is complete only with no approval in
+      // flight. Imports are rare admin actions taking a few seconds.
+      await lockForReview(tx, {}, "exclusive");
       const summary = await doImport(tx, content, options);
+      // An import can change approved items (sources, edition tags, strokes, structure),
+      // including shared characters and words that other curricula teach: every approval that no
+      // longer matches its version returns to PROVISIONAL (M14-b). Only rows above PROVISIONAL
+      // can change, so reconciling all of them is complete and cheap.
+      await reconcileReviews(tx, await nonProvisionalScope(tx), options.authorId ?? null);
       await options.onImported?.(tx, summary);
       return summary;
     },

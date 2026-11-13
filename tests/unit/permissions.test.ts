@@ -56,4 +56,26 @@ describe("role permissions", () => {
   it("grants admin:access to every admin role", () => {
     for (const role of ADMIN_ROLES) expect(hasPermission([role], "admin:access")).toBe(true);
   });
+
+  it("gives content reviewers only reading and reviewing, never editing (M14-b)", () => {
+    expect([...permissionsForRoles(["CONTENT_REVIEWER"])].sort()).toEqual(
+      ["admin:access", "curriculum:read", "curriculum:review"].sort(),
+    );
+    for (const p of [
+      "curriculum:write",
+      "curriculum:publish",
+      "content:import",
+      "users:manage-roles",
+    ] as const)
+      expect(hasPermission(["CONTENT_REVIEWER"], p)).toBe(false);
+  });
+
+  it("only super admins and content reviewers may review; editors may not (M14-b)", () => {
+    const holders = Object.entries(ROLE_PERMISSIONS)
+      .filter(([, perms]) => perms.includes("curriculum:review"))
+      .map(([role]) => role)
+      .sort();
+    expect(holders).toEqual(["CONTENT_REVIEWER", "SUPER_ADMIN"]);
+    expect(ADMIN_ROLES).toContain("CONTENT_REVIEWER");
+  });
 });

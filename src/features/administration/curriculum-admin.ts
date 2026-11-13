@@ -18,34 +18,82 @@ import {
 } from "@/features/curriculum/import-content";
 import { buildEvaluationConfig } from "@/features/exercises/evaluation-config";
 import { DomainError, type Actor } from "./services";
-import { VERIFICATION_RANK, type Verification } from "@/features/curriculum/provenance";
-import { ADMIN_ROLES } from "@/lib/permissions/permissions";
+import { lockForReview, reconcileReviews } from "@/features/curriculum/review";
+import type { Verification } from "@/features/curriculum/provenance";
 
 /** Source register id for content written in the admin (content/sources.json). */
 const AUTHORED_SOURCE = "hanziquest-authored";
 
 /**
- * Review metadata (M14): raising an item's verification records the reviewer's role (never a
- * name) and the time; returning it to PROVISIONAL clears both. VERIFIED needs a known licence.
+ * Verification is never set through the edit forms (M14-b, D-071). New content starts
+ * PROVISIONAL; an edit may resend the current value but never change it, whoever the actor is.
+ * Only the review queue (`features/curriculum/review.ts`) raises it, for an exact fingerprinted
+ * version, and only for holders of `curriculum:review` who didn't change that version.
  */
-function reviewStamp(
-  actor: Actor,
-  before: Verification | null,
-  next: Verification,
-  licenseStatus: string,
-) {
-  if (next === "VERIFIED" && licenseStatus === "UNKNOWN")
-    throw new DomainError("conflict", "Content can't be VERIFIED while its licence is unknown.");
-  if (next === "PROVISIONAL") return { reviewerRole: null, reviewedAt: null };
-  if (before === null || VERIFICATION_RANK[next] > VERIFICATION_RANK[before])
-    return {
-      reviewerRole: ADMIN_ROLES.find((r) => actor.roles.includes(r)) ?? null,
-      reviewedAt: new Date(),
-    };
+const VERIFICATION_VIA_QUEUE =
+  "Verification can only be changed in the review queue (Admin → Review), by a content reviewer.";
+
+function newContentVerification(requested: Verification | undefined) {
+  if (requested !== undefined && requested !== "PROVISIONAL")
+    throw new DomainError(
+      "forbidden",
+      `New content starts as Provisional. ${VERIFICATION_VIA_QUEUE}`,
+    );
+  return { verification: "PROVISIONAL" as const, reviewerRole: null, reviewedAt: null };
+}
+
+function withoutVerification<T extends { verification?: Verification }>(input: T) {
+  const { verification: _unchanged, ...rest } = input;
+  void _unchanged;
+  return rest;
+}
+
+function unchangedVerification(before: Verification, requested: Verification | undefined) {
+  if (requested !== undefined && requested !== before)
+    throw new DomainError("forbidden", VERIFICATION_VIA_QUEUE);
   return {};
 }
 
 type Tx = Prisma.TransactionClient;
+
+/** The curriculum a level, unit or lesson belongs to (for review reconciliation). */
+async function curriculumOf(
+  t: Tx,
+  where: { levelId?: string; unitId?: string; lessonId?: string },
+): Promise<string[]> {
+  if (where.levelId) {
+    const l = await t.hSKLevel.findUnique({
+      where: { id: where.levelId },
+      select: { curriculumId: true },
+    });
+    return l ? [l.curriculumId] : [];
+  }
+  if (where.unitId) {
+    const u = await t.unit.findUnique({
+      where: { id: where.unitId },
+      select: { level: { select: { curriculumId: true } } },
+    });
+    return u ? [u.level.curriculumId] : [];
+  }
+  const l = await t.lesson.findUnique({
+    where: { id: where.lessonId! },
+    select: { unit: { select: { level: { select: { curriculumId: true } } } } },
+  });
+  return l ? [l.unit.level.curriculumId] : [];
+}
+
+/**
+ * Takes the review locks for the curriculum a structure change belongs to, before any write
+ * (M14-b lock order, see `lockForReview`). Returns the curriculum ids for reconciling.
+ */
+async function lockStructure(
+  t: Tx,
+  where: { curriculumId?: string; levelId?: string; unitId?: string; lessonId?: string },
+) {
+  const curriculumIds = where.curriculumId ? [where.curriculumId] : await curriculumOf(t, where);
+  await lockForReview(t, { curriculumIds });
+  return curriculumIds;
+}
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
@@ -64,7 +112,8 @@ const optionalText = (max: number) =>
     .optional()
     .transform((v) => (v ? v : null));
 const licenseStatus = z.enum(["UNKNOWN", "OPEN_LICENSE", "LICENSED", "ORIGINAL", "PUBLIC_FACT"]);
-const verification = z.enum(["PROVISIONAL", "REVIEWED", "VERIFIED"]);
+/** Accepted only so that an unchanged value can be resent; see `unchangedVerification`. */
+const verification = z.enum(["PROVISIONAL", "REVIEWED", "VERIFIED"]).optional();
 
 export const curriculumInput = z.object({
   slug,
@@ -255,7 +304,13 @@ export async function createCurriculum(prisma: PrismaClient, actor: Actor, raw: 
   const input = curriculumInput.parse(raw);
   return tx(prisma, async (t) => {
     const created = await t.curriculum
-      .create({ data: input })
+      .create({
+        data: {
+          ...withoutVerification(input),
+          // Curricula carry no reviewer stamp columns, only the status.
+          verification: newContentVerification(input.verification).verification,
+        },
+      })
       .catch((e: unknown) =>
         unique(e, "A curriculum with this slug or framework version already exists."),
       );
@@ -272,11 +327,16 @@ export async function updateCurriculum(
 ) {
   const input = curriculumUpdate.parse(raw);
   return tx(prisma, async (t) => {
+    await lockForReview(t, { curriculumIds: [id] });
     const before = await t.curriculum.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Curriculum not found.");
+    unchangedVerification(before.verification, input.verification);
     await revision(t, actor, "Curriculum", id, before);
-    const updated = await t.curriculum.update({ where: { id }, data: input });
+    const { verification: _unchanged, ...changes } = input;
+    void _unchanged;
+    const updated = await t.curriculum.update({ where: { id }, data: changes });
     await audit(t, actor, "curriculum.update", "Curriculum", id, before, input);
+    await reconcileReviews(t, { curriculumIds: [id] }, actor.id);
     return updated;
   });
 }
@@ -284,10 +344,12 @@ export async function updateCurriculum(
 export async function createLevel(prisma: PrismaClient, actor: Actor, raw: unknown) {
   const input = levelInput.parse(raw);
   return tx(prisma, async (t) => {
+    const curriculumIds = await lockStructure(t, { curriculumId: input.curriculumId });
     const created = await t.hSKLevel
       .create({ data: input })
       .catch((e: unknown) => unique(e, "This level already exists in the curriculum."));
     await audit(t, actor, "level.create", "HSKLevel", created.id, undefined, input);
+    await reconcileReviews(t, { curriculumIds }, actor.id);
     return created;
   });
 }
@@ -295,11 +357,13 @@ export async function createLevel(prisma: PrismaClient, actor: Actor, raw: unkno
 export async function updateLevel(prisma: PrismaClient, actor: Actor, id: string, raw: unknown) {
   const input = levelUpdate.parse(raw);
   return tx(prisma, async (t) => {
+    const curriculumIds = await lockStructure(t, { levelId: id });
     const before = await t.hSKLevel.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Level not found.");
     await revision(t, actor, "HSKLevel", id, before);
     const updated = await t.hSKLevel.update({ where: { id }, data: input });
     await audit(t, actor, "level.update", "HSKLevel", id, before, input);
+    await reconcileReviews(t, { curriculumIds }, actor.id);
     return updated;
   });
 }
@@ -309,6 +373,7 @@ export async function updateLevel(prisma: PrismaClient, actor: Actor, id: string
 export async function createUnit(prisma: PrismaClient, actor: Actor, raw: unknown) {
   const input = unitInput.parse(raw);
   return tx(prisma, async (t) => {
+    const curriculumIds = await lockStructure(t, { levelId: input.levelId });
     const level = await t.hSKLevel.findUnique({ where: { id: input.levelId } });
     if (!level) throw new DomainError("not_found", "Level not found.");
     const last = await t.unit.findFirst({
@@ -319,6 +384,7 @@ export async function createUnit(prisma: PrismaClient, actor: Actor, raw: unknow
       .create({ data: { ...input, position: (last?.position ?? 0) + 1 } })
       .catch((e: unknown) => unique(e, "A unit with this slug already exists in the level."));
     await audit(t, actor, "unit.create", "Unit", created.id, undefined, input);
+    await reconcileReviews(t, { curriculumIds }, actor.id);
     return created;
   });
 }
@@ -326,11 +392,13 @@ export async function createUnit(prisma: PrismaClient, actor: Actor, raw: unknow
 export async function updateUnit(prisma: PrismaClient, actor: Actor, id: string, raw: unknown) {
   const input = unitUpdate.parse(raw);
   return tx(prisma, async (t) => {
+    const curriculumIds = await lockStructure(t, { unitId: id });
     const before = await t.unit.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Unit not found.");
     await revision(t, actor, "Unit", id, before);
     const updated = await t.unit.update({ where: { id }, data: input });
     await audit(t, actor, "unit.update", "Unit", id, before, input);
+    await reconcileReviews(t, { curriculumIds }, actor.id);
     return updated;
   });
 }
@@ -338,6 +406,7 @@ export async function updateUnit(prisma: PrismaClient, actor: Actor, id: string,
 export async function createLesson(prisma: PrismaClient, actor: Actor, raw: unknown) {
   const input = lessonInput.parse(raw);
   return tx(prisma, async (t) => {
+    const curriculumIds = await lockStructure(t, { unitId: input.unitId });
     const unit = await t.unit.findUnique({ where: { id: input.unitId } });
     if (!unit) throw new DomainError("not_found", "Unit not found.");
     const last = await t.lesson.findFirst({
@@ -349,6 +418,7 @@ export async function createLesson(prisma: PrismaClient, actor: Actor, raw: unkn
       .create({ data: { ...input, position: (last?.position ?? 0) + 1, status: "DRAFT" } })
       .catch((e: unknown) => unique(e, "A lesson with this slug already exists in the unit."));
     await audit(t, actor, "lesson.create", "Lesson", created.id, undefined, input);
+    await reconcileReviews(t, { curriculumIds }, actor.id);
     return created;
   });
 }
@@ -356,6 +426,7 @@ export async function createLesson(prisma: PrismaClient, actor: Actor, raw: unkn
 export async function updateLesson(prisma: PrismaClient, actor: Actor, id: string, raw: unknown) {
   const input = lessonUpdate.parse(raw);
   return tx(prisma, async (t) => {
+    const curriculumIds = await lockStructure(t, { lessonId: id });
     const before = await t.lesson.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Lesson not found.");
     await revision(t, actor, "Lesson", id, before);
@@ -368,6 +439,7 @@ export async function updateLesson(prisma: PrismaClient, actor: Actor, id: strin
       },
     });
     await audit(t, actor, "lesson.update", "Lesson", id, before, input);
+    await reconcileReviews(t, { curriculumIds }, actor.id);
     return updated;
   });
 }
@@ -418,6 +490,7 @@ export async function setLessonWords(
 ) {
   const { words: lines } = lessonWordsInput.parse(raw);
   return tx(prisma, async (t) => {
+    const curriculumIds = await lockStructure(t, { lessonId });
     const lesson = await t.lesson.findUnique({
       where: { id: lessonId },
       include: {
@@ -477,6 +550,7 @@ export async function setLessonWords(
         words: after,
       },
     );
+    await reconcileReviews(t, { curriculumIds }, actor.id);
     return built;
   });
 }
@@ -521,7 +595,7 @@ export async function createCharacter(
       .create({
         data: {
           ...input,
-          ...reviewStamp(actor, null, input.verification, input.licenseStatus),
+          ...newContentVerification(input.verification),
           strokeCount: strokes?.strokes.length ?? null,
           hasStrokeData: strokes !== null,
         },
@@ -544,14 +618,15 @@ export async function updateCharacter(
 ) {
   const input = characterUpdate.parse(raw);
   return tx(prisma, async (t) => {
+    await lockForReview(t, { characterIds: [id] });
     const before = await t.character.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Character not found.");
     await revision(t, actor, "Character", id, before);
     const updated = await t.character.update({
       where: { id },
       data: {
-        ...input,
-        ...reviewStamp(actor, before.verification, input.verification, input.licenseStatus),
+        ...withoutVerification(input),
+        ...unchangedVerification(before.verification, input.verification),
       },
     });
     // Guided and free-writing prompts show the character's pinyin and meaning.
@@ -582,6 +657,8 @@ export async function updateCharacter(
       );
     }
     await audit(t, actor, "character.update", "Character", id, before, input);
+    // An approval covers one exact version: a changed character returns to PROVISIONAL.
+    await reconcileReviews(t, { characterIds: [id] }, actor.id);
     return updated;
   });
 }
@@ -602,7 +679,7 @@ export async function createVocabulary(prisma: PrismaClient, actor: Actor, raw: 
       .create({
         data: {
           ...input,
-          ...reviewStamp(actor, null, input.verification, input.licenseStatus),
+          ...newContentVerification(input.verification),
           ...(input.exampleZh && {
             exampleSourceRef: AUTHORED_SOURCE,
             exampleVerification: "PROVISIONAL" as const,
@@ -630,6 +707,7 @@ export async function updateVocabulary(
 ) {
   const input = vocabularyUpdate.parse(raw);
   return tx(prisma, async (t) => {
+    await lockForReview(t, { vocabularyIds: [id] });
     const before = await t.vocabulary.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Word not found.");
     await revision(t, actor, "Vocabulary", id, before);
@@ -641,8 +719,8 @@ export async function updateVocabulary(
     const updated = await t.vocabulary.update({
       where: { id },
       data: {
-        ...input,
-        ...reviewStamp(actor, before.verification, input.verification, input.licenseStatus),
+        ...withoutVerification(input),
+        ...unchangedVerification(before.verification, input.verification),
         ...(exampleChanged && {
           exampleSourceRef: input.exampleZh ? AUTHORED_SOURCE : null,
           exampleVerification: input.exampleZh ? ("PROVISIONAL" as const) : null,
@@ -670,6 +748,7 @@ export async function updateVocabulary(
       lessons.map((l) => l.lessonId),
     );
     await audit(t, actor, "vocabulary.update", "Vocabulary", id, before, input);
+    await reconcileReviews(t, { vocabularyIds: [id] }, actor.id);
     return updated;
   });
 }

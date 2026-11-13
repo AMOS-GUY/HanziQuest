@@ -124,6 +124,7 @@ const ADMIN_LISTS = [
   "/admin/vocabulary/new",
   "/admin/import",
   "/admin/content-quality",
+  "/admin/review",
   "/admin/handwriting",
   "/admin/feedback",
   "/admin/users",

@@ -158,33 +158,31 @@ describe("review metadata in the admin", () => {
     return createCharacter(prisma, editor, { ...base, hanzi }, () => null);
   }
 
-  it("stamps role and time when verification rises, and clears them on PROVISIONAL", async () => {
+  it("verification can't change through the edit forms, for editors or super admins (M14-b)", async () => {
     const ch = await testCharacter();
-    await updateCharacter(prisma, editor, ch.id, { ...base, verification: "PROVISIONAL" });
-    const raised = await updateCharacter(prisma, editor, ch.id, {
-      ...base,
-      verification: "REVIEWED",
-    });
-    expect(raised.reviewerRole).toBe("CURRICULUM_EDITOR");
-    expect(raised.reviewedAt).not.toBeNull();
-    const lowered = await updateCharacter(prisma, editor, ch.id, {
-      ...base,
-      verification: "PROVISIONAL",
-    });
-    expect(lowered.reviewerRole).toBeNull();
-    expect(lowered.reviewedAt).toBeNull();
+    const superAdmin: Actor = { id: editor.id, roles: ["SUPER_ADMIN"] };
+    // Resending the current value is fine.
+    await updateCharacter(prisma, editor, ch.id, { ...base, verification: ch.verification });
+    for (const actor of [editor, superAdmin])
+      for (const v of ["REVIEWED", "VERIFIED"] as const) {
+        const err = await updateCharacter(prisma, actor, ch.id, { ...base, verification: v }).catch(
+          (e: unknown) => e,
+        );
+        expect(err).toBeInstanceOf(DomainError);
+        expect((err as DomainError).code).toBe("forbidden");
+      }
+    const row = await prisma.character.findUniqueOrThrow({ where: { id: ch.id } });
+    expect(row.verification).toBe(ch.verification);
   });
 
-  it("refuses VERIFIED while the licence is unknown", async () => {
-    const ch = await testCharacter();
-    await expect(
-      updateCharacter(prisma, editor, ch.id, {
-        ...base,
-        licenseStatus: "UNKNOWN",
-        verification: "VERIFIED",
-      }),
-    ).rejects.toBeInstanceOf(DomainError);
-    const row = await prisma.character.findUniqueOrThrow({ where: { id: ch.id } });
-    expect(row.verification).not.toBe("VERIFIED");
+  it("new content always starts PROVISIONAL", async () => {
+    const err = await createCharacter(
+      prisma,
+      editor,
+      { ...base, hanzi: "齉", verification: "REVIEWED" },
+      () => null,
+    ).catch((e: unknown) => e);
+    expect((err as DomainError).code).toBe("forbidden");
+    expect(await prisma.character.findUnique({ where: { hanzi: "齉" } })).toBeNull();
   });
 });

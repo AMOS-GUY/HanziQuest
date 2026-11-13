@@ -6,6 +6,8 @@ export const PERMISSIONS = [
   "curriculum:read",
   "curriculum:write",
   "curriculum:publish",
+  /** Record review decisions and change verification (REVIEWED/VERIFIED). M14-b, D-071. */
+  "curriculum:review",
   "content:import",
   "handwriting:validate",
   /** Erase a pilot participant's handwriting data (withdrawal or end of retention). */
@@ -36,6 +38,8 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly Permission[]> = {
   MODERATOR: ["admin:access", "curriculum:read", "users:read", "users:moderate", "feedback:manage"],
   ANALYST: ["admin:access", "curriculum:read", "analytics:read"],
   SUPPORT: ["admin:access", "users:read", "feedback:manage"],
+  // Least privilege: can read curriculum and record reviews, but never edit, publish or import.
+  CONTENT_REVIEWER: ["admin:access", "curriculum:read", "curriculum:review"],
   LEARNER: [],
 };
 
@@ -57,6 +61,10 @@ export const ROLE_DEFINITIONS: Record<RoleKey, { name: string; description: stri
     name: "Support",
     description: "Views learner account details to help with support requests.",
   },
+  CONTENT_REVIEWER: {
+    name: "Content reviewer",
+    description: "Reviews curriculum content and records review decisions. Can't edit content.",
+  },
   LEARNER: { name: "Learner", description: "Default role for every registered account." },
 };
 
@@ -67,6 +75,7 @@ export const ADMIN_ROLES: RoleKey[] = [
   "MODERATOR",
   "ANALYST",
   "SUPPORT",
+  "CONTENT_REVIEWER",
 ];
 
 export function permissionsForRoles(roles: readonly RoleKey[]): Set<Permission> {
