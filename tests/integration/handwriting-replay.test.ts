@@ -19,6 +19,8 @@ import {
   duplicateReport,
   replayStoredAttempts,
   sampleSplit,
+  readOnlyClient,
+  ReadOnlyViolation,
   splitOf,
 } from "@/features/handwriting/replay";
 import { ensureRoles, testPrisma, uniqueEmail } from "./helpers";
@@ -229,6 +231,51 @@ describe("replay of stored attempts", () => {
     } finally {
       await prisma.exerciseAttempt.delete({ where: { id: bad.id } });
     }
+  });
+});
+
+describe("read-only client against the real Prisma client (review R1, R4)", () => {
+  it("no write path is reachable: models, raw, transactions, $extends, internals, symbols", async () => {
+    const before = await snapshot();
+    const db = readOnlyClient(prisma) as unknown as Record<string | symbol, unknown>;
+    const attempts: (() => unknown)[] = [];
+    const model = db.exerciseAttempt as Record<string, (...a: unknown[]) => unknown>;
+    for (const m of [
+      "create",
+      "createMany",
+      "update",
+      "updateMany",
+      "upsert",
+      "delete",
+      "deleteMany",
+    ])
+      attempts.push(() => model[m]!({ where: { id: "none" }, data: {} }));
+    for (const m of [
+      "$executeRaw",
+      "$executeRawUnsafe",
+      "$queryRawUnsafe",
+      "$transaction",
+      "$extends",
+    ])
+      attempts.push(() => (db[m] as (...a: unknown[]) => unknown)("SELECT 1"));
+    // Prisma's internal client, under `_originalClient` and under an unnamed symbol.
+    const internals: unknown[] = [db._originalClient];
+    for (const s of Object.getOwnPropertySymbols(prisma)) internals.push(db[s]);
+    for (const obj of internals) {
+      if (!obj || typeof obj !== "object") continue;
+      const o = obj as Record<string, unknown>;
+      const inner = (o._originalClient ?? o) as Record<string, unknown>;
+      const delegate = inner.exerciseAttempt as Record<string, () => unknown> | undefined;
+      if (delegate) attempts.push(() => delegate.create!());
+      if (typeof inner.$executeRawUnsafe === "function")
+        attempts.push(() => (inner.$executeRawUnsafe as () => unknown)());
+    }
+    expect(attempts.length).toBeGreaterThan(12);
+    for (const call of attempts) expect(call).toThrow(ReadOnlyViolation);
+    await expect(
+      (db.exerciseAttempt as { count: () => Promise<number> }).count(),
+    ).resolves.toBeGreaterThan(0);
+    expect(await snapshot()).toBe(before);
   });
 });
 

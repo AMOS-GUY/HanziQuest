@@ -49,35 +49,50 @@ export class ReadOnlyViolation extends Error {
   }
 }
 
-/** Wraps a client so that any write (or raw statement, or transaction) throws. */
+/**
+ * Wraps a client so that nothing reachable from it can write (M13 review R1, R4).
+ *
+ * The wrap is recursive: every object reachable through a property, at any depth and under
+ * string or symbol keys (Prisma keeps its internal client under a symbol and under
+ * `_originalClient`), is wrapped the same way. Functions may be called only if their name is a
+ * read method (`find*`, `count`, `aggregate`, `groupBy`); at the top level, `$connect` and
+ * `$disconnect` are also allowed. Everything else, including `$extends`, raw statements,
+ * transactions and every create, update, upsert or delete, throws `ReadOnlyViolation`.
+ */
 export function readOnlyClient(prisma: PrismaClient): PrismaClient {
-  return new Proxy(prisma, {
-    get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver) as unknown;
-      if (typeof prop !== "string") return value;
-      if (prop.startsWith("$")) {
-        // Only connection management. `$extends` would return a new, unwrapped client that
-        // could write, so it is refused like every other `$` method (M13 review, R1).
-        if (prop === "$connect" || prop === "$disconnect") return value;
+  return wrapReadOnly(prisma, "client", true) as PrismaClient;
+}
+
+const CONNECTION_METHODS = new Set(["$connect", "$disconnect"]);
+
+function wrapReadOnly(target: object, path: string, root: boolean): object {
+  return new Proxy(target, {
+    get(obj, prop, receiver) {
+      const value = Reflect.get(obj, prop, receiver) as unknown;
+      const name = typeof prop === "string" ? prop : String(prop);
+      if (typeof value === "function") {
+        if (
+          typeof prop === "string" &&
+          (READ_METHODS.has(prop) || (root && CONNECTION_METHODS.has(prop)))
+        )
+          return (value as (...a: unknown[]) => unknown).bind(obj);
         return () => {
-          throw new ReadOnlyViolation(prop);
+          throw new ReadOnlyViolation(`${path}.${name}`);
         };
       }
-      if (value && typeof value === "object") {
-        return new Proxy(value, {
-          get(model, method, r) {
-            const fn = Reflect.get(model, method, r) as unknown;
-            if (typeof method !== "string" || typeof fn !== "function") return fn;
-            if (READ_METHODS.has(method)) return (fn as (...a: unknown[]) => unknown).bind(model);
-            return () => {
-              throw new ReadOnlyViolation(`${prop}.${method}`);
-            };
-          },
-        });
-      }
+      if (value && typeof value === "object") return wrapReadOnly(value, `${path}.${name}`, false);
       return value;
     },
-  }) as PrismaClient;
+    set(_obj, prop) {
+      throw new ReadOnlyViolation(`setting ${path}.${String(prop)}`);
+    },
+    defineProperty(_obj, prop) {
+      throw new ReadOnlyViolation(`defining ${path}.${String(prop)}`);
+    },
+    deleteProperty(_obj, prop) {
+      throw new ReadOnlyViolation(`deleting ${path}.${String(prop)}`);
+    },
+  });
 }
 
 // ─── Pure comparison ────────────────────────────────────────────────────────

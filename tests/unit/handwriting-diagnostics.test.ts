@@ -355,6 +355,9 @@ describe("read-only client and held-out split", () => {
     },
     $executeRaw: async () => 0,
     $transaction: async () => undefined,
+    // Real clients have these; they must be refused, not merely absent (review R1).
+    $extends: () => ({}),
+    $on: () => undefined,
   } as unknown as PrismaClient;
 
   it("allows reads and refuses every write", async () => {
@@ -371,6 +374,43 @@ describe("read-only client and held-out split", () => {
       () => (db.$on as unknown as () => unknown)(),
     ])
       expect(call).toThrow(ReadOnlyViolation);
+  });
+
+  it("refuses writes reachable through nested and symbol-keyed objects (review R4)", async () => {
+    const inner = {
+      exerciseAttempt: { findMany: async () => [], create: async () => ({}) },
+      $executeRaw: async () => 0,
+    };
+    const hidden = Symbol();
+    const nested = {
+      exerciseAttempt: { findMany: async () => [] },
+      _originalClient: inner,
+      [hidden]: { _originalClient: inner },
+    } as unknown as PrismaClient;
+    const db = readOnlyClient(nested) as unknown as Record<string | symbol, unknown>;
+    const viaUnderscore = (db._originalClient as { exerciseAttempt: { create: () => unknown } })
+      .exerciseAttempt;
+    expect(() => viaUnderscore.create()).toThrow(ReadOnlyViolation);
+    const viaSymbol = (
+      db[hidden] as { _originalClient: { exerciseAttempt: { create: () => unknown } } }
+    )._originalClient.exerciseAttempt;
+    expect(() => viaSymbol.create()).toThrow(ReadOnlyViolation);
+    expect(() => (db._originalClient as { $executeRaw: () => unknown }).$executeRaw()).toThrow(
+      ReadOnlyViolation,
+    );
+    // Reads still work at any depth.
+    await expect(
+      (
+        db._originalClient as { exerciseAttempt: { findMany: () => Promise<unknown> } }
+      ).exerciseAttempt.findMany(),
+    ).resolves.toEqual([]);
+    // The wrapper can't be modified either.
+    expect(() => {
+      (db as unknown as Record<string, unknown>).exerciseAttempt = {};
+    }).toThrow(ReadOnlyViolation);
+    expect(() => {
+      delete (db as unknown as Record<string, unknown>)._originalClient;
+    }).toThrow(ReadOnlyViolation);
   });
 
   it("splits by participant, deterministically, about a third held out", () => {
