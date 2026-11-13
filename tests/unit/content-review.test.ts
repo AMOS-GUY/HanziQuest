@@ -73,6 +73,18 @@ describe("review status", () => {
   it("flags a status that has no review record (set before M14-b or declared by an import)", () => {
     expect(reviewStatus("VERIFIED", "v1:a", [])).toBe("unreviewed-status");
   });
+
+  it("is approved only at the approved level: a higher declared status isn't covered", () => {
+    expect(reviewStatus("VERIFIED", "v1:a", [row("APPROVED", "v1:a", "REVIEWED")])).toBe(
+      "unreviewed-status",
+    );
+  });
+
+  it("is stale when the sources no longer support the approved level", () => {
+    expect(reviewStatus("REVIEWED", "v1:a", [row("APPROVED", "v1:a")], false)).toBe("stale");
+    // A provisional item isn't affected.
+    expect(reviewStatus("PROVISIONAL", "v1:a", [], false)).toBe("needs-review");
+  });
 });
 
 describe("source blockers (same rules as imports)", () => {

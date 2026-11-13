@@ -190,6 +190,12 @@ export async function curriculumItems(db: Db, curriculumId: string): Promise<Cur
 export async function curriculumVersion(
   db: Db,
   curriculumId: string,
+  /** Item versions the caller already computed (the review queue), to avoid computing twice. */
+  known?: {
+    items: CurriculumItems;
+    characters: Map<string, ContentVersion>;
+    vocabulary: Map<string, ContentVersion>;
+  },
 ): Promise<ContentVersion | null> {
   const c = await db.curriculum.findUnique({
     where: { id: curriculumId },
@@ -231,11 +237,14 @@ export async function curriculumVersion(
     },
   });
   if (!c) return null;
-  const items = await curriculumItems(db, curriculumId);
-  const [chars, words] = await Promise.all([
-    characterVersions(db, items.characterIds),
-    vocabularyVersions(db, items.vocabularyIds),
-  ]);
+  const [chars, words] = known
+    ? [known.characters, known.vocabulary]
+    : await curriculumItems(db, curriculumId).then((items) =>
+        Promise.all([
+          characterVersions(db, items.characterIds),
+          vocabularyVersions(db, items.vocabularyIds),
+        ]),
+      );
   const { levels, sourceRefs, ...meta } = c;
   return versionOf({
     kind: "CURRICULUM",

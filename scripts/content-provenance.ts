@@ -1,9 +1,14 @@
 /**
- * Curriculum provenance (M14). Read-only.
+ * Curriculum provenance (M14). Read-only, except `--reconcile --apply`.
  *   npm run content:provenance                 Report on DATABASE_URL: sources, verification,
  *                                              review metadata and edition tags
  *   npm run content:provenance -- --register   Validate content/sources.json only (no database)
  *   npm run content:provenance -- --reviews    Review progress per published curriculum
+ *   npm run content:provenance -- --reconcile [--apply]
+ *                                              Return to PROVISIONAL every approval that no
+ *                                              longer holds (changed content, or a source whose
+ *                                              approval was withdrawn). Preview unless --apply:
+ *                                              the only option of this script that writes.
  *   npm run content:provenance -- --compare a.txt b.txt
  *                                              Edition mapping dry run: compare two word lists
  *                                              (format as for content:coverage; no database)
@@ -13,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { compareLists, sourceRegister } from "../src/features/curriculum/sources";
 import { provenanceReport } from "../src/features/curriculum/provenance-report";
-import { reviewProgress } from "../src/features/curriculum/review";
+import { reconcileAllReviews, reviewProgress } from "../src/features/curriculum/review";
 import { parseWordList } from "../src/features/curriculum/word-list";
 import { createPrismaClient } from "../src/lib/database/client";
 
@@ -52,6 +57,15 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL is not set");
   const prisma = createPrismaClient(url);
   try {
+    if (args.includes("--reconcile")) {
+      const apply = args.includes("--apply");
+      const invalidated = await reconcileAllReviews(prisma, { apply, register });
+      console.log(
+        `${apply ? "Returned to PROVISIONAL" : "Preview, nothing written. Would return to PROVISIONAL"}: ${invalidated.length} item(s).`,
+      );
+      for (const x of invalidated) console.log(`  ${x.type.padEnd(10)} ${x.id}`);
+      return;
+    }
     if (args.includes("--reviews")) {
       // Review progress per published curriculum (M14-b). Read-only.
       const curricula = await prisma.curriculum.findMany({

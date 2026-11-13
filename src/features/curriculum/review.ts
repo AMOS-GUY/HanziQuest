@@ -165,12 +165,16 @@ export function reviewStatus(
   verification: Verification,
   fingerprint: string,
   history: readonly ReviewRow[],
+  /** False when the item's sources no longer support its level (a source approval withdrawn). */
+  sourcesAllow = true,
 ): ReviewStatus {
   const latest = history[0];
   const approval = history.find((r) => r.decision === "APPROVED");
   if (verification !== "PROVISIONAL") {
     if (!approval) return "unreviewed-status"; // set before M14-b, or declared by an import
-    if (approval.fingerprint !== fingerprint) return "stale";
+    if (approval.fingerprint !== fingerprint || !sourcesAllow) return "stale";
+    // The status must be the level that was approved (an import may have declared another).
+    if (approval.level !== verification) return "unreviewed-status";
     return "approved";
   }
   if (approval && approval.fingerprint !== fingerprint && latest === approval) return "stale";
@@ -216,7 +220,7 @@ export async function reviewQueue(
   register: SourceRegister = sourceRegister(),
 ): Promise<QueueItem[]> {
   const items = await curriculumItems(prisma, curriculumId);
-  const [charRows, wordRows, curriculum, cv, wv, cuv] = await Promise.all([
+  const [charRows, wordRows, curriculum, cv, wv] = await Promise.all([
     prisma.character.findMany({
       where: { id: { in: items.characterIds } },
       orderBy: { hanzi: "asc" },
@@ -262,8 +266,13 @@ export async function reviewQueue(
     }),
     characterVersions(prisma, items.characterIds),
     vocabularyVersions(prisma, items.vocabularyIds),
-    curriculumVersion(prisma, curriculumId),
   ]);
+  // The curriculum's version reuses the item versions computed above.
+  const cuv = await curriculumVersion(prisma, curriculumId, {
+    items,
+    characters: cv,
+    vocabulary: wv,
+  });
   if (!curriculum || !cuv) return [];
   const [ch, vo, cu] = await Promise.all([
     reviewsFor(prisma, "CHARACTER", items.characterIds),
@@ -282,7 +291,14 @@ export async function reviewQueue(
     extraBlockers: ReviewBlocker[] = [],
   ): QueueItem => {
     const approval = history.find((r) => r.decision === "APPROVED");
-    const status = reviewStatus(verification, version.fingerprint, history);
+    const blockers = {
+      REVIEWED: [...sourceBlockers(provenance, "REVIEWED", entityType, register), ...extraBlockers],
+      VERIFIED: [...sourceBlockers(provenance, "VERIFIED", entityType, register), ...extraBlockers],
+    };
+    const sourcesAllow = verification === "PROVISIONAL" || blockers[verification].length === 0;
+    const status = reviewStatus(verification, version.fingerprint, history, sourcesAllow);
+    const changed =
+      status === "stale" && approval ? changedFields(approval.snapshot, version.snapshot) : [];
     return {
       entityType,
       entityId: id,
@@ -292,16 +308,7 @@ export async function reviewQueue(
       status,
       fingerprint: version.fingerprint,
       sourceRefs: [...provenance.sourceRefs],
-      blockers: {
-        REVIEWED: [
-          ...sourceBlockers(provenance, "REVIEWED", entityType, register),
-          ...extraBlockers,
-        ],
-        VERIFIED: [
-          ...sourceBlockers(provenance, "VERIFIED", entityType, register),
-          ...extraBlockers,
-        ],
-      },
+      blockers,
       history: history.slice(0, 10).map((r) => ({
         decision: r.decision,
         level: r.level,
@@ -311,76 +318,70 @@ export async function reviewQueue(
         fingerprint: r.fingerprint,
       })),
       changedSinceApproval:
-        status === "stale" && approval ? changedFields(approval.snapshot, version.snapshot) : [],
+        changed.length || status !== "stale" || sourcesAllow
+          ? changed
+          : [
+              blockers[verification as "REVIEWED" | "VERIFIED"].some(
+                (b) => b.code === "items-not-approved",
+              )
+                ? "items no longer approved"
+                : "sources no longer support this level",
+            ],
     };
   };
-  const out: QueueItem[] = [];
-  const pending = (
-    list: { verification: Verification; id: string }[],
-    st: Map<string, ContentVersion>,
-    rev: Map<string, ReviewRow[]>,
-  ) =>
-    list.filter(
-      (x) =>
-        reviewStatus(x.verification, st.get(x.id)!.fingerprint, rev.get(x.id) ?? []) !== "approved",
-    ).length;
-  const notApproved = pending(charRows, cv, ch) + pending(wordRows, wv, vo);
-  out.push(
+  const characters = charRows.map((c) =>
     build(
-      "CURRICULUM",
-      curriculum.id,
-      curriculum.name,
-      { framework: curriculum.framework, version: curriculum.version },
-      curriculum.verification,
-      cuv,
-      cu.get(curriculum.id) ?? [],
-      { sourceRefs: curriculum.sourceRefs, licenseStatus: curriculum.licenseStatus },
-      notApproved
-        ? [
-            {
-              code: "items-not-approved",
-              message: `${notApproved} character(s) and word(s) in this curriculum don't have a current approval yet.`,
-            },
-          ]
-        : [],
+      "CHARACTER",
+      c.id,
+      c.hanzi,
+      { pinyin: c.pinyin, meaning: c.meaning, traditional: c.traditional },
+      c.verification,
+      cv.get(c.id)!,
+      ch.get(c.id) ?? [],
+      { sourceRefs: c.sourceRefs, licenseStatus: c.licenseStatus },
     ),
   );
-  for (const c of charRows)
-    out.push(
-      build(
-        "CHARACTER",
-        c.id,
-        c.hanzi,
-        { pinyin: c.pinyin, meaning: c.meaning, traditional: c.traditional },
-        c.verification,
-        cv.get(c.id)!,
-        ch.get(c.id) ?? [],
-        { sourceRefs: c.sourceRefs, licenseStatus: c.licenseStatus },
-      ),
-    );
-  for (const w of wordRows)
-    out.push(
-      build(
-        "VOCABULARY",
-        w.id,
-        w.simplified,
-        {
-          pinyin: w.pinyin,
-          meaning: w.meaning,
-          partOfSpeech: w.partOfSpeech,
-          example: w.exampleZh ? `${w.exampleZh} (${w.exampleEn ?? ""})` : null,
-        },
-        w.verification,
-        wv.get(w.id)!,
-        vo.get(w.id) ?? [],
-        {
-          sourceRefs: w.sourceRefs,
-          licenseStatus: w.licenseStatus,
-          example: w.exampleZh ? { sourceRef: w.exampleSourceRef } : null,
-        },
-      ),
-    );
-  return out;
+  const words = wordRows.map((w) =>
+    build(
+      "VOCABULARY",
+      w.id,
+      w.simplified,
+      {
+        pinyin: w.pinyin,
+        meaning: w.meaning,
+        partOfSpeech: w.partOfSpeech,
+        example: w.exampleZh ? `${w.exampleZh} (${w.exampleEn ?? ""})` : null,
+      },
+      w.verification,
+      wv.get(w.id)!,
+      vo.get(w.id) ?? [],
+      {
+        sourceRefs: w.sourceRefs,
+        licenseStatus: w.licenseStatus,
+        example: w.exampleZh ? { sourceRef: w.exampleSourceRef } : null,
+      },
+    ),
+  );
+  const notApproved = [...characters, ...words].filter((x) => x.status !== "approved").length;
+  const cur = build(
+    "CURRICULUM",
+    curriculum.id,
+    curriculum.name,
+    { framework: curriculum.framework, version: curriculum.version },
+    curriculum.verification,
+    cuv,
+    cu.get(curriculum.id) ?? [],
+    { sourceRefs: curriculum.sourceRefs, licenseStatus: curriculum.licenseStatus },
+    notApproved
+      ? [
+          {
+            code: "items-not-approved",
+            message: `${notApproved} character(s) and word(s) in this curriculum don't have a current approval yet.`,
+          },
+        ]
+      : [],
+  );
+  return [cur, ...characters, ...words];
 }
 
 // ─── Recording a decision ───────────────────────────────────────────────────
@@ -502,90 +503,122 @@ export async function recordReview(
         ? "VERIFIED"
         : null;
 
-  return prisma.$transaction(async (tx) => {
-    // Serialise decisions on the same item.
-    await lockForReview(tx, {
-      characterIds: input.entityType === "CHARACTER" ? [input.entityId] : [],
-      vocabularyIds: input.entityType === "VOCABULARY" ? [input.entityId] : [],
-      curriculumIds: input.entityType === "CURRICULUM" ? [input.entityId] : [],
-    });
-    const version = await currentVersion(tx, input.entityType, input.entityId);
-    if (!version) throw new DomainError("not_found", "That item no longer exists.");
-    if (version.fingerprint !== input.fingerprint)
-      throw new DomainError(
-        "conflict",
-        "This item changed after you opened it. Reload the review queue and review the current version.",
-      );
-    if (await actorAuthoredVersion(tx, actor.id, input.entityType, input.entityId))
-      throw new DomainError(
-        "forbidden",
-        "You changed or imported this version, so another reviewer has to review it.",
-      );
+  return prisma.$transaction(
+    async (tx) => {
+      // Serialise decisions on the same item.
+      await lockForReview(tx, {
+        characterIds: input.entityType === "CHARACTER" ? [input.entityId] : [],
+        vocabularyIds: input.entityType === "VOCABULARY" ? [input.entityId] : [],
+        curriculumIds: input.entityType === "CURRICULUM" ? [input.entityId] : [],
+      });
+      const version = await currentVersion(tx, input.entityType, input.entityId);
+      if (!version) throw new DomainError("not_found", "That item no longer exists.");
+      if (version.fingerprint !== input.fingerprint)
+        throw new DomainError(
+          "conflict",
+          "This item changed after you opened it. Reload the review queue and review the current version.",
+        );
+      if (await actorAuthoredVersion(tx, actor.id, input.entityType, input.entityId))
+        throw new DomainError(
+          "forbidden",
+          "You changed or imported this version, so another reviewer has to review it.",
+        );
 
-    if (level) {
-      const blockers = await approvalBlockers(
+      if (level) {
+        // A repeated or concurrent approval of the same version adds nothing: refuse it rather
+        // than writing a duplicate record. Raising REVIEWED to VERIFIED is a new decision.
+        const current = await currentState(tx, input.entityType, input.entityId, register);
+        if (current && approvedAt(current, level))
+          throw new DomainError(
+            "conflict",
+            `This version is already approved as ${current.verification.toLowerCase()}.`,
+          );
+        const blockers = await approvalBlockers(
+          tx,
+          input.entityType,
+          input.entityId,
+          level,
+          register,
+        );
+        if (blockers.length)
+          throw new DomainError(
+            "conflict",
+            `Can't approve: ${blockers.map((b) => b.message).join(" ")}`,
+          );
+      }
+
+      const reviewerRole = ADMIN_ROLES.find((r) => actor.roles.includes(r)) ?? "UNKNOWN";
+      const review = await tx.contentReview.create({
+        data: {
+          entityType: input.entityType,
+          entityId: input.entityId,
+          fingerprint: version.fingerprint,
+          decision: level ? "APPROVED" : "CHANGES_REQUESTED",
+          level,
+          reviewerId: actor.id,
+          reviewerRole,
+          note: input.note,
+          snapshot: version.snapshot as Prisma.InputJsonValue,
+        },
+      });
+      const next: Verification = level ?? "PROVISIONAL";
+      const before = await setVerification(
         tx,
         input.entityType,
         input.entityId,
-        level,
-        register,
+        next,
+        level ? reviewerRole : null,
       );
-      if (blockers.length)
-        throw new DomainError(
-          "conflict",
-          `Can't approve: ${blockers.map((b) => b.message).join(" ")}`,
-        );
-    }
-
-    const reviewerRole = ADMIN_ROLES.find((r) => actor.roles.includes(r)) ?? "UNKNOWN";
-    const review = await tx.contentReview.create({
-      data: {
-        entityType: input.entityType,
+      await recordAudit(tx, {
+        actorId: actor.id,
+        action: level ? "content.review.approve" : "content.review.request-changes",
+        entityType: AUDIT_ENTITY[input.entityType],
         entityId: input.entityId,
-        fingerprint: version.fingerprint,
-        decision: level ? "APPROVED" : "CHANGES_REQUESTED",
-        level,
-        reviewerId: actor.id,
-        reviewerRole,
-        note: input.note,
-        snapshot: version.snapshot as Prisma.InputJsonValue,
-      },
-    });
-    const next: Verification = level ?? "PROVISIONAL";
-    const before = await setVerification(
-      tx,
-      input.entityType,
-      input.entityId,
-      next,
-      level ? reviewerRole : null,
-    );
-    await recordAudit(tx, {
-      actorId: actor.id,
-      action: level ? "content.review.approve" : "content.review.request-changes",
-      entityType: AUDIT_ENTITY[input.entityType],
-      entityId: input.entityId,
-      before: { verification: before },
-      after: {
-        verification: next,
-        reviewId: review.id,
-        fingerprint: version.fingerprint,
-        note: input.note,
-      },
-      ipAddress: actor.ip,
-      userAgent: actor.userAgent,
-    });
-    // Withdrawing an item's approval can invalidate the curricula that rely on it.
-    if (!level && input.entityType !== "CURRICULUM")
-      await reconcileReviews(
-        tx,
-        {
-          characterIds: input.entityType === "CHARACTER" ? [input.entityId] : [],
-          vocabularyIds: input.entityType === "VOCABULARY" ? [input.entityId] : [],
+        before: { verification: before },
+        after: {
+          verification: next,
+          reviewId: review.id,
+          fingerprint: version.fingerprint,
+          note: input.note,
         },
-        actor.id,
-      );
-    return review;
-  });
+        ipAddress: actor.ip,
+        userAgent: actor.userAgent,
+      });
+      // Withdrawing an item's approval can invalidate the curricula that rely on it.
+      if (!level && input.entityType !== "CURRICULUM")
+        await reconcileReviews(
+          tx,
+          {
+            characterIds: input.entityType === "CHARACTER" ? [input.entityId] : [],
+            vocabularyIds: input.entityType === "VOCABULARY" ? [input.entityId] : [],
+          },
+          actor.id,
+        );
+      return review;
+    },
+    // Same limits as edits: an import holds the review lock for a few seconds.
+    { timeout: 30_000, maxWait: 10_000 },
+  );
+}
+
+/** The current review state of one item, or of a curriculum (status from its own history). */
+async function currentState(
+  db: Db,
+  type: ReviewEntityType,
+  id: string,
+  register: SourceRegister,
+): Promise<{ status: ReviewStatus; verification: Verification } | null> {
+  if (type !== "CURRICULUM") return (await itemStates(db, type, [id], register)).get(id) ?? null;
+  const [row, version, history] = await Promise.all([
+    db.curriculum.findUnique({ where: { id }, select: { verification: true } }),
+    curriculumVersion(db, id),
+    reviewsFor(db, "CURRICULUM", [id]),
+  ]);
+  if (!row || !version) return null;
+  return {
+    verification: row.verification,
+    status: reviewStatus(row.verification, version.fingerprint, history.get(id) ?? []),
+  };
 }
 
 async function approvalBlockers(
@@ -593,14 +626,16 @@ async function approvalBlockers(
   type: ReviewEntityType,
   id: string,
   level: "REVIEWED" | "VERIFIED",
-  register: SourceRegister,
-) {
+  /** None: check only that every item of a curriculum is approved (reconciling after edits). */
+  register: SourceRegister | null,
+): Promise<ReviewBlocker[]> {
+  if (type !== "CURRICULUM" && !register) return [];
   if (type === "CHARACTER") {
     const c = await tx.character.findUniqueOrThrow({
       where: { id },
       select: { sourceRefs: true, licenseStatus: true },
     });
-    return sourceBlockers(c, level, type, register);
+    return sourceBlockers(c, level, type, register!);
   }
   if (type === "VOCABULARY") {
     const v = await tx.vocabulary.findUniqueOrThrow({
@@ -611,38 +646,21 @@ async function approvalBlockers(
       { ...v, example: v.exampleZh ? { sourceRef: v.exampleSourceRef } : null },
       level,
       type,
-      register,
+      register!,
     );
   }
   const c = await tx.curriculum.findUniqueOrThrow({
     where: { id },
     select: { sourceRefs: true, licenseStatus: true },
   });
-  const blockers = sourceBlockers(c, level, type, register);
+  const blockers = register ? sourceBlockers(c, level, type, register) : [];
   // Every item must hold a current approval at this level or higher.
   const items = await curriculumItems(tx, id);
-  const [cv, wv, cr, vr, crow, vrow] = await Promise.all([
-    characterVersions(tx, items.characterIds),
-    vocabularyVersions(tx, items.vocabularyIds),
-    reviewsFor(tx, "CHARACTER", items.characterIds),
-    reviewsFor(tx, "VOCABULARY", items.vocabularyIds),
-    tx.character.findMany({
-      where: { id: { in: items.characterIds } },
-      select: { id: true, verification: true },
-    }),
-    tx.vocabulary.findMany({
-      where: { id: { in: items.vocabularyIds } },
-      select: { id: true, verification: true },
-    }),
-  ]);
-  const missing = [
-    ...crow.filter(
-      (x) => !approvedAt(x.verification, cv.get(x.id)!.fingerprint, cr.get(x.id) ?? [], level),
-    ),
-    ...vrow.filter(
-      (x) => !approvedAt(x.verification, wv.get(x.id)!.fingerprint, vr.get(x.id) ?? [], level),
-    ),
-  ].length;
+  const states = [
+    ...(await itemStates(tx, "CHARACTER", items.characterIds, register)).values(),
+    ...(await itemStates(tx, "VOCABULARY", items.vocabularyIds, register)).values(),
+  ];
+  const missing = states.filter((x) => !approvedAt(x, level)).length;
   if (missing)
     blockers.push({
       code: "items-not-approved",
@@ -651,15 +669,76 @@ async function approvalBlockers(
   return blockers;
 }
 
+/** An item's current review state: its version, history, and status under the source rules. */
+interface ItemState {
+  id: string;
+  verification: Verification;
+  version: ContentVersion;
+  history: ReviewRow[];
+  status: ReviewStatus;
+}
+
+async function itemStates(
+  db: Db,
+  type: "CHARACTER" | "VOCABULARY",
+  ids: readonly string[],
+  /** None: the source rules aren't checked (versions only). */
+  register: SourceRegister | null,
+): Promise<Map<string, ItemState>> {
+  if (!ids.length) return new Map();
+  const where = { id: { in: [...ids] } };
+  const [versions, reviews, rows] = await Promise.all([
+    type === "CHARACTER" ? characterVersions(db, ids) : vocabularyVersions(db, ids),
+    reviewsFor(db, type, ids),
+    type === "CHARACTER"
+      ? db.character.findMany({
+          where,
+          select: { id: true, verification: true, sourceRefs: true, licenseStatus: true },
+        })
+      : db.vocabulary
+          .findMany({
+            where,
+            select: {
+              id: true,
+              verification: true,
+              sourceRefs: true,
+              licenseStatus: true,
+              exampleZh: true,
+              exampleSourceRef: true,
+            },
+          })
+          .then((rs) =>
+            rs.map(({ exampleZh, exampleSourceRef, ...r }) => ({
+              ...r,
+              example: exampleZh ? { sourceRef: exampleSourceRef } : null,
+            })),
+          ),
+  ]);
+  const out = new Map<string, ItemState>();
+  for (const row of rows) {
+    const version = versions.get(row.id)!;
+    const history = reviews.get(row.id) ?? [];
+    const sourcesAllow =
+      !register ||
+      row.verification === "PROVISIONAL" ||
+      sourceBlockers(row, row.verification, type, register).length === 0;
+    out.set(row.id, {
+      id: row.id,
+      verification: row.verification,
+      version,
+      history,
+      status: reviewStatus(row.verification, version.fingerprint, history, sourcesAllow),
+    });
+  }
+  return out;
+}
+
 function approvedAt(
-  verification: Verification,
-  fingerprint: string,
-  history: readonly ReviewRow[],
+  state: { status: ReviewStatus; verification: Verification },
   level: Verification,
 ) {
   return (
-    reviewStatus(verification, fingerprint, history) === "approved" &&
-    VERIFICATION_RANK[verification] >= VERIFICATION_RANK[level]
+    state.status === "approved" && VERIFICATION_RANK[state.verification] >= VERIFICATION_RANK[level]
   );
 }
 
@@ -754,6 +833,12 @@ export async function reconcileReviews(
     curriculumIds?: readonly string[];
   },
   actorId: string | null,
+  /**
+   * With a register, approvals whose sources no longer support their level are invalidated too
+   * (`reconcileAllReviews`, after the owner withdraws a source approval). Edits and imports pass
+   * none: they check versions only.
+   */
+  register: SourceRegister | null = null,
 ) {
   const characterIds = [...(scope.characterIds ?? [])].sort();
   const vocabularyIds = [...(scope.vocabularyIds ?? [])].sort();
@@ -764,53 +849,26 @@ export async function reconcileReviews(
   for (const id of characterIds) await lockItem(tx, "CHARACTER", id);
   for (const id of vocabularyIds) await lockItem(tx, "VOCABULARY", id);
 
-  const items = async (
-    type: "CHARACTER" | "VOCABULARY",
-    ids: string[],
-    versions: Map<string, ContentVersion>,
-    rows: { id: string; verification: Verification }[],
-  ) => {
-    const reviews = await reviewsFor(tx, type, ids);
-    for (const row of rows) {
-      if (row.verification === "PROVISIONAL") continue;
-      const status = reviewStatus(
-        row.verification,
-        versions.get(row.id)!.fingerprint,
-        reviews.get(row.id) ?? [],
-      );
-      if (status !== "stale") continue;
+  const items = async (type: "CHARACTER" | "VOCABULARY", ids: string[]) => {
+    for (const state of (await itemStates(tx, type, ids, register)).values()) {
+      // Stale: the content changed since approval (or, with a register, its sources no longer
+      // support the level).
+      if (state.verification === "PROVISIONAL" || state.status !== "stale") continue;
+      const approval = state.history.find((r) => r.decision === "APPROVED")!;
       await invalidate(
         tx,
         type,
-        row.id,
-        row.verification,
-        reviews.get(row.id)![0]!.fingerprint,
-        versions.get(row.id)!.fingerprint,
+        state.id,
+        state.verification,
+        approval.fingerprint,
+        state.version.fingerprint,
         actorId,
       );
-      invalidated.push({ type, id: row.id });
+      invalidated.push({ type, id: state.id });
     }
   };
-  if (characterIds.length)
-    await items(
-      "CHARACTER",
-      characterIds,
-      await characterVersions(tx, characterIds),
-      await tx.character.findMany({
-        where: { id: { in: characterIds } },
-        select: { id: true, verification: true },
-      }),
-    );
-  if (vocabularyIds.length)
-    await items(
-      "VOCABULARY",
-      vocabularyIds,
-      await vocabularyVersions(tx, vocabularyIds),
-      await tx.vocabulary.findMany({
-        where: { id: { in: vocabularyIds } },
-        select: { id: true, verification: true },
-      }),
-    );
+  await items("CHARACTER", characterIds);
+  await items("VOCABULARY", vocabularyIds);
 
   const curricula = new Set([
     ...(scope.curriculumIds ?? []),
@@ -831,10 +889,17 @@ export async function reconcileReviews(
       "CURRICULUM",
       id,
       row.verification as "REVIEWED" | "VERIFIED",
-      sourceRegister(),
+      register,
     );
-    const itemsStillApproved = !blockers.some((b) => b.code === "items-not-approved");
-    if (version && approval.fingerprint === version.fingerprint && itemsStillApproved) continue;
+    // Still valid only for the approved version, at the approved level, with every item approved
+    // (and, with a register, the curriculum's own sources still allowing the level).
+    if (
+      version &&
+      approval.fingerprint === version.fingerprint &&
+      approval.level === row.verification &&
+      blockers.length === 0
+    )
+      continue;
     await invalidate(
       tx,
       "CURRICULUM",
@@ -920,4 +985,60 @@ export async function reviewProgress(
   register?: SourceRegister,
 ) {
   return summariseQueue(curriculumId, await reviewQueue(prisma, curriculumId, register));
+}
+
+/**
+ * Every character, word and curriculum whose status is above PROVISIONAL: the only rows that
+ * reconciling can change. Imports reconcile all of them, because an import can change shared
+ * characters and words that other curricula teach too.
+ *
+ * Complete only under the EXCLUSIVE review lock: with no approval in flight, no row can become
+ * REVIEWED between this read and the reconciliation. (An experiment with a shared import lock left
+ * an approval on changed content: an approval still in flight was missed by this read.)
+ */
+export async function nonProvisionalScope(db: Db) {
+  const where = { verification: { not: "PROVISIONAL" as const } };
+  const select = { id: true } as const;
+  const [characters, words, curricula] = await Promise.all([
+    db.character.findMany({ where, select }),
+    db.vocabulary.findMany({ where, select }),
+    db.curriculum.findMany({ where, select }),
+  ]);
+  return {
+    characterIds: characters.map((x) => x.id),
+    vocabularyIds: words.map((x) => x.id),
+    curriculumIds: curricula.map((x) => x.id),
+  };
+}
+
+class DryRun extends Error {}
+
+/**
+ * Reconciles every status above PROVISIONAL, for example after the owner withdraws a source
+ * approval in `content/sources.json` (a deploy, not a database change). Takes the exclusive
+ * review lock like an import. Without `apply` the transaction is rolled back: a preview.
+ */
+export async function reconcileAllReviews(
+  prisma: PrismaClient,
+  options: { apply: boolean; register?: SourceRegister },
+) {
+  let invalidated: { type: ReviewEntityType; id: string }[] = [];
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        await lockForReview(tx, {}, "exclusive");
+        invalidated = await reconcileReviews(
+          tx,
+          await nonProvisionalScope(tx),
+          null,
+          options.register ?? sourceRegister(),
+        );
+        if (!options.apply) throw new DryRun();
+      },
+      { timeout: 120_000, maxWait: 10_000 },
+    );
+  } catch (error) {
+    if (!(error instanceof DryRun)) throw error;
+  }
+  return invalidated;
 }
