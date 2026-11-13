@@ -6,6 +6,7 @@ import {
   Activity,
   BookA,
   BookOpen,
+  ClipboardCheck,
   Languages,
   LayoutDashboard,
   Library,
@@ -34,6 +35,7 @@ const ICONS: Record<string, LucideIcon> = {
   "shield-check": ShieldCheck,
   activity: Activity,
   ticket: Ticket,
+  "clipboard-check": ClipboardCheck,
 };
 
 export interface AdminNavItem {

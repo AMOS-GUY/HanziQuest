@@ -38,6 +38,12 @@ const NAV: (AdminNavItem & { permission: Permission })[] = [
     icon: "shield-check",
     permission: "curriculum:read",
   },
+  {
+    href: "/admin/review",
+    label: "Review",
+    icon: "clipboard-check",
+    permission: "curriculum:review",
+  },
   { href: "/admin/import", label: "Import", icon: "upload", permission: "content:import" },
   {
     href: "/admin/handwriting",

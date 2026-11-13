@@ -3,6 +3,7 @@
  *   npm run content:provenance                 Report on DATABASE_URL: sources, verification,
  *                                              review metadata and edition tags
  *   npm run content:provenance -- --register   Validate content/sources.json only (no database)
+ *   npm run content:provenance -- --reviews    Review progress per published curriculum
  *   npm run content:provenance -- --compare a.txt b.txt
  *                                              Edition mapping dry run: compare two word lists
  *                                              (format as for content:coverage; no database)
@@ -12,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { compareLists, sourceRegister } from "../src/features/curriculum/sources";
 import { provenanceReport } from "../src/features/curriculum/provenance-report";
+import { reviewProgress } from "../src/features/curriculum/review";
 import { parseWordList } from "../src/features/curriculum/word-list";
 import { createPrismaClient } from "../src/lib/database/client";
 
@@ -50,6 +52,20 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL is not set");
   const prisma = createPrismaClient(url);
   try {
+    if (args.includes("--reviews")) {
+      // Review progress per published curriculum (M14-b). Read-only.
+      const curricula = await prisma.curriculum.findMany({
+        where: { status: "PUBLISHED" },
+        select: { id: true, name: true, version: true },
+      });
+      for (const c of curricula) {
+        const p = await reviewProgress(prisma, c.id, register);
+        console.log(
+          `${c.name} (${c.version}): ${p.byStatus.approved}/${p.total} approved; needs review ${p.byStatus["needs-review"]}; changes requested ${p.byStatus["changes-requested"]}; changed since approval ${p.byStatus.stale}; status without review record ${p.byStatus["unreviewed-status"]}; blocked by sources ${p.blockedBySources}; curriculum ${p.curriculum}`,
+        );
+      }
+      return;
+    }
     console.log(JSON.stringify(await provenanceReport(prisma, register), null, 2));
   } finally {
     await prisma.$disconnect();

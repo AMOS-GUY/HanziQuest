@@ -4,6 +4,7 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/database/prisma";
 import { requirePagePermission } from "@/lib/auth/session";
 import { contentQualityReport } from "@/features/curriculum/quality";
+import { reviewProgress } from "@/features/curriculum/review";
 
 export const metadata = { title: "Content quality" };
 export const dynamic = "force-dynamic";
@@ -15,8 +16,18 @@ const SEVERITY = {
 } as const;
 
 export default async function ContentQualityPage() {
-  await requirePagePermission("curriculum:read");
+  const user = await requirePagePermission("curriculum:read");
   const report = await contentQualityReport(prisma);
+  // Review progress for published curricula (M14-b step 4). Drafts are reviewed from the queue.
+  const published = await prisma.curriculum.findMany({
+    where: { status: "PUBLISHED" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true, version: true },
+  });
+  const reviews = await Promise.all(
+    published.map(async (c) => ({ ...c, progress: await reviewProgress(prisma, c.id) })),
+  );
+  const canReview = user.permissions.has("curriculum:review");
   const counts = {
     error: report.findings.filter((f) => f.severity === "error").length,
     warning: report.findings.filter((f) => f.severity === "warning").length,
@@ -103,6 +114,64 @@ export default async function ContentQualityPage() {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <Card>
+        <CardTitle className="mb-3">Review progress (published curricula)</CardTitle>
+        {reviews.length === 0 ? (
+          <p className="text-muted-foreground">No published curriculum.</p>
+        ) : (
+          <div
+            role="region"
+            aria-label="Review progress (scrolls sideways)"
+            tabIndex={0}
+            className="overflow-x-auto"
+          >
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead className="text-muted-foreground border-border border-b-2">
+                <tr>
+                  <th className="py-2 pr-4">Curriculum</th>
+                  <th className="py-2 pr-4">Items approved</th>
+                  <th className="py-2 pr-4">Needs review</th>
+                  <th className="py-2 pr-4">Changed since approval</th>
+                  <th className="py-2 pr-4">Blocked by sources</th>
+                  <th className="py-2">Curriculum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reviews.map((r) => (
+                  <tr key={r.id} className="border-border border-b last:border-0">
+                    <td className="py-2 pr-4">
+                      {canReview ? (
+                        <Link
+                          href={`/admin/review?c=${r.id}`}
+                          className="underline underline-offset-4"
+                        >
+                          {r.name}
+                        </Link>
+                      ) : (
+                        r.name
+                      )}{" "}
+                      <span className="text-muted-foreground">({r.version})</span>
+                    </td>
+                    <td className="py-2 pr-4">
+                      {r.progress.byStatus.approved} / {r.progress.total}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {r.progress.byStatus["needs-review"] +
+                        r.progress.byStatus["changes-requested"]}
+                    </td>
+                    <td className="py-2 pr-4">{r.progress.byStatus.stale}</td>
+                    <td className="py-2 pr-4">{r.progress.blockedBySources}</td>
+                    <td className="py-2">
+                      {r.progress.curriculum === "approved" ? "approved" : "not approved"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       <Card>
