@@ -261,6 +261,12 @@ export async function validateImportAction(_: FormState, formData: FormData): Pr
 }
 
 export async function importContentAction(_: FormState, formData: FormData): Promise<FormState> {
+  // Permission first: validation messages are only for people who may import.
+  try {
+    await assertPermission("content:import");
+  } catch {
+    return { ok: false, message: "You do not have permission to do that." };
+  }
   const parsed = parseImport(formData);
   if ("error" in parsed) return { ok: false, message: parsed.error };
   if (!parsed.result.ok || !parsed.result.content)

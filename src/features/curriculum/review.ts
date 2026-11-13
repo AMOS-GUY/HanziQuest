@@ -21,6 +21,7 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { recordAudit } from "@/lib/audit";
 import { DomainError, type Actor } from "@/features/administration/services";
 import { ADMIN_ROLES, hasPermission } from "@/lib/permissions/permissions";
+import type { RoleKey } from "@/generated/prisma/enums";
 import { VERIFICATION_RANK, type Verification } from "./provenance";
 import { sourceRegister, type SourceRegister } from "./sources";
 import {
@@ -386,6 +387,17 @@ export async function reviewQueue(
 
 // ─── Recording a decision ───────────────────────────────────────────────────
 
+/**
+ * The role recorded on a decision: the actor's first admin role that grants `curriculum:review`.
+ * (Not just their first admin role: an editor who is also a reviewer approves as a reviewer.)
+ */
+export function reviewerRoleOf(roles: readonly RoleKey[]): string {
+  return (
+    ADMIN_ROLES.find((r) => roles.includes(r) && hasPermission([r], "curriculum:review")) ??
+    "UNKNOWN"
+  );
+}
+
 export const reviewInputSchema = z
   .object({
     entityType: z.enum(["CURRICULUM", "CHARACTER", "VOCABULARY"]),
@@ -547,7 +559,7 @@ export async function recordReview(
           );
       }
 
-      const reviewerRole = ADMIN_ROLES.find((r) => actor.roles.includes(r)) ?? "UNKNOWN";
+      const reviewerRole = reviewerRoleOf(actor.roles);
       const review = await tx.contentReview.create({
         data: {
           entityType: input.entityType,

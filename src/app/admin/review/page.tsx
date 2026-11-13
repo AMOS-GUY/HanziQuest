@@ -20,6 +20,17 @@ export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 20;
 
+/** Readable labels for the details shown per item. */
+const DETAIL_LABEL: Record<string, string> = {
+  pinyin: "Pinyin",
+  meaning: "Meaning",
+  traditional: "Traditional",
+  partOfSpeech: "Part of speech",
+  example: "Example",
+  framework: "Framework",
+  version: "Version",
+};
+
 const STATUS_LABEL: Record<ReviewStatus, string> = {
   "needs-review": "Needs review",
   "changes-requested": "Changes requested",
@@ -179,132 +190,144 @@ function ReviewItem({
 }) {
   const headingId = `review-${q.entityType}-${q.entityId}`;
   return (
-    <Card aria-labelledby={headingId}>
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h2 id={headingId} className="text-xl font-black">
-          <span className="text-muted-foreground mr-2 text-sm font-bold">
-            {KIND_LABEL[q.entityType]}
-          </span>
-          {q.entityType === "CURRICULUM" ? (
-            q.title
-          ) : (
-            <span lang="zh" className="hanzi">
-              {q.title}
+    // An article named by its heading: groups each item's details and its "Record decision"
+    // form for screen readers (a plain div can't carry a name).
+    <article aria-labelledby={headingId}>
+      <Card>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h2 id={headingId} className="text-xl font-black">
+            <span className="text-muted-foreground mr-2 text-sm font-bold">
+              {KIND_LABEL[q.entityType]}
             </span>
-          )}
-        </h2>
-        <Badge variant={STATUS_VARIANT[q.status]}>{STATUS_LABEL[q.status]}</Badge>
-        <Badge variant="muted">{q.verification}</Badge>
-      </div>
-
-      <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
-        {Object.entries(q.details)
-          .filter(([, v]) => v)
-          .map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt className="text-muted-foreground">{k}</dt>
-              <dd lang={k === "example" ? "zh" : undefined}>{v}</dd>
-            </div>
-          ))}
-        <dt className="text-muted-foreground">sources</dt>
-        <dd>
-          {q.sourceRefs.length ? (
-            <ul className="flex flex-wrap gap-2">
-              {q.sourceRefs.map((ref) => {
-                const s = sourceLabel(ref);
-                return (
-                  <li key={ref}>
-                    <code>{ref}</code>{" "}
-                    <Badge variant={s?.approval.status === "APPROVED" ? "default" : "warning"}>
-                      {s
-                        ? s.approval.status === "APPROVED"
-                          ? "approved"
-                          : "awaiting owner approval"
-                        : "not registered"}
-                    </Badge>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            "none recorded"
-          )}
-        </dd>
-        <dt className="text-muted-foreground">version</dt>
-        <dd>
-          <code className="text-xs">{q.fingerprint.slice(0, 19)}…</code>
-        </dd>
-      </dl>
-
-      {q.changedSinceApproval.length ? (
-        <p className="mt-2 text-sm">
-          <span className="font-bold">Changed since the last approval:</span>{" "}
-          {q.changedSinceApproval.join(", ")}
-        </p>
-      ) : null}
-
-      {q.blockers.REVIEWED.length ? (
-        <div className="mt-3 text-sm" role="note">
-          <p className="font-bold">Can&apos;t be approved yet:</p>
-          <ul className="list-disc pl-5">
-            {q.blockers.REVIEWED.map((b) => (
-              <li key={b.message}>{b.message}</li>
-            ))}
-          </ul>
+            {q.entityType === "CURRICULUM" ? (
+              q.title
+            ) : (
+              <span lang="zh" className="hanzi">
+                {q.title}
+              </span>
+            )}
+          </h2>
+          <Badge variant={STATUS_VARIANT[q.status]}>{STATUS_LABEL[q.status]}</Badge>
+          <Badge variant="muted">{q.verification}</Badge>
         </div>
-      ) : null}
 
-      {q.history.length ? (
-        <details className="mt-3 text-sm">
-          <summary className="cursor-pointer font-bold">
-            Review history ({q.history.length})
-          </summary>
-          <ul className="mt-2 flex flex-col gap-1">
-            {q.history.map((h) => (
-              <li key={`${h.createdAt.toISOString()}-${h.fingerprint}`}>
-                {h.createdAt.toISOString().slice(0, 16).replace("T", " ")} ·{" "}
-                {h.decision === "APPROVED"
-                  ? `approved as ${h.level?.toLowerCase()}`
-                  : "changes requested"}{" "}
-                by a {h.reviewerRole.toLowerCase().replace("_", " ")}
-                {h.fingerprint === q.fingerprint ? " (this version)" : " (an earlier version)"}
-                {h.note ? `: “${h.note}”` : ""}
-              </li>
+        <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
+          {Object.entries(q.details)
+            .filter(([, v]) => v)
+            .map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="text-muted-foreground">{DETAIL_LABEL[k] ?? k}</dt>
+                <dd lang={k === "example" ? "zh" : undefined}>{v}</dd>
+              </div>
             ))}
-          </ul>
-        </details>
-      ) : null}
+          <dt className="text-muted-foreground">Sources</dt>
+          <dd>
+            {q.sourceRefs.length ? (
+              <ul className="flex flex-wrap gap-2">
+                {q.sourceRefs.map((ref) => {
+                  const s = sourceLabel(ref);
+                  return (
+                    <li key={ref}>
+                      <code>{ref}</code>{" "}
+                      <Badge variant={s?.approval.status === "APPROVED" ? "default" : "warning"}>
+                        {s
+                          ? s.approval.status === "APPROVED"
+                            ? "approved"
+                            : "awaiting owner approval"
+                          : "not registered"}
+                      </Badge>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              "none recorded"
+            )}
+          </dd>
+          <dt className="text-muted-foreground">Fingerprint</dt>
+          <dd>
+            <code className="text-xs">{q.fingerprint.slice(0, 19)}…</code>
+          </dd>
+        </dl>
 
-      <div className="mt-4">
-        <AdminForm
-          action={recordReviewAction}
-          submitLabel="Record decision"
-          fields={[
-            { name: "entityType", type: "hidden", label: "Kind", defaultValue: q.entityType },
-            { name: "entityId", type: "hidden", label: "Item", defaultValue: q.entityId },
-            { name: "fingerprint", type: "hidden", label: "Version", defaultValue: q.fingerprint },
-            {
-              name: "decision",
-              label: "Decision",
-              type: "select",
-              required: true,
-              options: [
-                { value: "REQUEST_CHANGES", label: "Request changes (stays Provisional)" },
-                { value: "APPROVE_REVIEWED", label: "Approve as Reviewed" },
-                { value: "APPROVE_VERIFIED", label: "Approve as Verified (licensed sources only)" },
-              ],
-            },
-            {
-              name: "note",
-              label: "Note",
-              type: "textarea",
-              rows: 2,
-              help: "Required when requesting changes. Shown in the review history.",
-              wide: true,
-            },
-          ]}
-        />
-      </div>
-    </Card>
+        {q.changedSinceApproval.length ? (
+          <p className="mt-2 text-sm">
+            <span className="font-bold">Changed since the last approval:</span>{" "}
+            {q.changedSinceApproval.join(", ")}
+          </p>
+        ) : null}
+
+        {q.blockers.REVIEWED.length ? (
+          <div className="mt-3 text-sm" role="note">
+            <p className="font-bold">Can&apos;t be approved yet:</p>
+            <ul className="list-disc pl-5">
+              {q.blockers.REVIEWED.map((b) => (
+                <li key={b.message}>{b.message}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {q.history.length ? (
+          <details className="mt-3 text-sm">
+            <summary className="cursor-pointer font-bold">
+              Review history ({q.history.length})
+            </summary>
+            <ul className="mt-2 flex flex-col gap-1">
+              {q.history.map((h) => (
+                <li key={`${h.createdAt.toISOString()}-${h.fingerprint}`}>
+                  {h.createdAt.toISOString().slice(0, 16).replace("T", " ")} ·{" "}
+                  {h.decision === "APPROVED"
+                    ? `approved as ${h.level?.toLowerCase()}`
+                    : "changes requested"}{" "}
+                  by a {h.reviewerRole.toLowerCase().replace("_", " ")}
+                  {h.fingerprint === q.fingerprint ? " (this version)" : " (an earlier version)"}
+                  {h.note ? `: “${h.note}”` : ""}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+
+        <div className="mt-4">
+          <AdminForm
+            action={recordReviewAction}
+            submitLabel="Record decision"
+            fields={[
+              { name: "entityType", type: "hidden", label: "Kind", defaultValue: q.entityType },
+              { name: "entityId", type: "hidden", label: "Item", defaultValue: q.entityId },
+              {
+                name: "fingerprint",
+                type: "hidden",
+                label: "Version",
+                defaultValue: q.fingerprint,
+              },
+              {
+                name: "decision",
+                label: "Decision",
+                type: "select",
+                required: true,
+                options: [
+                  { value: "REQUEST_CHANGES", label: "Request changes (stays Provisional)" },
+                  { value: "APPROVE_REVIEWED", label: "Approve as Reviewed" },
+                  {
+                    value: "APPROVE_VERIFIED",
+                    label: "Approve as Verified (licensed sources only)",
+                  },
+                ],
+              },
+              {
+                name: "note",
+                label: "Note",
+                type: "textarea",
+                rows: 2,
+                help: "Required when requesting changes. Shown in the review history.",
+                wide: true,
+              },
+            ]}
+          />
+        </div>
+      </Card>
+    </article>
   );
 }

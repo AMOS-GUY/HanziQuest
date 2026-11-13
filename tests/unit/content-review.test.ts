@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  reviewerRoleOf,
   reviewStatus,
   sourceBlockers,
   summariseQueue,
@@ -141,6 +142,14 @@ describe("source blockers (same rules as imports)", () => {
         approved,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("the role recorded on a decision", () => {
+  it("is the role that grants review, not just the first admin role", () => {
+    expect(reviewerRoleOf(["CURRICULUM_EDITOR", "CONTENT_REVIEWER"])).toBe("CONTENT_REVIEWER");
+    expect(reviewerRoleOf(["CONTENT_REVIEWER", "SUPER_ADMIN"])).toBe("SUPER_ADMIN");
+    expect(reviewerRoleOf(["CURRICULUM_EDITOR"])).toBe("UNKNOWN");
   });
 });
 
