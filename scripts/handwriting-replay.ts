@@ -30,7 +30,9 @@ import { arg } from "./lib/db-tools";
 const has = (flag: string) => process.argv.includes(`--${flag}`);
 
 function printAttempts(r: AttemptReplayReport, details: boolean) {
-  console.log(`Stored attempts replayed with ${r.engineVersion}: ${r.attempts}`);
+  console.log(
+    `Stored attempts replayed with ${r.engineVersion}: ${r.attempts} of ${r.eligible}${r.truncated ? " (TRUNCATED: raise --limit to replay all)" : ""}`,
+  );
   for (const [status, n] of Object.entries(r.byStatus)) console.log(`  ${status.padEnd(24)} ${n}`);
   console.log(`  nondeterministic replays  ${r.nondeterministic}`);
   if (!details) return;

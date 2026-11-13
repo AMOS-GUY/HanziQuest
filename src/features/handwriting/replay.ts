@@ -56,7 +56,9 @@ export function readOnlyClient(prisma: PrismaClient): PrismaClient {
       const value = Reflect.get(target, prop, receiver) as unknown;
       if (typeof prop !== "string") return value;
       if (prop.startsWith("$")) {
-        if (["$connect", "$disconnect", "$on", "$extends"].includes(prop)) return value;
+        // Only connection management. `$extends` would return a new, unwrapped client that
+        // could write, so it is refused like every other `$` method (M13 review, R1).
+        if (prop === "$connect" || prop === "$disconnect") return value;
         return () => {
           throw new ReadOnlyViolation(prop);
         };
@@ -245,6 +247,10 @@ export function replayAttempt(input: ReplayInput): ReplayResult {
 export interface AttemptReplayReport {
   engineVersion: string;
   attempts: number;
+  /** Stored attempts with stroke data that matched the selection (before the limit). */
+  eligible: number;
+  /** True when `limit` cut the replay short: only the oldest `attempts` were replayed. */
+  truncated: boolean;
   byStatus: Record<ReplayStatus, number>;
   nondeterministic: number;
   results: ReplayResult[];
@@ -272,11 +278,13 @@ export async function replayStoredAttempts(
   options: { limit?: number; attemptIds?: readonly string[] } = {},
 ): Promise<AttemptReplayReport> {
   const db = readOnlyClient(prisma);
+  const where = {
+    strokeData: { not: Prisma.DbNull },
+    ...(options.attemptIds ? { id: { in: [...options.attemptIds] } } : {}),
+  };
+  const eligible = await db.exerciseAttempt.count({ where });
   const attempts = await db.exerciseAttempt.findMany({
-    where: {
-      strokeData: { not: Prisma.DbNull },
-      ...(options.attemptIds ? { id: { in: [...options.attemptIds] } } : {}),
-    },
+    where,
     orderBy: [{ receivedAt: "asc" }, { id: "asc" }],
     take: options.limit ?? 5000,
     select: {
@@ -370,6 +378,8 @@ export async function replayStoredAttempts(
   return {
     engineVersion: ENGINE_VERSION,
     attempts: results.length,
+    eligible,
+    truncated: results.length < eligible,
     byStatus,
     nondeterministic: results.filter((r) => !r.deterministic).length,
     results,
@@ -417,6 +427,9 @@ export function splitOf(participantCode: string): "development" | "held-out" {
 /** Minimums before any threshold change (HANDWRITING_VALIDATION.md); the lab's own constant. */
 export const VALIDATION_MINIMUM = MIN_SAMPLES;
 
+/** The lab's own analysis limit (`analyseSamples`). */
+const SAMPLE_LIMIT = 20_000;
+
 /** Metrics without the per-participant breakdown, whose keys are participant codes. */
 function withoutParticipants(m: ValidationMetrics) {
   const { participant, ...breakdowns } = m.breakdowns;
@@ -425,8 +438,12 @@ function withoutParticipants(m: ValidationMetrics) {
 
 export async function sampleSplit(prisma: PrismaClient, options: { includeTests?: boolean } = {}) {
   const db = readOnlyClient(prisma);
-  const { samples, metrics } = await analyseSamples(db, 20_000, {
-    includeTests: options.includeTests ?? false,
+  const includeTests = options.includeTests ?? false;
+  const { samples, metrics } = await analyseSamples(db, SAMPLE_LIMIT, { includeTests });
+  const stored = await db.handwritingSample.count({
+    where: includeTests
+      ? {}
+      : { NOT: { participantCode: { startsWith: TEST_PARTICIPANT_PREFIX } } },
   });
   const describe = (name: "development" | "held-out") => {
     const set = samples.filter((s) => splitOf(s.participant) === name);
@@ -461,6 +478,10 @@ export async function sampleSplit(prisma: PrismaClient, options: { includeTests?
       `${development.incorrect + heldOut.incorrect} incorrect samples; at least ${VALIDATION_MINIMUM.incorrect} are needed`,
     );
   if (heldOut.participants === 0) reasons.push("no participant falls in the held-out third");
+  if (stored > samples.length)
+    reasons.push(
+      `only ${samples.length} of ${stored} samples were analysed (limit ${SAMPLE_LIMIT})`,
+    );
   if (testCodes > 0)
     reasons.push(
       `${testCodes} sample(s) are TEST rehearsal or automated samples, not real participants`,
@@ -477,6 +498,8 @@ export async function sampleSplit(prisma: PrismaClient, options: { includeTests?
       : "lab samples from human participants (TEST codes excluded)",
     engineVersion: ENGINE_VERSION,
     total: samples.length,
+    /** Samples stored (same selection); more than `total` means the analysis was truncated. */
+    stored,
     development: strip(development),
     heldOut: strip(heldOut),
     /** Writers appearing in both sets. Always 0 by construction (split by participant). */

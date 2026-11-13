@@ -191,6 +191,10 @@ describe("replay of stored attempts", () => {
     const r1 = await replayStoredAttempts(prisma, { attemptIds });
     const r2 = await replayStoredAttempts(prisma, { attemptIds });
     expect(r1.attempts).toBe(2);
+    expect(r1).toMatchObject({ eligible: 2, truncated: false });
+    // A limit that cuts the replay short says so (review R2).
+    const cut = await replayStoredAttempts(prisma, { attemptIds, limit: 1 });
+    expect(cut).toMatchObject({ attempts: 1, eligible: 2, truncated: true });
     expect(r1.byStatus.identical).toBe(2);
     expect(r1.nondeterministic).toBe(0);
     expect(JSON.stringify(r2)).toBe(JSON.stringify(r1));
@@ -256,6 +260,7 @@ describe("held-out split of lab samples", () => {
     expect(s.sufficientForValidation).toBe(false);
     expect(s.insufficientBecause.join(" ")).toMatch(/TEST rehearsal or automated samples/);
     expect(s.development.samples + s.heldOut.samples).toBe(s.total);
+    expect(s.stored).toBe(s.total); // nothing truncated (review R3)
     // Every code lands in exactly one split.
     for (const c of codes) expect(["development", "held-out"]).toContain(splitOf(c));
     // Human-only view excludes TEST codes entirely.

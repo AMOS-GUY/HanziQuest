@@ -366,6 +366,9 @@ describe("read-only client and held-out split", () => {
       () => db.exerciseAttempt.deleteMany(),
       () => (db.$executeRaw as unknown as () => unknown)(),
       () => db.$transaction([]),
+      // $extends would hand back a new, unwrapped client that could write (review R1).
+      () => (db.$extends as unknown as () => unknown)(),
+      () => (db.$on as unknown as () => unknown)(),
     ])
       expect(call).toThrow(ReadOnlyViolation);
   });
