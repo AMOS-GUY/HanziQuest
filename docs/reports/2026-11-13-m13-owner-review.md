@@ -80,14 +80,14 @@ This review adds `4bf68d2` (replay review fixes) and a documentation commit.
 
 **Test attribution:**
 
-| Commit                     | Local CI run                                                                                                                  | Covers                                                                  |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `d712a82` (`main`)         | `20261112T173638-ac59`: exit 0, 25 PASS, 0 FAIL, 4 BLOCKED, 2 NOT RUN                                                         | baseline                                                                |
-| `7850083`                  | `20261112T180316-0493`: same result; 231 unit, 126 integration, 36 e2e                                                        | commits 1–4 cumulatively (not run one by one)                           |
-| `4ba3ea7`                  | `20261112T183909-28ec`: same result; 235 unit, 126 integration, 36 e2e, backup drill passed                                   | adds commits 5–7                                                        |
-| `460fcca`                  | not run separately                                                                                                            | docs only: 1 file, the report's CI numbers. Code identical to `4ba3ea7` |
-| `e1936e4`                  | `20261113T053529-5c59`: exit 0, 25 PASS, 0 FAIL, 4 BLOCKED, 2 NOT RUN; 235 unit, 126 integration, 36 e2e, backup drill passed | adds `4bf68d2` (R1–R3) and the first version of this document           |
-| this review's final commit | see section G                                                                                                                 | adds `4bf68d2` and this document                                        |
+| Commit             | Local CI run                                                                                                                  | Covers                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `d712a82` (`main`) | `20261112T173638-ac59`: exit 0, 25 PASS, 0 FAIL, 4 BLOCKED, 2 NOT RUN                                                         | baseline                                                                |
+| `7850083`          | `20261112T180316-0493`: same result; 231 unit, 126 integration, 36 e2e                                                        | commits 1–4 cumulatively (not run one by one)                           |
+| `4ba3ea7`          | `20261112T183909-28ec`: same result; 235 unit, 126 integration, 36 e2e, backup drill passed                                   | adds commits 5–7                                                        |
+| `460fcca`          | not run separately                                                                                                            | docs only: 1 file, the report's CI numbers. Code identical to `4ba3ea7` |
+| `e1936e4`          | `20261113T053529-5c59`: exit 0, 25 PASS, 0 FAIL, 4 BLOCKED, 2 NOT RUN; 235 unit, 126 integration, 36 e2e, backup drill passed | adds `4bf68d2` (R1–R3) and the first version of this document           |
+| `07f77fe` (final)  | see section G                                                                                                                 | adds `4bf68d2` and this document                                        |
 
 Both branch runs started from a clean tree. **GitHub Actions: not run** (billing restriction).
 
@@ -549,4 +549,14 @@ features.
 
 Filled in after the full local CI run on this review's final commit:
 
-FINAL_REVIEW_VERIFICATION
+| Item                      | Result                                                                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Final code commit         | `07f77fe9441feba1042a38a95f1055a9a75801dc` (the commit after it only records this table)                                                             |
+| Local CI                  | run `20261113T055038-1b5c`: **exit 0. PASS 25, FAIL 0, BLOCKED 4, NOT RUN 2**                                                                        |
+| Test counts               | 236 unit, 127 integration, 36 e2e passed; backup drill passed all checks                                                                             |
+| BLOCKED                   | `age` and Docker ×3 (not installed). NOT RUN: Firefox (advisory) and the report upload                                                               |
+| GitHub Actions            | **Not run:** account billing restriction                                                                                                             |
+| Replay safeguards         | R1–R4 each covered by regression tests (unit and integration). The R4 unit test fails on the previous wrapper                                        |
+| Replay coverage           | 410 of 410 attempts replayed, identical, 0 nondeterministic; `--limit 50` reports "50 of 410 (TRUNCATED…)"                                           |
+| Writable client escape    | None: every write path on the real Prisma client, including internal and symbol-keyed ones, is refused (integration test); the database is unchanged |
+| Engine fix on valid input | Identical: 410/410 replays and the synthetic baseline report                                                                                         |
