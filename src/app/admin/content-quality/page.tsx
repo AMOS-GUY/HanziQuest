@@ -135,7 +135,7 @@ export default async function ContentQualityPage() {
                   <th className="py-2 pr-4">Needs review</th>
                   <th className="py-2 pr-4">Changed since approval</th>
                   <th className="py-2 pr-4">Blocked by sources</th>
-                  <th className="py-2">Curriculum</th>
+                  <th className="py-2">Curriculum approval</th>
                 </tr>
               </thead>
               <tbody>
