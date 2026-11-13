@@ -37,6 +37,22 @@ The schema is in `src/features/curriculum/content-schema.ts`:
   character used by any word must be defined here.
 - `units[].lessons[].words[]`: `{ simplified, pinyin, meaning, partOfSpeech?, source? }`.
 
+## Review workflow (M14-b)
+
+Only Content reviewers and Super Admins (`curriculum:review`) change verification, in
+Admin → Review. Editors can't: the edit forms have no verification field, and the server refuses
+changes.
+
+- **What an approval covers:** one exact version, by fingerprint. Editing the content or its
+  sources afterwards returns it to Provisional, with an audit entry.
+- **Self-review:** nobody can approve a version they changed or imported.
+- **Sources:** approval needs owner-approved sources, the same rule as imports, so nothing can
+  be approved until the owner approves the source register entries.
+- **Curricula:** a curriculum can be approved once every character and word it teaches is.
+- **History:** every decision is kept.
+- **Progress:** shown on the review page and on Content quality, and by
+  `npm run content:provenance -- --reviews`.
+
 ## Sources and editions (M14)
 
 Every content file must cite at least one id from the source register,

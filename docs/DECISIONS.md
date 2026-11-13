@@ -2,6 +2,49 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-13 — M14-b review workflow
+
+**D-070 · Learners see the edition and an honest status.** The Learn page, the lesson page and
+the admin preview name the edition ("HSK 2.0 edition", "HSK 3.0 (2021) edition", "HanziQuest
+course") and always say "not official HSK material". The status comes from `verificationLabel`:
+REVIEWED shows as "Reviewed (not yet verified)", distinct from VERIFIED. Before this, anything
+not VERIFIED showed "Provisional content", so reviewed content would have been mislabelled.
+
+**D-071 · Verification is changed only by reviewers, through the review queue.**
+
+- **Role:** a new least-privilege role, `CONTENT_REVIEWER`, holds `admin:access`,
+  `curriculum:read` and the new `curriculum:review`. It can't edit, publish or import.
+- **Permission:** `curriculum:review` belongs to Super Admins and Content reviewers only;
+  curriculum editors don't get it.
+- **Edits:** verification isn't a form field. Server-side, new content starts PROVISIONAL and
+  edits can't change verification, whoever the actor is.
+- **Migrations:** the role row is inserted by a migration, because existing databases aren't
+  re-seeded.
+
+**D-072 · An approval covers one exact version.**
+
+- **History:** `ContentReview` keeps every decision with a fingerprint of the reviewed version:
+  canonical JSON of the content and provenance, SHA-256. Character fingerprints include stroke
+  data; word fingerprints include their composition and example; curriculum fingerprints include
+  the structure and every item's fingerprint.
+- **Submitting:** the reviewer submits the fingerprint they saw. A different current version is
+  refused.
+- **Self-review:** refused. That means any audited change, structure change or import of the
+  version by the reviewer since the last approval.
+- **Sources:** approval follows the import source rules (registered, owner-approved sources that
+  may supply readings or glosses; VERIFIED needs known licences).
+- **Curricula:** a curriculum needs every item approved at its level.
+- **Invalidation:** every edit path and the importer call `reconcileReviews`, which returns
+  approved items whose version changed to PROVISIONAL, with an audit entry.
+- **No deletion:** review rows are never updated or deleted. They have no foreign key to the
+  item, so the history outlives edits.
+
+**Open (owner):**
+
+- **Imports declaring a status:** content files may still declare REVIEWED or VERIFIED. They're
+  gated by the same source rules (no source is approved today, so it can't happen yet), but they
+  bypass the version-bound review. The recommendation is to allow only PROVISIONAL in files.
+
 ## 2026-11-13 — M13 handwriting diagnostics
 
 **D-066 · Handwriting diagnostics are read-only and never change grading.** The confusable suite,

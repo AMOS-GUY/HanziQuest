@@ -218,6 +218,16 @@ Target public beta: **2026-12-08**.
 - [ ] **Not started:** dispute route, technique-cap decision, tuning (need real samples, a teacher, owner decisions)
 - [ ] **No accuracy evidence:** 0 human samples; synthetic results only
 
+### M14-b review workflow (2026-11-13, `feature/m14b-review-workflow`): PR pending, not merged
+
+- [x] Learner-facing edition and status labels; REVIEWED is distinct from VERIFIED (D-070)
+- [x] `CONTENT_REVIEWER` role and `curriculum:review`; editors can't change verification, and edits never set it (D-071)
+- [x] Version-bound reviews (fingerprints), the review queue, history, audit, no self-review, import source rules, curriculum approval needing every item, invalidation on edit or import (D-072)
+- [x] Review progress: queue page, Content quality, `content:provenance -- --reviews`
+- [x] Migrations, all additive: a `RoleKey` value; the role row; the `ContentReview` table and 2 enums
+- [ ] **Owner:** approve source register entries (all 183 HSK 1 Starter items are blocked until then); the teacher; the 3 content warnings; whether content files may declare REVIEWED or VERIFIED
+- [ ] **Found, not fixed (pre-existing, LOW):** inside /admin, permission-denied pages answer 200 with the not-found page (the loading boundary streams first). Content is withheld
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
