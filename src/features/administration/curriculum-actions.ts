@@ -12,6 +12,7 @@ import { recordAudit } from "@/lib/audit";
 import { loadStrokeData } from "@/features/curriculum/stroke-data";
 import { validateCurriculumContent } from "@/features/curriculum/validate-content";
 import { sourceRegister } from "@/features/curriculum/sources";
+import { confusableDiagnostics } from "@/features/curriculum/confusable-diagnostics";
 import { formatImportPreview, previewCurriculumImport } from "@/features/curriculum/import-preview";
 import { importCurriculumContent } from "@/features/curriculum/import-content";
 import { DomainError, type Actor } from "./services";
@@ -246,6 +247,11 @@ export async function validateImportAction(_: FormState, formData: FormData): Pr
     // What importing would change, against the current database (read-only).
     const preview = await previewCurriculumImport(prisma, parsed.result.content);
     details.push("— Import preview —", ...formatImportPreview(preview));
+    // M13: advisory only; it never changes whether the import is valid.
+    details.push(
+      "— Confusable characters —",
+      ...confusableDiagnostics(parsed.result.content, loadStrokeData).lines,
+    );
   }
   return {
     ok: parsed.result.ok,

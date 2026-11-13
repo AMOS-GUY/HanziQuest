@@ -12,6 +12,12 @@ Detailed plans:
 
 ## Where things stand
 
+_Note (2026-11-13, M13 audit): this table is the 2026-11-12 snapshot. Since then M12's pilot
+privacy work and M14's provenance infrastructure have been merged (PRs #22 and #23), the
+repository is public, and GitHub Actions is blocked by an account billing restriction rather
+than by private minutes. Current state: docs/PROGRESS.md and
+docs/reports/2026-11-13-m13-overnight-engineering-report.md._
+
 | Area                  | Built                                                                                   | Missing                                                                                                                       |
 | --------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Handwriting engine    | `hq-eval-1`; lab, consent, metrics, export, report; synthetic baseline                  | **0 real samples.** Accuracy for real learners is unknown. The validation procedure needs ≥ 15 participants before any tuning |
@@ -103,6 +109,11 @@ The owner chose **written** consent. Recruiting and collection wait for the owne
   - Every finding has an owner decision: fix now, M13, or won't fix.
 
 ## M13 — Evaluation accuracy and false-positive handling
+
+**Status (2026-11-13):** diagnostic tooling is built on `feature/m13-handwriting-diagnostics`:
+the confusable suite, advisory import diagnostics and the read-only replay harness
+(docs/M13_HANDWRITING_DIAGNOSTICS.md). Not started: the dispute route, the technique-cap
+decision and any tuning. Those still need real samples, a teacher and owner decisions.
 
 - **Objective.** Measure and, only with enough evidence, improve accuracy, with the emphasis on
   false acceptance: a wrong character accepted damages learning more than a correct one rejected.

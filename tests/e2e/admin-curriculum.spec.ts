@@ -150,6 +150,11 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
   // Validation also previews what the import would change, read-only.
   await expect(page.getByText("— Import preview —")).toBeVisible();
   await expect(page.getByText(/^Lessons: 1 new/)).toBeVisible();
+  // M13: the advisory confusable-character check is shown, and it doesn't block the import.
+  await expect(page.getByText("— Confusable characters —")).toBeVisible();
+  await expect(
+    page.getByText(/^Confusable-character check \(advisory; synthetic ink/),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Import as drafts" }).click();
   await expect(page.getByText(/Imported: 1 new lessons \(as drafts\)/)).toBeVisible({
     timeout: 30_000,

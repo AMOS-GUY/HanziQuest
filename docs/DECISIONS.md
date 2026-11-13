@@ -2,6 +2,28 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-13 — M13 handwriting diagnostics
+
+**D-066 · Handwriting diagnostics are read-only and never change grading.** The confusable suite,
+the import diagnostics and the replay harness use the unchanged engine. They don't touch
+thresholds, identity rules, candidate sets, XP, mastery or SRS. Replay goes through a client
+that refuses every write. Findings are recorded (F1–F8) for an owner decision rather than fixed,
+because each remedy changes how learners are graded.
+
+**D-067 · Confusable pairs carry their provenance; results carry `source: "synthetic"`.** There
+is no universal look-alike list. Groups are tagged roadmap-m13, m12-pilot-lookalike or
+engineering-screen (not teacher-reviewed). Every result records the engine version and a
+configuration fingerprint, and is labelled synthetic, so it can't be mistaken for human
+evidence.
+
+**D-068 · Import diagnostics are advisory.** The confusable check is shown in the import preview
+and the content CLI, and never blocks or alters an import. The candidate set is the file's
+characters, matching what learners at that level are checked against.
+
+**D-069 · Lab-sample held-out split is by participant.** `sha256(code)` decides it, so no writer
+is in both sets. Reports carry counts, never participant codes. With fewer than the validation
+minimums, the report says it isn't sufficient rather than producing an estimate.
+
 ## 2026-11-12 — Erasure ledger safeguards, feedback, public repository
 
 **D-062 · Restored databases are gated until the signed erasure ledger is applied.**

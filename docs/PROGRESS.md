@@ -208,6 +208,16 @@ Target public beta: **2026-12-08**.
 - [ ] **Owner:** approve the consent form (then flip `ownerApproved`), fill in its blanks, approve register entries
 - [ ] **Not done here:** no participants recruited, no real handwriting, no thresholds changed, nothing on Neon or Render
 
+### M13 handwriting diagnostics (2026-11-13, `feature/m13-handwriting-diagnostics`): PR open, not merged
+
+- [x] Confusable-character suite: seeded synthetic ink, provenance per pair group, in-set and out-of-set, false acceptance and false rejection kept separate, config fingerprint (D-066, D-067)
+- [x] Advisory confusable diagnostics in the admin import preview and `content:validate / preview / import`; never blocks (D-068)
+- [x] Read-only replay harness (`npm run handwriting:replay`): stored vs replayed evaluation, determinism, duplicates, participant-level held-out split of lab samples (D-069)
+- [x] Findings recorded, not fixed: F1–F7 (look-alikes outside the HSK 1 Starter set accepted on synthetic ink), F8 (干→千 accepted in-set, 1/5)
+- [ ] **Owner:** how to handle F1–F8 (each remedy changes grading); teacher review of the pair groups; whether attempts should store a config id
+- [ ] **Not started:** dispute route, technique-cap decision, tuning (need real samples, a teacher, owner decisions)
+- [ ] **No accuracy evidence:** 0 human samples; synthetic results only
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
@@ -785,3 +795,63 @@ See `docs/M11_STAGING_AUDIT.md`.
 - Final local CI at `ed1cb51` (run `20261112T153405-60d6`): **exit 0, 25 PASS, 0 FAIL,
   4 BLOCKED (age, Docker x3), 2 NOT RUN (Firefox advisory, report upload)**. GitHub Actions:
   BLOCKED by the account billing restriction, not run.
+
+### 2026-11-13 — Session 18 (M13 diagnostics, overnight)
+
+- Baseline: PR #23 merged as `d712a82b05dbf32be1620cff1ccbbc68ecba3bf5`; `main` matched
+  `origin/main`; clean tree. Local CI on `d712a82` (run `20261112T173638-ac59`): exit 0,
+  25 PASS, 0 FAIL, 4 BLOCKED (age, Docker x3), 2 NOT RUN (Firefox advisory, report upload).
+- Built the confusable suite, the advisory import diagnostics and the read-only replay harness
+  (docs/M13_HANDWRITING_DIAGNOSTICS.md). No change to grading.
+- Findings (synthetic only):
+  - F1–F7: 入→八, 夫→天, 犬→天, 找→我, 王→五, 牛→午, 孑→子, each accepted (Good 84–94) when the
+    written character is outside the level's set, and rejected once it's a candidate
+  - F8: 干→千 accepted in-set on 1 of 5 seeds
+- Replay on the local development database: 410 of 410 stored attempts identical, 0
+  nondeterministic, 0 duplicate ids. Lab samples: 0 human, so no held-out evaluation is
+  possible.
+- The review caught one privacy issue in new code before commit: the split report's metrics
+  included the per-participant breakdown, keyed by code. It now reports counts only, and a test
+  guards it.
+- Platform audit (same session; full report in
+  [reports/2026-11-13-m13-overnight-engineering-report.md](reports/2026-11-13-m13-overnight-engineering-report.md)):
+  - fixed: the engine never returned on NaN or infinite coordinates (latent; no grading change,
+    410/410 replays and the synthetic baseline identical); a doubled word was listed twice on a
+    character page
+  - documented: lab vs learner candidate sets, linear evaluation cost (about 10 ms at 102
+    candidates, about 400 ms at 3,000), small mobile header links, curriculum gaps (no
+    traditional forms, examples or audio)
+  - corrected: HANDWRITING.md's "10 testers" (the rules say 15) and the in-set qualifier;
+    ROADMAP's status note
+  - decision register D1–D12 and three proposed milestones in the report
+
+### 2026-11-13 — Session 19 (M13 owner review)
+
+- Verified the branch: 8 commits at `460fcca` (the handover said 7), based on the current
+  `main` `d712a82`, noreply identity throughout. No PR opened (no `gh` or GitHub sign-in); the
+  compare link and PR text are ready.
+- Regression review:
+  - synthetic ink moved byte-identical
+  - import diagnostics advisory only
+  - the engine fix independently confirmed (no change for finite input; 410/410 replays
+    identical; the former hang returns in milliseconds)
+- Found and fixed in the replay harness (`4bf68d2`):
+  - R1: `readOnlyClient` let `$extends` through, which could yield a writable client
+  - R2 and R3: silent truncation of attempts and samples
+- Tests were attributed to their exact commits; secret and participant-data scans clean.
+- Wrote [reports/2026-11-13-m13-owner-review.md](reports/2026-11-13-m13-owner-review.md):
+  - the decision register D1–D12 in full
+  - the identity investigation and a shadow-mode plan
+  - the performance bottleneck and exact pruning options (an estimated 65–77 % of alignments
+    skippable)
+  - the validation plan
+  - all findings
+  - the roadmap reconciled with M14 (M14-b still open) and M13-b
+- No grading, candidate-set, XP, mastery or SRS change; no new milestone started.
+- R4, found while verifying the replay's isolation: `readOnlyClient` wrapped only one level and
+  passed symbol-keyed values through, so Prisma's internal client could hand back a writable
+  delegate. Now a recursive wrap, at every depth and for symbol keys. It's covered by a unit
+  test (fails on the old wrapper) and an integration test against the real client. Replay still
+  410/410 identical; synthetic baseline unchanged.
+- Corrected a statistical statement in the owner review: ≤ 1 % wrong-character acceptance needs
+  0 of about 300 (one acceptance needs about 475).
