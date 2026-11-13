@@ -52,6 +52,12 @@ changes.
 - **History:** every decision is kept.
 - **Progress:** shown on the review page and on Content quality, and by
   `npm run content:provenance -- --reviews`.
+- **Repeats:** a second approval of an already-approved version is refused. Raising Reviewed
+  to Verified is allowed.
+- **Withdrawing a source approval** (owner, in `content/sources.json`): once that change is
+  deployed, the queue shows affected approvals as changed. Run
+  `npm run content:provenance -- --reconcile` to preview, then add `--apply` to return them to
+  Provisional (audited).
 
 ## Sources and editions (M14)
 

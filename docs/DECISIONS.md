@@ -18,8 +18,10 @@ not VERIFIED showed "Provisional content", so reviewed content would have been m
   curriculum editors don't get it.
 - **Edits:** verification isn't a form field. Server-side, new content starts PROVISIONAL and
   edits can't change verification, whoever the actor is.
-- **Migrations:** the role row is inserted by a migration, because existing databases aren't
-  re-seeded.
+- **Role rows:** no migration inserts data. Restores need an empty, migrated target, and local
+  CI caught an earlier version that inserted the role row in a migration (`db:restore` refused
+  it). The seed creates every role, and granting a role creates its row from `ROLE_DEFINITIONS`
+  if it's missing (`setUserRole`), so existing databases need no re-seed.
 
 **D-072 · An approval covers one exact version.**
 
@@ -38,13 +40,61 @@ not VERIFIED showed "Provisional content", so reviewed content would have been m
   approved items whose version changed to PROVISIONAL, with an audit entry.
 - **No deletion:** review rows are never updated or deleted. They have no foreign key to the
   item, so the history outlives edits.
-- **Lock order:** approvals and edits take a shared global review lock, then per-item locks
-  (items before curricula, sorted), _before_ writing rows. Imports take the global lock
-  exclusively. Without this, an approval racing an edit could deadlock, or leave an approval on
-  changed content. A test races them five times.
+- **Lock order:** see D-073.
+
+**D-073 · Review integrity under concurrency (audit after the first PR run).**
+
+- **Lock order:** `lockForReview` comes first in every path that writes reviewed content:
+  approvals, requests for changes, and edits to characters, words, curricula, levels, units,
+  lessons and lesson words. It takes a shared global review lock, then per-item locks (items
+  before curricula, each sorted), before any row is written. Structure edits used to lock after
+  writing. That was still correct, because reconciling reads after locking, but it broke the
+  documented order.
+- **Imports and `--reconcile` lock exclusively.** An import writes rows before it knows which
+  items it touches, and then reconciles every row above PROVISIONAL: an import can change shared
+  characters and words that other curricula teach too. That read is complete only with no
+  approval in flight. The exclusive lock is load-bearing. With it made shared as an experiment,
+  the import races failed in round 0: an approval stayed on changed content, and a transaction
+  was rejected. The cost is small: an HSK 1 Starter import holds the lock for 0.9–1.6 s
+  (measured locally), and approvals now have the same 30 s limit as edits.
+- **No duplicate approvals.** Approving a version already approved at that level or higher is
+  refused and writes nothing. Two reviewers racing record one approval. Raising REVIEWED to
+  VERIFIED is a new decision. The same version can be approved again after an invalidation,
+  when content returns to an earlier state.
+- **The level must match.** An item is "approved" only if its latest approval's level equals its
+  status. An import that declares a higher status isn't covered by a lower approval: it shows as
+  "status without a review record".
+- **Withdrawn source approvals.** The register is a deployed file, not database data. Under the
+  current register, the queue and progress show affected approvals as stale ("sources no longer
+  support this level"). `npm run content:provenance -- --reconcile` previews and `--apply`
+  returns them to PROVISIONAL, audited with no actor. Edits and imports check versions only, so
+  a register change takes effect in one explicit, previewable step.
+- **Tests:** `tests/integration/review-concurrency.test.ts` races approval vs edit, approval vs
+  import, edit vs edit, reviewer vs reviewer, approve vs request changes, curriculum approval vs
+  structure edit, and edit vs import. Each race has its own `REVIEW_RACE_ROUNDS` (default 10). The
+  approval start is staggered so both orders occur. With 50 rounds locally, every race passed,
+  and the approval committed first in 24 to 32 of the 50 rounds of each approval race. An
+  invariant is checked after every round: nothing above PROVISIONAL without an approval of its
+  exact version, at its level. The suite also covers repeated approvals, source withdrawal, and
+  rollback (a failed import keeps its approvals; a refused approval writes nothing).
+- **The recorded role is the one that grants review.** Someone who is both a Curriculum editor
+  and a Content reviewer approves as `CONTENT_REVIEWER`. Before this fix, the history named
+  their first admin role.
+- **Self-review is conservative.** Any audited action by the reviewer on the item since the last
+  approval counts, including publishing. That never lets an author approve, at the cost of
+  sometimes needing a second reviewer.
+- **Permission-denied admin pages stay a "soft" 404.** Rechecked. The proxy answers non-staff,
+  suspended and revoked sessions with a real 404 for everything under `/admin`, including
+  server-action requests. Staff without one specific permission get the not-found page with
+  status 200: `admin/loading.tsx` wraps every admin page, so `notFound()` runs after the
+  response has started. No protected content is sent. The correct fixes are to drop the admin
+  loading UI, or to duplicate per-route permissions in the proxy. Both cost more than the
+  status code is worth, so neither was done.
 
 **Open (owner):**
 
+- **VERIFIED by one reviewer:** any holder of `curriculum:review` can approve VERIFIED directly.
+  A second-reviewer rule for VERIFIED is a policy choice, not built.
 - **Imports declaring a status:** content files may still declare REVIEWED or VERIFIED. They're
   gated by the same source rules (no source is approved today, so it can't happen yet), but they
   bypass the version-bound review. The recommendation is to allow only PROVISIONAL in files.
