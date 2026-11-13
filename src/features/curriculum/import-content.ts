@@ -4,6 +4,8 @@ import type { CurriculumContent, ContentWord } from "./content-schema";
 import type { StrokeData } from "./stroke-data";
 import { mayOverwrite } from "./provenance";
 import { nextRevision } from "@/features/administration/services";
+import { reconcileReviews } from "./review";
+import { curriculumItems } from "./review-fingerprint";
 
 export interface ImportOptions {
   /** Publish lessons that are new in this import. Existing lessons keep their publication status. */
@@ -50,6 +52,18 @@ export async function importCurriculumContent(
   return prisma.$transaction(
     async (tx) => {
       const summary = await doImport(tx, content, options);
+      // An import can change approved items (sources, edition tags, strokes, structure): any
+      // approval that no longer matches its version returns to PROVISIONAL (M14-b).
+      const items = await curriculumItems(tx, summary.curriculumId);
+      await reconcileReviews(
+        tx,
+        {
+          characterIds: items.characterIds,
+          vocabularyIds: items.vocabularyIds,
+          curriculumIds: [summary.curriculumId],
+        },
+        options.authorId ?? null,
+      );
       await options.onImported?.(tx, summary);
       return summary;
     },

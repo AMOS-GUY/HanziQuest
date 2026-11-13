@@ -18,6 +18,7 @@ import {
 } from "@/features/curriculum/import-content";
 import { buildEvaluationConfig } from "@/features/exercises/evaluation-config";
 import { DomainError, type Actor } from "./services";
+import { reconcileReviews } from "@/features/curriculum/review";
 import type { Verification } from "@/features/curriculum/provenance";
 
 /** Source register id for content written in the admin (content/sources.json). */
@@ -54,6 +55,32 @@ function unchangedVerification(before: Verification, requested: Verification | u
 }
 
 type Tx = Prisma.TransactionClient;
+
+/** The curriculum a level, unit or lesson belongs to (for review reconciliation). */
+async function curriculumOf(
+  t: Tx,
+  where: { levelId?: string; unitId?: string; lessonId?: string },
+): Promise<string[]> {
+  if (where.levelId) {
+    const l = await t.hSKLevel.findUnique({
+      where: { id: where.levelId },
+      select: { curriculumId: true },
+    });
+    return l ? [l.curriculumId] : [];
+  }
+  if (where.unitId) {
+    const u = await t.unit.findUnique({
+      where: { id: where.unitId },
+      select: { level: { select: { curriculumId: true } } },
+    });
+    return u ? [u.level.curriculumId] : [];
+  }
+  const l = await t.lesson.findUnique({
+    where: { id: where.lessonId! },
+    select: { unit: { select: { level: { select: { curriculumId: true } } } } },
+  });
+  return l ? [l.unit.level.curriculumId] : [];
+}
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
@@ -295,6 +322,7 @@ export async function updateCurriculum(
     void _unchanged;
     const updated = await t.curriculum.update({ where: { id }, data: changes });
     await audit(t, actor, "curriculum.update", "Curriculum", id, before, input);
+    await reconcileReviews(t, { curriculumIds: [id] }, actor.id);
     return updated;
   });
 }
@@ -306,6 +334,7 @@ export async function createLevel(prisma: PrismaClient, actor: Actor, raw: unkno
       .create({ data: input })
       .catch((e: unknown) => unique(e, "This level already exists in the curriculum."));
     await audit(t, actor, "level.create", "HSKLevel", created.id, undefined, input);
+    await reconcileReviews(t, { curriculumIds: [created.curriculumId] }, actor.id);
     return created;
   });
 }
@@ -318,6 +347,7 @@ export async function updateLevel(prisma: PrismaClient, actor: Actor, id: string
     await revision(t, actor, "HSKLevel", id, before);
     const updated = await t.hSKLevel.update({ where: { id }, data: input });
     await audit(t, actor, "level.update", "HSKLevel", id, before, input);
+    await reconcileReviews(t, { curriculumIds: await curriculumOf(t, { levelId: id }) }, actor.id);
     return updated;
   });
 }
@@ -337,6 +367,11 @@ export async function createUnit(prisma: PrismaClient, actor: Actor, raw: unknow
       .create({ data: { ...input, position: (last?.position ?? 0) + 1 } })
       .catch((e: unknown) => unique(e, "A unit with this slug already exists in the level."));
     await audit(t, actor, "unit.create", "Unit", created.id, undefined, input);
+    await reconcileReviews(
+      t,
+      { curriculumIds: await curriculumOf(t, { unitId: created.id }) },
+      actor.id,
+    );
     return created;
   });
 }
@@ -349,6 +384,7 @@ export async function updateUnit(prisma: PrismaClient, actor: Actor, id: string,
     await revision(t, actor, "Unit", id, before);
     const updated = await t.unit.update({ where: { id }, data: input });
     await audit(t, actor, "unit.update", "Unit", id, before, input);
+    await reconcileReviews(t, { curriculumIds: await curriculumOf(t, { unitId: id }) }, actor.id);
     return updated;
   });
 }
@@ -367,6 +403,11 @@ export async function createLesson(prisma: PrismaClient, actor: Actor, raw: unkn
       .create({ data: { ...input, position: (last?.position ?? 0) + 1, status: "DRAFT" } })
       .catch((e: unknown) => unique(e, "A lesson with this slug already exists in the unit."));
     await audit(t, actor, "lesson.create", "Lesson", created.id, undefined, input);
+    await reconcileReviews(
+      t,
+      { curriculumIds: await curriculumOf(t, { lessonId: created.id }) },
+      actor.id,
+    );
     return created;
   });
 }
@@ -386,6 +427,7 @@ export async function updateLesson(prisma: PrismaClient, actor: Actor, id: strin
       },
     });
     await audit(t, actor, "lesson.update", "Lesson", id, before, input);
+    await reconcileReviews(t, { curriculumIds: await curriculumOf(t, { lessonId: id }) }, actor.id);
     return updated;
   });
 }
@@ -495,6 +537,7 @@ export async function setLessonWords(
         words: after,
       },
     );
+    await reconcileReviews(t, { curriculumIds: await curriculumOf(t, { lessonId }) }, actor.id);
     return built;
   });
 }
@@ -600,6 +643,8 @@ export async function updateCharacter(
       );
     }
     await audit(t, actor, "character.update", "Character", id, before, input);
+    // An approval covers one exact version: a changed character returns to PROVISIONAL.
+    await reconcileReviews(t, { characterIds: [id] }, actor.id);
     return updated;
   });
 }
@@ -688,6 +733,7 @@ export async function updateVocabulary(
       lessons.map((l) => l.lessonId),
     );
     await audit(t, actor, "vocabulary.update", "Vocabulary", id, before, input);
+    await reconcileReviews(t, { vocabularyIds: [id] }, actor.id);
     return updated;
   });
 }

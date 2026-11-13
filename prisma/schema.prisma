@@ -235,6 +235,7 @@ model User {
   downloadedContent   DownloadedContentVersion[]
   auditLogs           AuditLog[]
   contentRevisions    ContentRevision[]
+  contentReviews      ContentReview[]
   subscriptions       Subscription[]
   paymentCustomers    PaymentCustomer[]
   paymentTransactions PaymentTransaction[]
@@ -1300,4 +1301,46 @@ model ErasureLedgerGate {
   clearanceReason      String?
 
   @@index([ledgerAppliedAt])
+}
+
+/// What a content review applies to (M14-b).
+enum ReviewEntity {
+  CURRICULUM
+  CHARACTER
+  VOCABULARY
+}
+
+enum ReviewDecision {
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+/// One review decision on one exact version of a curriculum, character or word (M14-b, D-072).
+/// `fingerprint` identifies the version reviewed (content and provenance, canonical JSON,
+/// SHA-256): an approval authorises that version only, so any later change to the content or its
+/// sources makes it stale and the item returns to PROVISIONAL. Rows are never updated or
+/// deleted: they are the review history. `entityId` has no foreign key on purpose, so history
+/// outlives the item's edits; the reviewer is kept as a role even if their account is deleted.
+model ContentReview {
+  id           String              @id @default(cuid())
+  entityType   ReviewEntity
+  entityId     String
+  /// "v1:" + SHA-256 of the reviewed version (features/curriculum/review-fingerprint.ts).
+  fingerprint  String
+  decision     ReviewDecision
+  /// The status granted (REVIEWED or VERIFIED); null when changes were requested.
+  level        VerificationStatus?
+  reviewerId   String?
+  /// The reviewer's role at the time (a role, never a name).
+  reviewerRole String
+  /// The reviewer's note (required when requesting changes).
+  note         String?
+  /// The reviewed values, so the history shows exactly what was approved.
+  snapshot     Json
+  createdAt    DateTime            @default(now())
+
+  reviewer User? @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([decision, createdAt])
 }
