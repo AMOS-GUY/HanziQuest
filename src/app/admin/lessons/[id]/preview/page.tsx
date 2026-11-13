@@ -6,6 +6,7 @@ import { PracticeRunner } from "@/components/lessons/practice-runner";
 import { requirePagePermission } from "@/lib/auth/session";
 import { prisma } from "@/lib/database/prisma";
 import { getLessonPractice } from "@/features/learning/lesson-data";
+import { editionLabel, verificationBadge } from "@/features/curriculum/labels";
 
 export const metadata = { title: "Lesson preview" };
 
@@ -18,7 +19,11 @@ export default async function LessonPreviewPage({ params }: { params: Promise<{ 
       where: { id },
       include: {
         unit: {
-          include: { level: { include: { curriculum: { select: { verification: true } } } } },
+          include: {
+            level: {
+              include: { curriculum: { select: { verification: true, framework: true } } },
+            },
+          },
         },
         vocabulary: { orderBy: { position: "asc" }, include: { vocabulary: true } },
       },
@@ -42,9 +47,12 @@ export default async function LessonPreviewPage({ params }: { params: Promise<{ 
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-black">{lesson.title}</h1>
-          {lesson.unit.level.curriculum.verification !== "VERIFIED" ? (
-            <Badge variant="warning">Provisional content</Badge>
-          ) : null}
+          <Badge variant={verificationBadge(lesson.unit.level.curriculum.verification).variant}>
+            {verificationBadge(lesson.unit.level.curriculum.verification).label}
+          </Badge>
+          <Badge variant="muted">
+            {editionLabel(lesson.unit.level.curriculum.framework).label}
+          </Badge>
         </div>
         {lesson.description ? <p className="text-muted-foreground">{lesson.description}</p> : null}
         <ul className="mt-3 flex flex-wrap gap-3">

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { requireUser } from "@/lib/auth/session";
 import { getLearnerPath } from "@/features/curriculum/queries";
+import { editionLabel, verificationBadge } from "@/features/curriculum/labels";
 import type { LessonState } from "@/features/progression/lesson-states";
 import { cn } from "@/lib/utilities/cn";
 
@@ -41,15 +42,15 @@ export default async function LearnPage() {
             <h2 id={`c-${curriculum.id}`} className="text-3xl font-black">
               {curriculum.name}
             </h2>
-            {curriculum.verification !== "VERIFIED" ? (
-              <Badge
-                variant="warning"
-                title="This content has not yet been reviewed by a qualified teacher."
-              >
-                Provisional content
-              </Badge>
-            ) : null}
+            <Badge variant={verificationBadge(curriculum.verification).variant}>
+              {verificationBadge(curriculum.verification).label}
+            </Badge>
           </div>
+          <p className="text-muted-foreground mb-2 text-sm">
+            <span className="font-bold">{editionLabel(curriculum.framework).label}.</span>{" "}
+            {editionLabel(curriculum.framework).note}{" "}
+            {verificationBadge(curriculum.verification).description}
+          </p>
           <div className="mb-6 flex items-center gap-3">
             <ProgressBar value={completed} max={total} label="Lessons completed" />
             <span className="text-muted-foreground text-sm font-bold whitespace-nowrap">

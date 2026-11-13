@@ -10,6 +10,7 @@ export async function getLearningPath() {
     select: {
       id: true,
       name: true,
+      framework: true,
       verification: true,
       levels: {
         orderBy: { level: "asc" },

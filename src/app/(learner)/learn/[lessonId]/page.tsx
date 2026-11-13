@@ -8,6 +8,7 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
 import { getLessonForLearner } from "@/features/learning/lesson-data";
 import { OfflineDownload } from "@/components/offline/offline-download";
+import { editionLabel, verificationBadge } from "@/features/curriculum/labels";
 
 export const metadata: Metadata = { title: "Lesson" };
 
@@ -119,12 +120,21 @@ export default async function LessonPage({ params }: { params: Promise<{ lessonI
         </section>
       ) : null}
 
-      {lesson.unit.level.curriculum.verification !== "VERIFIED" ? (
-        <Card className="text-muted-foreground text-sm">
-          <CardTitle className="mb-1 text-sm">About this content</CardTitle>
-          Pinyin and meanings are provisional and still being reviewed by a teacher.
-        </Card>
-      ) : null}
+      <Card className="text-muted-foreground text-sm">
+        <CardTitle className="mb-1 flex flex-wrap items-center gap-2 text-sm">
+          About this content
+          <Badge variant={verificationBadge(lesson.unit.level.curriculum.verification).variant}>
+            {verificationBadge(lesson.unit.level.curriculum.verification).label}
+          </Badge>
+        </CardTitle>
+        <p>
+          <span className="font-bold">
+            {editionLabel(lesson.unit.level.curriculum.framework).label}.
+          </span>{" "}
+          {editionLabel(lesson.unit.level.curriculum.framework).note}
+        </p>
+        <p>{verificationBadge(lesson.unit.level.curriculum.verification).description}</p>
+      </Card>
     </div>
   );
 }
