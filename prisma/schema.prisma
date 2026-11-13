@@ -26,6 +26,8 @@ enum RoleKey {
   MODERATOR
   ANALYST
   SUPPORT
+  /// Reviews curriculum content and records review decisions; can't edit content (M14-b).
+  CONTENT_REVIEWER
   LEARNER
 }
 

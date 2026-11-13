@@ -185,8 +185,4 @@ export const LICENSE_OPTIONS = [
   "ORIGINAL",
   "PUBLIC_FACT",
 ].map((v) => ({ value: v, label: v.replace("_", " ").toLowerCase() }));
-export const VERIFICATION_OPTIONS = [
-  { value: "PROVISIONAL", label: "Provisional" },
-  { value: "REVIEWED", label: "Reviewed" },
-  { value: "VERIFIED", label: "Verified (shown as official)" },
-];
+/** Verification is set only through the review queue (M14-b), so no form offers it. */

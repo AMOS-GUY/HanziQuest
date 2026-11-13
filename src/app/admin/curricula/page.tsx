@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
-import { AdminForm, LICENSE_OPTIONS, VERIFICATION_OPTIONS } from "@/components/admin/admin-form";
+import { AdminForm, LICENSE_OPTIONS } from "@/components/admin/admin-form";
 import { prisma } from "@/lib/database/prisma";
 import { requirePagePermission } from "@/lib/auth/session";
 import { createCurriculumAction } from "@/features/administration/curriculum-actions";
@@ -82,12 +82,6 @@ export default async function CurriculaPage() {
                 help: "Where the content comes from",
               },
               { name: "licenseStatus", label: "License", type: "select", options: LICENSE_OPTIONS },
-              {
-                name: "verification",
-                label: "Verification",
-                type: "select",
-                options: VERIFICATION_OPTIONS,
-              },
               { name: "description", label: "Description", type: "textarea", rows: 2 },
             ]}
           />

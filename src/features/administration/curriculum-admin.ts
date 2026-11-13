@@ -18,30 +18,38 @@ import {
 } from "@/features/curriculum/import-content";
 import { buildEvaluationConfig } from "@/features/exercises/evaluation-config";
 import { DomainError, type Actor } from "./services";
-import { VERIFICATION_RANK, type Verification } from "@/features/curriculum/provenance";
-import { ADMIN_ROLES } from "@/lib/permissions/permissions";
+import type { Verification } from "@/features/curriculum/provenance";
 
 /** Source register id for content written in the admin (content/sources.json). */
 const AUTHORED_SOURCE = "hanziquest-authored";
 
 /**
- * Review metadata (M14): raising an item's verification records the reviewer's role (never a
- * name) and the time; returning it to PROVISIONAL clears both. VERIFIED needs a known licence.
+ * Verification is never set through the edit forms (M14-b, D-071). New content starts
+ * PROVISIONAL; an edit may resend the current value but never change it, whoever the actor is.
+ * Only the review queue (`features/curriculum/review.ts`) raises it, for an exact fingerprinted
+ * version, and only for holders of `curriculum:review` who didn't change that version.
  */
-function reviewStamp(
-  actor: Actor,
-  before: Verification | null,
-  next: Verification,
-  licenseStatus: string,
-) {
-  if (next === "VERIFIED" && licenseStatus === "UNKNOWN")
-    throw new DomainError("conflict", "Content can't be VERIFIED while its licence is unknown.");
-  if (next === "PROVISIONAL") return { reviewerRole: null, reviewedAt: null };
-  if (before === null || VERIFICATION_RANK[next] > VERIFICATION_RANK[before])
-    return {
-      reviewerRole: ADMIN_ROLES.find((r) => actor.roles.includes(r)) ?? null,
-      reviewedAt: new Date(),
-    };
+const VERIFICATION_VIA_QUEUE =
+  "Verification can only be changed in the review queue (Admin → Review), by a content reviewer.";
+
+function newContentVerification(requested: Verification | undefined) {
+  if (requested !== undefined && requested !== "PROVISIONAL")
+    throw new DomainError(
+      "forbidden",
+      `New content starts as Provisional. ${VERIFICATION_VIA_QUEUE}`,
+    );
+  return { verification: "PROVISIONAL" as const, reviewerRole: null, reviewedAt: null };
+}
+
+function withoutVerification<T extends { verification?: Verification }>(input: T) {
+  const { verification: _unchanged, ...rest } = input;
+  void _unchanged;
+  return rest;
+}
+
+function unchangedVerification(before: Verification, requested: Verification | undefined) {
+  if (requested !== undefined && requested !== before)
+    throw new DomainError("forbidden", VERIFICATION_VIA_QUEUE);
   return {};
 }
 
@@ -64,7 +72,8 @@ const optionalText = (max: number) =>
     .optional()
     .transform((v) => (v ? v : null));
 const licenseStatus = z.enum(["UNKNOWN", "OPEN_LICENSE", "LICENSED", "ORIGINAL", "PUBLIC_FACT"]);
-const verification = z.enum(["PROVISIONAL", "REVIEWED", "VERIFIED"]);
+/** Accepted only so that an unchanged value can be resent; see `unchangedVerification`. */
+const verification = z.enum(["PROVISIONAL", "REVIEWED", "VERIFIED"]).optional();
 
 export const curriculumInput = z.object({
   slug,
@@ -255,7 +264,13 @@ export async function createCurriculum(prisma: PrismaClient, actor: Actor, raw: 
   const input = curriculumInput.parse(raw);
   return tx(prisma, async (t) => {
     const created = await t.curriculum
-      .create({ data: input })
+      .create({
+        data: {
+          ...withoutVerification(input),
+          // Curricula carry no reviewer stamp columns, only the status.
+          verification: newContentVerification(input.verification).verification,
+        },
+      })
       .catch((e: unknown) =>
         unique(e, "A curriculum with this slug or framework version already exists."),
       );
@@ -274,8 +289,11 @@ export async function updateCurriculum(
   return tx(prisma, async (t) => {
     const before = await t.curriculum.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Curriculum not found.");
+    unchangedVerification(before.verification, input.verification);
     await revision(t, actor, "Curriculum", id, before);
-    const updated = await t.curriculum.update({ where: { id }, data: input });
+    const { verification: _unchanged, ...changes } = input;
+    void _unchanged;
+    const updated = await t.curriculum.update({ where: { id }, data: changes });
     await audit(t, actor, "curriculum.update", "Curriculum", id, before, input);
     return updated;
   });
@@ -521,7 +539,7 @@ export async function createCharacter(
       .create({
         data: {
           ...input,
-          ...reviewStamp(actor, null, input.verification, input.licenseStatus),
+          ...newContentVerification(input.verification),
           strokeCount: strokes?.strokes.length ?? null,
           hasStrokeData: strokes !== null,
         },
@@ -550,8 +568,8 @@ export async function updateCharacter(
     const updated = await t.character.update({
       where: { id },
       data: {
-        ...input,
-        ...reviewStamp(actor, before.verification, input.verification, input.licenseStatus),
+        ...withoutVerification(input),
+        ...unchangedVerification(before.verification, input.verification),
       },
     });
     // Guided and free-writing prompts show the character's pinyin and meaning.
@@ -602,7 +620,7 @@ export async function createVocabulary(prisma: PrismaClient, actor: Actor, raw: 
       .create({
         data: {
           ...input,
-          ...reviewStamp(actor, null, input.verification, input.licenseStatus),
+          ...newContentVerification(input.verification),
           ...(input.exampleZh && {
             exampleSourceRef: AUTHORED_SOURCE,
             exampleVerification: "PROVISIONAL" as const,
@@ -641,8 +659,8 @@ export async function updateVocabulary(
     const updated = await t.vocabulary.update({
       where: { id },
       data: {
-        ...input,
-        ...reviewStamp(actor, before.verification, input.verification, input.licenseStatus),
+        ...withoutVerification(input),
+        ...unchangedVerification(before.verification, input.verification),
         ...(exampleChanged && {
           exampleSourceRef: input.exampleZh ? AUTHORED_SOURCE : null,
           exampleVerification: input.exampleZh ? ("PROVISIONAL" as const) : null,

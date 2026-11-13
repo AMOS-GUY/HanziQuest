@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card, CardTitle } from "@/components/ui/card";
-import { AdminForm, LICENSE_OPTIONS, VERIFICATION_OPTIONS } from "@/components/admin/admin-form";
+import { AdminForm, LICENSE_OPTIONS } from "@/components/admin/admin-form";
 import { AdminBack, RevisionList } from "@/components/admin/revision-list";
 import { prisma } from "@/lib/database/prisma";
 import { requirePagePermission } from "@/lib/auth/session";
@@ -67,13 +67,6 @@ export default async function CurriculumPage({ params }: { params: Promise<{ id:
                 type: "select",
                 options: LICENSE_OPTIONS,
                 defaultValue: c.licenseStatus,
-              },
-              {
-                name: "verification",
-                label: "Verification",
-                type: "select",
-                options: VERIFICATION_OPTIONS,
-                defaultValue: c.verification,
               },
               {
                 name: "description",
