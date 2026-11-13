@@ -520,3 +520,40 @@ describe("requesting changes and curriculum approval", () => {
     expect(items.structureIds.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("concurrency", () => {
+  it("an approval racing an edit never leaves an approved status on changed content", async () => {
+    for (let i = 0; i < 5; i += 1) {
+      const c = await prisma.character.findUniqueOrThrow({ where: { hanzi: "龟" } });
+      const q = await item("CHARACTER", "龟");
+      const results = await Promise.allSettled([
+        recordReview(
+          prisma,
+          reviewer,
+          {
+            entityType: "CHARACTER",
+            entityId: q.entityId,
+            fingerprint: q.fingerprint,
+            decision: "APPROVE_REVIEWED",
+          },
+          approved,
+        ),
+        updateCharacter(prisma, editor, c.id, {
+          pinyin: "guī",
+          pinyinAlternatives: "",
+          meaning: `tortoise (race ${RUN}-${i})`,
+          source: c.source,
+          licenseStatus: c.licenseStatus,
+        }),
+      ]);
+
+      // The edit must always succeed (no deadlock); the approval either committed first and was
+      // invalidated by the edit, or was refused because the version had changed.
+      expect(results[1]!.status, `round ${i}: edit`).toBe("fulfilled");
+
+      const after = await item("CHARACTER", "龟");
+      expect(after.verification, `round ${i}`).toBe("PROVISIONAL");
+      expect(after.status, `round ${i}`).not.toBe("approved");
+    }
+  });
+});

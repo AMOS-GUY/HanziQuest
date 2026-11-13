@@ -18,7 +18,7 @@ import {
 } from "@/features/curriculum/import-content";
 import { buildEvaluationConfig } from "@/features/exercises/evaluation-config";
 import { DomainError, type Actor } from "./services";
-import { reconcileReviews } from "@/features/curriculum/review";
+import { lockForReview, reconcileReviews } from "@/features/curriculum/review";
 import type { Verification } from "@/features/curriculum/provenance";
 
 /** Source register id for content written in the admin (content/sources.json). */
@@ -314,6 +314,7 @@ export async function updateCurriculum(
 ) {
   const input = curriculumUpdate.parse(raw);
   return tx(prisma, async (t) => {
+    await lockForReview(t, { curriculumIds: [id] });
     const before = await t.curriculum.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Curriculum not found.");
     unchangedVerification(before.verification, input.verification);
@@ -605,6 +606,7 @@ export async function updateCharacter(
 ) {
   const input = characterUpdate.parse(raw);
   return tx(prisma, async (t) => {
+    await lockForReview(t, { characterIds: [id] });
     const before = await t.character.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Character not found.");
     await revision(t, actor, "Character", id, before);
@@ -693,6 +695,7 @@ export async function updateVocabulary(
 ) {
   const input = vocabularyUpdate.parse(raw);
   return tx(prisma, async (t) => {
+    await lockForReview(t, { vocabularyIds: [id] });
     const before = await t.vocabulary.findUnique({ where: { id } });
     if (!before) throw new DomainError("not_found", "Word not found.");
     await revision(t, actor, "Vocabulary", id, before);

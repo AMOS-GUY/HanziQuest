@@ -4,7 +4,7 @@ import type { CurriculumContent, ContentWord } from "./content-schema";
 import type { StrokeData } from "./stroke-data";
 import { mayOverwrite } from "./provenance";
 import { nextRevision } from "@/features/administration/services";
-import { reconcileReviews } from "./review";
+import { lockForReview, reconcileReviews } from "./review";
 import { curriculumItems } from "./review-fingerprint";
 
 export interface ImportOptions {
@@ -51,6 +51,8 @@ export async function importCurriculumContent(
 ): Promise<ImportSummary> {
   return prisma.$transaction(
     async (tx) => {
+      // Imports touch many reviewed rows: serialise with approvals (M14-b lock order).
+      await lockForReview(tx, {}, "exclusive");
       const summary = await doImport(tx, content, options);
       // An import can change approved items (sources, edition tags, strokes, structure): any
       // approval that no longer matches its version returns to PROVISIONAL (M14-b).

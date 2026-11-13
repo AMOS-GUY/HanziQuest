@@ -38,6 +38,10 @@ not VERIFIED showed "Provisional content", so reviewed content would have been m
   approved items whose version changed to PROVISIONAL, with an audit entry.
 - **No deletion:** review rows are never updated or deleted. They have no foreign key to the
   item, so the history outlives edits.
+- **Lock order:** approvals and edits take a shared global review lock, then per-item locks
+  (items before curricula, sorted), _before_ writing rows. Imports take the global lock
+  exclusively. Without this, an approval racing an edit could deadlock, or leave an approval on
+  changed content. A test races them five times.
 
 **Open (owner):**
 

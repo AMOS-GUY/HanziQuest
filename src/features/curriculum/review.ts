@@ -504,7 +504,11 @@ export async function recordReview(
 
   return prisma.$transaction(async (tx) => {
     // Serialise decisions on the same item.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`review:${input.entityType}:${input.entityId}`}))`;
+    await lockForReview(tx, {
+      characterIds: input.entityType === "CHARACTER" ? [input.entityId] : [],
+      vocabularyIds: input.entityType === "VOCABULARY" ? [input.entityId] : [],
+      curriculumIds: input.entityType === "CURRICULUM" ? [input.entityId] : [],
+    });
     const version = await currentVersion(tx, input.entityType, input.entityId);
     if (!version) throw new DomainError("not_found", "That item no longer exists.");
     if (version.fingerprint !== input.fingerprint)
@@ -703,6 +707,36 @@ async function setVerification(
   return before.verification;
 }
 
+/** Serialises review decisions and reconciliation on one item (transaction-scoped, re-entrant). */
+async function lockItem(tx: Prisma.TransactionClient, type: ReviewEntityType, id: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`review:${type}:${id}`}))`;
+}
+
+/**
+ * Lock order for anything that writes reviewed content (M14-b): take these locks FIRST in the
+ * transaction, before updating rows, so that approvals (which lock, then write) and edits never
+ * wait on each other in opposite orders.
+ * - A global key: shared for approvals and single-item edits, exclusive for imports (which touch
+ *   many rows), so imports and approvals serialise.
+ * - Then per-item keys, items before curricula, each sorted.
+ */
+export async function lockForReview(
+  tx: Prisma.TransactionClient,
+  scope: {
+    characterIds?: readonly string[];
+    vocabularyIds?: readonly string[];
+    curriculumIds?: readonly string[];
+  },
+  mode: "shared" | "exclusive" = "shared",
+) {
+  if (mode === "exclusive")
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('review:*'))`;
+  else await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext('review:*'))`;
+  for (const id of [...(scope.characterIds ?? [])].sort()) await lockItem(tx, "CHARACTER", id);
+  for (const id of [...(scope.vocabularyIds ?? [])].sort()) await lockItem(tx, "VOCABULARY", id);
+  for (const id of [...(scope.curriculumIds ?? [])].sort()) await lockItem(tx, "CURRICULUM", id);
+}
+
 // ─── Keeping approvals honest after changes ─────────────────────────────────
 
 /**
@@ -721,9 +755,14 @@ export async function reconcileReviews(
   },
   actorId: string | null,
 ) {
-  const characterIds = [...(scope.characterIds ?? [])];
-  const vocabularyIds = [...(scope.vocabularyIds ?? [])];
+  const characterIds = [...(scope.characterIds ?? [])].sort();
+  const vocabularyIds = [...(scope.vocabularyIds ?? [])].sort();
   const invalidated: { type: ReviewEntityType; id: string }[] = [];
+  // Same locks as recordReview, taken before reading: a concurrent approval either commits first
+  // (and is invalidated here) or waits and then sees the changed version (and is refused).
+  // Order: items before curricula, sorted, so concurrent transactions can't deadlock.
+  for (const id of characterIds) await lockItem(tx, "CHARACTER", id);
+  for (const id of vocabularyIds) await lockItem(tx, "VOCABULARY", id);
 
   const items = async (
     type: "CHARACTER" | "VOCABULARY",
@@ -779,7 +818,8 @@ export async function reconcileReviews(
       ? await curriculaContaining(tx, characterIds, vocabularyIds)
       : []),
   ]);
-  for (const id of curricula) {
+  for (const id of [...curricula].sort()) {
+    await lockItem(tx, "CURRICULUM", id);
     const row = await tx.curriculum.findUnique({ where: { id }, select: { verification: true } });
     if (!row || row.verification === "PROVISIONAL") continue;
     const history = (await reviewsFor(tx, "CURRICULUM", [id])).get(id) ?? [];
