@@ -2,8 +2,10 @@
  * Backup and disaster-recovery drill (M11, Phase G), on disposable local databases:
  *   npm run drill:backup
  *
- * Source: a disposable database migrated and seeded with synthetic data. The drill never reads
- * the development database's learners.
+ * Source: a disposable database migrated and seeded with synthetic data, plus 1,500 synthetic
+ * accounts with three roles each, so UserRole spans several 1000-row pages with ties in its first
+ * column (backups once duplicated or skipped rows there). The drill
+ * never reads the development database's learners.
  * 1. Backup, then restore into a new database. Verify against the source (checksums, FKs, app
  *    reads) and against the backup alone.
  * 2. Corruption and tampering, each against a fresh empty target. Each must be REJECTED and
@@ -61,6 +63,35 @@ async function rowCount(url: string) {
 const tsx = (script: string, args: string[], env: Record<string, string> = {}) =>
   cli([TSX, script, ...args], env);
 
+/**
+ * Synthetic accounts with three roles each (disposable source only), so UserRole spans several
+ * 1000-row pages with ties in its first column, as a real database with ~1,500 users would.
+ */
+async function spanPages(url: string) {
+  const c = new pg.Client({ connectionString: url });
+  await c.connect();
+  try {
+    await c.query(
+      `INSERT INTO "User" (id, email, "updatedAt")
+       SELECT 'drill-user-' || g, 'drill-user-' || g || '@example.test', now()
+         FROM generate_series(1, 1500) g`,
+    );
+    await c.query(
+      `INSERT INTO "UserRole" ("userId", "roleId")
+       SELECT u.id, r.id FROM "User" u, "Role" r
+        WHERE u.id LIKE 'drill-user-%' AND r.key IN ('LEARNER', 'ANALYST', 'SUPPORT')`,
+    );
+    // Churn, as in a live database: updated rows move, so ties no longer sit in insertion order.
+    await c.query(
+      `UPDATE "UserRole" SET "createdAt" = now() WHERE "userId" LIKE 'drill-user-%' AND random() < 0.5`,
+    );
+    const r = await c.query<{ n: string }>(`SELECT count(*)::text AS n FROM "UserRole"`);
+    return Number(r.rows[0]!.n);
+  } finally {
+    await c.end();
+  }
+}
+
 async function freshTarget(name: string) {
   const url = await createDb(name);
   const m = cli([PRISMA, "migrate", "deploy"], { MIGRATE_DATABASE_URL: url });
@@ -84,6 +115,14 @@ async function main() {
     seeded.ok,
     seeded.ok ? "" : seeded.output.slice(-300),
   );
+
+  // Synthetic rows so a join table (UserRole, first column repeating) spans several 1000-row
+  // pages, as in a real database. Backups once paged by the first column only and duplicated or
+  // skipped tied rows when PostgreSQL sorted rather than read the index (seen on a churned
+  // local test database; this small table may still be read in index order). Coverage of
+  // multi-page tables, not a guaranteed reproduction; the restore and verify must match.
+  const tied = await spanPages(source);
+  check("UserRole spans several 1000-row pages (synthetic accounts)", tied > 4000, `${tied} rows`);
 
   console.log("1. Backup, restore, verify");
   const backup = file("drill.ndjson.gz");

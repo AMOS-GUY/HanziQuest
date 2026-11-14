@@ -7,6 +7,7 @@ import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
+import type pg from "pg";
 import {
   appliedMigrations,
   arg,
@@ -53,14 +54,26 @@ async function main() {
     });
     for (const { table, rows, columns: cols } of meta) {
       const names = cols.map((c) => `"${c.name}"`).join(", ");
-      const batch = 1000;
-      for (let offset = 0; offset < rows; offset += batch) {
-        const r = await db.query({
-          text: `SELECT ${names} FROM "${table}" ORDER BY 1 LIMIT ${batch} OFFSET ${offset}`,
-          rowMode: "array",
-        });
+      // Every row exactly once: a cursor over the snapshot, ordered by the whole primary key.
+      // (Paging with `ORDER BY 1 LIMIT … OFFSET …` ordered by the first column only. Where it
+      // isn't unique, as in join tables like UserRole, rows tied across a page boundary could be
+      // written twice while another was skipped: an unrestorable or incomplete backup.)
+      const key = await orderKey(db, table, cols);
+      await db.query(
+        `DECLARE backup_rows NO SCROLL CURSOR FOR SELECT ${names} FROM "${table}" ORDER BY ${key}`,
+      );
+      let written = 0;
+      for (;;) {
+        const r = await db.query({ text: "FETCH 1000 FROM backup_rows", rowMode: "array" });
         for (const row of r.rows) await write({ t: table, r: row });
+        written += r.rows.length;
+        if (r.rows.length < 1000) break;
       }
+      await db.query("CLOSE backup_rows");
+      if (written !== rows)
+        throw new Error(
+          `${table}: wrote ${written} rows, the snapshot has ${rows}. Backup aborted.`,
+        );
       console.log(`  ${table}: ${rows}`);
     }
     await db.query("COMMIT");
@@ -70,6 +83,20 @@ async function main() {
     await new Promise<void>((resolve) => file.on("finish", () => resolve()));
   }
   console.log(`Backup written to ${out} (${fs.statSync(out).size} bytes)`);
+}
+
+/** ORDER BY clause: the table's primary key columns, or every column if it has none. */
+async function orderKey(db: pg.Client, table: string, cols: { name: string }[]) {
+  const pk = await db.query<{ name: string }>(
+    `SELECT a.attname AS name
+       FROM pg_index i
+       JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey)
+      WHERE i.indrelid = format('%I', $1::text)::regclass AND i.indisprimary
+      ORDER BY array_position(i.indkey, a.attnum)`,
+    [table],
+  );
+  const names = pk.rows.length ? pk.rows.map((r) => r.name) : cols.map((c) => c.name);
+  return names.map((n) => `"${n}"`).join(", ");
 }
 
 main().catch((e) => {
