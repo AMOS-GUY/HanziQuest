@@ -12,6 +12,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerUser } from "@/features/authentication/register";
+import { deleteAccount } from "@/features/account/account";
 import { DomainError, type Actor } from "@/features/administration/services";
 import { updateCharacter } from "@/features/administration/curriculum-admin";
 import { ContentStatusError, importCurriculumContent } from "@/features/curriculum/import-content";
@@ -701,5 +702,32 @@ describe("repeated requests for changes", () => {
     await ask(reviewerA, "Also check the gloss.");
     await ask(reviewerB, "Check the tone.");
     expect(await rows()).toBe(3);
+  });
+});
+
+describe("a reviewer who deletes their account", () => {
+  it("keeps the review history interpretable; another reviewer can still verify", async () => {
+    const leaver = await user("status-leaver", ["CONTENT_REVIEWER"]);
+    const q = await newLeopardVersion("leaver");
+    const review = await decide(leaver, q, "APPROVE_REVIEWED");
+    await deleteAccount(prisma, leaver.id, { password: "password-1234", confirm: "DELETE" });
+    const kept = await prisma.contentReview.findUniqueOrThrow({ where: { id: review.id } });
+    expect(kept).toMatchObject({
+      reviewerId: null, // the account is gone…
+      reviewerRole: "CONTENT_REVIEWER", // …but the role and decision are kept
+      decision: "APPROVED",
+      level: "REVIEWED",
+      fingerprint: q.fingerprint,
+    });
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "content.review.approve", entityId: q.entityId },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(audit.actorId).toBeNull();
+    expect((audit.after as { reviewId: string }).reviewId).toBe(review.id);
+    // The item stays REVIEWED, and a different reviewer can verify it.
+    await decide(reviewerB, q, "APPROVE_VERIFIED");
+    expect((await item("CHARACTER", "豹")).verification).toBe("VERIFIED");
+    await expectIndependentVerification("leaver");
   });
 });
