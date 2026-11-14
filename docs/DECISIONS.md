@@ -2,6 +2,67 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-14 — M14-b independent audit
+
+**Review status: what each value means and who sets it.**
+
+| Status      | Meaning                                                                             | Who moves an item here, and when                                                                                                                                                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PROVISIONAL | No current approval of this exact version                                           | Everything starts here: creation, every import (D-074) and any edit. The system returns an item here, audited, when its version changes or (with `--reconcile`) its sources stop supporting its level. A reviewer returns it here by requesting changes. |
+| REVIEWED    | One content reviewer approved this exact version                                    | A holder of `curriculum:review` (Content reviewer, Super Admin) who didn't change or import this version, when its sources are registered, owner-approved and may supply readings and glosses. A curriculum also needs every item REVIEWED or higher.    |
+| VERIFIED    | A second, different reviewer approved the same version, with known licences (D-075) | A holder of `curriculum:review` other than the REVIEWED approver, who didn't change or import the version, while the REVIEWED approval is current, with every source's licence known. A curriculum also needs every item VERIFIED. No role is exempt.    |
+
+The only code that raises a status is `setVerification` in `recordReview`. Other writers:
+creation and edits (always PROVISIONAL or unchanged), the importer (PROVISIONAL on create; never
+touches an existing curriculum's status, D-077), and reconciliation (only lowers).
+
+**D-076 · Fingerprint v2.** v1 left out what learners see but a reviewer approves: stroke
+outlines (only the medians used for grading were hashed), the character's assets with their
+source and licence, and a word's audio URL. v2 includes them, and the prefix changed so a
+version label never silently changes meaning. Compatibility: a v1 approval no longer matches, so
+it shows as changed and reconciling returns it to PROVISIONAL, audited. None can exist in a real
+environment: approvals need an owner-approved source, and the register has none. No data
+migration. Verified field by field in `content-status.test.ts`, including what must not change a
+fingerprint (status, review stamps, publication status, timestamps).
+
+**D-077 · Audit fixes in the review workflow.**
+
+- **Re-import no longer demotes silently.** The importer set an existing curriculum's
+  verification to the file's value (always PROVISIONAL), so an identical re-import erased an
+  approval with no audit entry. It no longer touches it; reconciling demotes, audited, only if
+  the version changed.
+- **"Changed since approval"** compared `jsonb` snapshots with `JSON.stringify`; `jsonb` reorders
+  keys, so nested objects (examples, assets) were reported as changed. Now canonical JSON.
+- **Double submits:** a request for changes identical to the item's latest decision (reviewer,
+  version, note) is refused, so a double click records one decision and one audit entry.
+- **Confirmation after a decision:** the page now confirms what was recorded (read back from the
+  database) and moves focus to it. Before, an approved item left the "Open" list with its own
+  success message, and keyboard focus was lost. The redirect is built only from validated
+  values.
+- **Honest descriptions:** learner status descriptions say who approved (a content reviewer; two
+  independent reviewers for VERIFIED), not that they were teachers: the system can't know that.
+- **Content CLI:** arguments are parsed strictly (`scripts/lib/content-args.ts`). Unknown
+  options and a second file are errors, and each run prints the file it uses.
+
+**D-078 · Backups read every row exactly once.** `db-backup` paged with
+`ORDER BY 1 LIMIT 1000 OFFSET n`. Where the first column repeats (join tables such as
+`UserRole`), rows tied across a page boundary could be written twice while another was skipped.
+A restore drill on the local test database (2,397 `UserRole` rows) produced a backup with a
+duplicate row that `db:restore` refused. Each table is now read through one cursor in the
+backup's snapshot, ordered by its full primary key, and the rows written must equal the
+snapshot's count. Pre-existing since M10; any production database with about 1,000 or more
+accounts would have been exposed.
+
+**Limitations kept (LOW):**
+
+- CLI and seed imports have no actor and write no audit entry, so the self-review rule can't
+  attribute them. Running them needs database credentials, which already allow anything.
+- Identity is by account: a reviewer who deletes their account and registers again is a new
+  account to the independence rule.
+- A withdrawn source returns a VERIFIED item to PROVISIONAL, not REVIEWED (conservative).
+- Correction to the M14-b report of 2026-11-13: CI does cancel superseded runs on the same ref
+  (`cancel-in-progress: true`). It didn't affect any reported result.
+
 ## 2026-11-13 — M14-b review workflow
 
 **D-070 · Learners see the edition and an honest status.** The Learn page, the lesson page and

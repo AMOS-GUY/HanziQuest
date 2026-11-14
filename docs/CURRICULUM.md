@@ -39,6 +39,14 @@ The schema is in `src/features/curriculum/content-schema.ts`:
 
 ## Review workflow (M14-b)
 
+| Status      | Means                                                    | Set by                                                                     |
+| ----------- | -------------------------------------------------------- | -------------------------------------------------------------------------- |
+| PROVISIONAL | No current approval of this exact version                | Creation, imports, edits; the system after a change; a request for changes |
+| REVIEWED    | One content reviewer approved this exact version         | A reviewer who didn't change or import it, with owner-approved sources     |
+| VERIFIED    | A second, different reviewer approved it, licences known | A reviewer other than the first, who didn't change or import it            |
+
+Details and conditions: DECISIONS.md, "Review status: what each value means and who sets it".
+
 Only Content reviewers and Super Admins (`curriculum:review`) change verification, in
 Admin → Review. Editors can't: the edit forms have no verification field, and the server refuses
 changes.

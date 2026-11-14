@@ -230,7 +230,11 @@ Target public beta: **2026-12-08**.
 - [x] Queue: 32 → 22 queries for HSK 1 Starter (item fingerprints computed once)
 - [x] Content files may only declare PROVISIONAL, checked by the schema and again by the importer (D-074, owner decision)
 - [x] VERIFIED needs two independent reviewers, for every role (D-075, owner decision); self-review window fixed; CLI file-argument bug fixed
+- [x] Independent audit round 2 (2026-11-14, `docs/M14B_REVIEW_AUDIT.md`): backups read every row once (D-078, HIGH, pre-existing); re-import no longer demotes silently; fingerprint v2 (D-076); confirmation and focus after decisions; honest status descriptions; double submits; strict content CLI (D-077)
+- [x] Restore drill with review history (identical after restore); synthetic benchmarks to 3,000 items; M15 discovery (`docs/M15_PLAN.md`)
+- [ ] **Follow-up PR** for `feature/m14b-status-and-verification`: needs opening (no GitHub sign-in on the development machine), then GitHub CI
 - [ ] **Owner:** approve source register entries (all 183 HSK 1 Starter items are blocked until then); the teacher; the 3 content warnings
+- [ ] **Engineering follow-up (LOW):** batch the importer's per-item upserts before curricula reach ~6,000 items (the exclusive review lock is held for the whole import)
 - [ ] **Kept as is (pre-existing, LOW, rechecked in D-073):** inside /admin, staff without a page's permission get the not-found page with status 200 (the loading boundary streams first). Content is withheld; non-staff and suspended accounts get a real 404 from the proxy
 
 ## Session log

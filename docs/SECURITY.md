@@ -273,6 +273,11 @@ test.
 | Input                | Zod: entity type enum, id ≤ 64 characters, fingerprint format, note ≤ 1000 characters (at least 5 to request changes). Rate limited like admin mutations.                      | unit; e2e                                                 |
 | Errors               | Refusals give the reason (no data from other records). Unexpected errors show a generic message, and details go to the server log.                                             | e2e                                                       |
 
+Writers of a review status (audited 2026-11-14): `recordReview` (the only one that raises it),
+creation and edits (PROVISIONAL or unchanged), the importer (PROVISIONAL on create, never on
+update, D-077), and reconciliation (lowers only). Fingerprint v2 covers what learners see
+(D-076).
+
 Limitation (LOW, D-073): inside `/admin`, staff without a page's permission get the not-found
 page with status 200, because the admin loading boundary starts the response first. Non-staff
 and suspended accounts get a real 404.
