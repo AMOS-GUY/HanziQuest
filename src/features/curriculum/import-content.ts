@@ -130,7 +130,10 @@ async function doImport(
       source: c.source,
       sourceRefs: c.sourceRefs ?? [],
       licenseStatus: c.licenseStatus,
-      verification: c.verification,
+      // Never set on update: a file is always PROVISIONAL (D-074), and writing that here would
+      // silently demote an approved curriculum, even on an identical re-import, with no audit
+      // entry. Reconciling after the import returns it to PROVISIONAL, audited, if and only if
+      // its version changed.
     },
   });
   summary.curriculumId = curriculum.id;

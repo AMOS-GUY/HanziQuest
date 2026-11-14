@@ -24,6 +24,11 @@ import {
   reviewQueue,
   type QueueItem,
 } from "@/features/curriculum/review";
+import {
+  characterVersions,
+  curriculumVersion,
+  vocabularyVersions,
+} from "@/features/curriculum/review-fingerprint";
 import type { StrokeData } from "@/features/curriculum/stroke-data";
 import { ensureRoles, testPrisma, uniqueEmail } from "./helpers";
 
@@ -446,5 +451,255 @@ describe("D-075: VERIFIED needs two independent reviewers", () => {
       (await prisma.curriculum.findUniqueOrThrow({ where: { id: curriculumId } })).verification,
     ).toBe("VERIFIED");
     await expectIndependentVerification("curriculum");
+  });
+
+  it("re-importing the same file keeps approvals; a changed file returns them to PROVISIONAL, audited", async () => {
+    // Runs after the curriculum test: everything is VERIFIED.
+    const invalidations = () =>
+      prisma.auditLog.count({
+        where: { action: "content.review.invalidated", entityId: curriculumId },
+      });
+    const before = await invalidations();
+    await importContent(valid(`status-${RUN}`));
+    expect(
+      (await prisma.curriculum.findUniqueOrThrow({ where: { id: curriculumId } })).verification,
+    ).toBe("VERIFIED");
+    expect(await invalidations()).toBe(before);
+    const changed = valid(`status-${RUN}`);
+    changed.curriculum.description = "Changed by a later file.";
+    await importContent(changed);
+    expect(
+      (await prisma.curriculum.findUniqueOrThrow({ where: { id: curriculumId } })).verification,
+    ).toBe("PROVISIONAL");
+    expect(await invalidations()).toBe(before + 1);
+  });
+});
+
+describe("fingerprint coverage (v2, D-076)", () => {
+  it("changes with every reviewed field, and not with status, stamps, timestamps or exercises", async () => {
+    const frog = await prisma.character.findUniqueOrThrow({
+      where: { hanzi: "蛙" },
+      include: { strokes: true, assets: true },
+    });
+    const word = await prisma.vocabulary.findFirstOrThrow({ where: { simplified: "蛙" } });
+    const charFp = async () =>
+      (await characterVersions(prisma, [frog.id])).get(frog.id)!.fingerprint;
+    const wordFp = async () =>
+      (await vocabularyVersions(prisma, [word.id])).get(word.id)!.fingerprint;
+    const curFp = async () => (await curriculumVersion(prisma, curriculumId))!.fingerprint;
+    expect(await charFp()).toMatch(/^v2:/);
+
+    // Each change is made directly (test data only) and undone afterwards.
+    const changes: [
+      string,
+      () => Promise<string>,
+      () => Promise<unknown>,
+      () => Promise<unknown>,
+    ][] = [
+      [
+        "character pinyin (tone)",
+        charFp,
+        () => prisma.character.update({ where: { id: frog.id }, data: { pinyin: "wà" } }),
+        () => prisma.character.update({ where: { id: frog.id }, data: { pinyin: frog.pinyin } }),
+      ],
+      [
+        "character reading alternatives",
+        charFp,
+        () =>
+          prisma.character.update({ where: { id: frog.id }, data: { pinyinAlternatives: ["wa"] } }),
+        () =>
+          prisma.character.update({
+            where: { id: frog.id },
+            data: { pinyinAlternatives: frog.pinyinAlternatives },
+          }),
+      ],
+      [
+        "character gloss",
+        charFp,
+        () => prisma.character.update({ where: { id: frog.id }, data: { meaning: "toad" } }),
+        () => prisma.character.update({ where: { id: frog.id }, data: { meaning: frog.meaning } }),
+      ],
+      [
+        "character traditional form",
+        charFp,
+        () => prisma.character.update({ where: { id: frog.id }, data: { traditional: "鼃" } }),
+        () =>
+          prisma.character.update({
+            where: { id: frog.id },
+            data: { traditional: frog.traditional },
+          }),
+      ],
+      [
+        "character source refs",
+        charFp,
+        () =>
+          prisma.character.update({
+            where: { id: frog.id },
+            data: { sourceRefs: [...frog.sourceRefs, "hanzi-writer-data-2.0.1"] },
+          }),
+        () =>
+          prisma.character.update({
+            where: { id: frog.id },
+            data: { sourceRefs: frog.sourceRefs },
+          }),
+      ],
+      [
+        "character licence",
+        charFp,
+        () =>
+          prisma.character.update({ where: { id: frog.id }, data: { licenseStatus: "UNKNOWN" } }),
+        () =>
+          prisma.character.update({
+            where: { id: frog.id },
+            data: { licenseStatus: frog.licenseStatus },
+          }),
+      ],
+      [
+        "stroke outline only (v1 missed this)",
+        charFp,
+        () =>
+          prisma.characterStroke.update({
+            where: { id: frog.strokes[0]!.id },
+            data: { path: "M 1 1" },
+          }),
+        () =>
+          prisma.characterStroke.update({
+            where: { id: frog.strokes[0]!.id },
+            data: { path: frog.strokes[0]!.path },
+          }),
+      ],
+      [
+        "stroke-data asset licence (v1 missed this)",
+        charFp,
+        () =>
+          prisma.characterAsset.update({
+            where: { id: frog.assets[0]!.id },
+            data: { licenseStatus: "UNKNOWN" },
+          }),
+        () =>
+          prisma.characterAsset.update({
+            where: { id: frog.assets[0]!.id },
+            data: { licenseStatus: frog.assets[0]!.licenseStatus },
+          }),
+      ],
+      [
+        "word gloss",
+        wordFp,
+        () => prisma.vocabulary.update({ where: { id: word.id }, data: { meaning: "toad" } }),
+        () => prisma.vocabulary.update({ where: { id: word.id }, data: { meaning: word.meaning } }),
+      ],
+      [
+        "word example",
+        wordFp,
+        () =>
+          prisma.vocabulary.update({
+            where: { id: word.id },
+            data: {
+              exampleZh: "蛙！",
+              exampleEn: "A frog!",
+              exampleSourceRef: "hanziquest-authored",
+            },
+          }),
+        () =>
+          prisma.vocabulary.update({
+            where: { id: word.id },
+            data: {
+              exampleZh: word.exampleZh,
+              exampleEn: word.exampleEn,
+              exampleSourceRef: word.exampleSourceRef,
+            },
+          }),
+      ],
+      [
+        "word audio (v1 missed this)",
+        wordFp,
+        () =>
+          prisma.vocabulary.update({
+            where: { id: word.id },
+            data: { audioUrl: "https://example.test/wa.mp3" },
+          }),
+        () =>
+          prisma.vocabulary.update({ where: { id: word.id }, data: { audioUrl: word.audioUrl } }),
+      ],
+      [
+        "curriculum item (a character in it changed)",
+        curFp,
+        () => prisma.character.update({ where: { id: frog.id }, data: { meaning: "toad" } }),
+        () => prisma.character.update({ where: { id: frog.id }, data: { meaning: frog.meaning } }),
+      ],
+    ];
+    expect(frog.strokes.length).toBeGreaterThan(0);
+    expect(frog.assets.length).toBeGreaterThan(0);
+    for (const [label, fp, change, undo] of changes) {
+      const before = await fp();
+      await change();
+      const changed = await fp();
+      await undo();
+      expect(changed, label).not.toBe(before);
+      expect(await fp(), `${label} (undone)`).toBe(before);
+    }
+
+    // Not part of a version.
+    const before = [await charFp(), await wordFp(), await curFp()];
+    await prisma.character.update({
+      where: { id: frog.id },
+      data: { verification: "REVIEWED", reviewerRole: "CONTENT_REVIEWER", reviewedAt: new Date() },
+    });
+    await prisma.curriculum.update({ where: { id: curriculumId }, data: { status: "DRAFT" } });
+    expect([await charFp(), await wordFp(), await curFp()]).toEqual(before);
+    await prisma.character.update({
+      where: { id: frog.id },
+      data: {
+        verification: frog.verification,
+        reviewerRole: frog.reviewerRole,
+        reviewedAt: frog.reviewedAt,
+      },
+    });
+    await prisma.curriculum.update({ where: { id: curriculumId }, data: { status: "PUBLISHED" } });
+  });
+});
+
+describe("repeated requests for changes", () => {
+  it("a double submit records one decision and one audit entry; a different note is new", async () => {
+    const q = await newLeopardVersion("double-submit");
+    const ask = (actor: Actor, note: string) =>
+      recordReview(
+        prisma,
+        actor,
+        {
+          entityType: q.entityType,
+          entityId: q.entityId,
+          fingerprint: q.fingerprint,
+          decision: "REQUEST_CHANGES",
+          note,
+        },
+        approved,
+      );
+    const rows = () =>
+      prisma.contentReview.count({
+        where: { entityId: q.entityId, fingerprint: q.fingerprint, decision: "CHANGES_REQUESTED" },
+      });
+    const audits = () =>
+      prisma.auditLog.count({
+        where: {
+          action: "content.review.request-changes",
+          entityId: q.entityId,
+          actorId: reviewerA.id,
+        },
+      });
+    const auditsBefore = await audits();
+    const results = await Promise.allSettled([
+      ask(reviewerA, "Check the tone."),
+      ask(reviewerA, "Check the tone."),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const refused = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+    expect((refused.reason as Error).message).toMatch(/already requested these changes/);
+    expect(await rows()).toBe(1);
+    expect(await audits()).toBe(auditsBefore + 1);
+    // A different note, or another reviewer, is a new decision.
+    await ask(reviewerA, "Also check the gloss.");
+    await ask(reviewerB, "Check the tone.");
+    expect(await rows()).toBe(3);
   });
 });

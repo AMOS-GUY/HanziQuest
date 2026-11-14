@@ -25,6 +25,7 @@ import type { RoleKey } from "@/generated/prisma/enums";
 import { VERIFICATION_RANK, type Verification } from "./provenance";
 import { sourceRegister, type SourceRegister } from "./sources";
 import {
+  canonicalJson,
   characterVersions,
   curriculumItems,
   curriculumVersion,
@@ -212,9 +213,13 @@ export interface QueueItem {
 function changedFields(before: unknown, now: Record<string, unknown>) {
   if (!before || typeof before !== "object") return [];
   const b = before as Record<string, unknown>;
-  return Object.keys({ ...b, ...now })
-    .filter((k) => JSON.stringify(b[k] ?? null) !== JSON.stringify(now[k] ?? null))
-    .sort();
+  return (
+    Object.keys({ ...b, ...now })
+      // Canonical JSON: the stored snapshot is jsonb, which reorders object keys, so plain
+      // JSON.stringify would report nested objects (examples, assets) as changed when they aren't.
+      .filter((k) => canonicalJson(b[k] ?? null) !== canonicalJson(now[k] ?? null))
+      .sort()
+  );
 }
 
 /** The review queue for one curriculum: its characters, its words and the curriculum itself. */
@@ -562,10 +567,21 @@ export async function recordReview(
           "You changed or imported this version, so another reviewer has to review it.",
         );
 
+      const current = await currentState(tx, input.entityType, input.entityId, register);
+      const latest = current?.history[0];
+      // A repeated request for changes (a double submit) adds nothing: the same reviewer, the
+      // same version and the same note as the latest decision.
+      if (
+        !level &&
+        latest?.decision === "CHANGES_REQUESTED" &&
+        latest.fingerprint === version.fingerprint &&
+        latest.reviewerId === actor.id &&
+        latest.note === input.note
+      )
+        throw new DomainError("conflict", "You already requested these changes for this version.");
       if (level) {
         // A repeated or concurrent approval of the same version adds nothing: refuse it rather
         // than writing a duplicate record. Raising REVIEWED to VERIFIED is a new decision.
-        const current = await currentState(tx, input.entityType, input.entityId, register);
         if (current && approvedAt(current, level))
           throw new DomainError(
             "conflict",
