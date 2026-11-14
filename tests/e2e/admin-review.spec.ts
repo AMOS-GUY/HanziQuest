@@ -38,7 +38,12 @@ test("a content reviewer can review but not edit; refused approvals explain why"
   await form.getByLabel("Decision").selectOption("REQUEST_CHANGES");
   await form.getByLabel("Note").fill("E2E: please check the gloss.");
   await form.getByRole("button", { name: "Record decision" }).click();
-  await expect(page.getByText(/Changes requested\. \(review/)).toBeVisible({ timeout: 15_000 });
+  // The page confirms what was recorded and moves focus to the confirmation.
+  const confirmation = page.getByRole("status").filter({ hasText: /^Recorded:/ });
+  await expect(confirmation).toContainText("returned with a request for changes", {
+    timeout: 15_000,
+  });
+  await expect(confirmation).toBeFocused();
 
   // Least privilege: no editing or importing. Inside /admin the response is a "soft" not-found
   // (status 200, because the admin loading boundary streams first): assert what's rendered.
@@ -203,4 +208,41 @@ test("the admin import refuses files that declare REVIEWED or VERIFIED (D-074)",
       await client.end();
     }
   }
+});
+
+test("the review queue works by keyboard alone and fits a phone screen", async ({
+  page,
+}, testInfo) => {
+  const email = uniqueEmail("reviewer-keyboard");
+  await register(page, "Reviewer K", email, throwawayPassword());
+  await completeOnboarding(page);
+  await grantRole(email, "CONTENT_REVIEWER");
+  await page.goto("/admin/review");
+  await expect(page.getByRole("heading", { level: 1, name: "Content review" })).toBeVisible();
+
+  if (testInfo.project.use.isMobile) {
+    // No sideways scrolling at phone width, even with long Chinese text and fingerprints.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+    return;
+  }
+
+  // Keyboard only: reach the first decision, choose, write a note, submit with Enter.
+  const form = page.locator("form").filter({ hasText: "Record decision" }).first();
+  const decision = form.getByLabel("Decision");
+  await decision.focus();
+  await page.keyboard.press("Tab"); // to the note
+  await expect(form.getByLabel("Note")).toBeFocused();
+  await page.keyboard.type("E2E: keyboard-only request.");
+  await page.keyboard.press("Tab"); // to the submit button
+  await expect(form.getByRole("button", { name: "Record decision" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  const confirmation = page.getByRole("status").filter({ hasText: /^Recorded:/ });
+  await expect(confirmation).toContainText("returned with a request for changes", {
+    timeout: 15_000,
+  });
+  // Focus lands on the confirmation, so keyboard and screen-reader users know where they are.
+  await expect(confirmation).toBeFocused();
 });

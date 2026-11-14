@@ -13,6 +13,7 @@ import {
   type ReviewStatus,
 } from "@/features/curriculum/review";
 import { recordReviewAction } from "@/features/administration/review-actions";
+import { FocusOnMount } from "@/components/admin/focus-on-mount";
 import { ReviewProgressSummary } from "./progress-summary";
 
 export const metadata: Metadata = { title: "Content review" };
@@ -53,13 +54,28 @@ const KIND_LABEL = {
   VOCABULARY: "Word",
 } as const;
 
-const FILTERS = ["open", "all", "needs-review", "changes-requested", "stale", "approved"] as const;
+const FILTERS = [
+  "open",
+  "all",
+  "needs-review",
+  "changes-requested",
+  "stale",
+  "unreviewed-status",
+  "approved",
+] as const;
 type Filter = (typeof FILTERS)[number];
 
 export default async function ReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ c?: string; status?: string; kind?: string; page?: string }>;
+  searchParams: Promise<{
+    c?: string;
+    status?: string;
+    kind?: string;
+    page?: string;
+    /** The decision just recorded (a review id), to confirm. */
+    done?: string;
+  }>;
 }) {
   await requirePagePermission("curriculum:review");
   const sp = await searchParams;
@@ -92,9 +108,22 @@ export default async function ReviewPage({
       (!kind || q.entityType === kind) &&
       (filter === "all" || (filter === "open" ? q.status !== "approved" : q.status === filter)),
   );
+  // The decision just recorded (after the action's redirect). Read from the database, so the
+  // confirmation states what was actually recorded.
+  const done = /^[a-z0-9]{1,64}$/.test(sp.done ?? "")
+    ? await prisma.contentReview.findUnique({
+        where: { id: sp.done },
+        select: { id: true, entityType: true, entityId: true, decision: true, level: true },
+      })
+    : null;
+  const doneItem = done
+    ? queue.find((q) => q.entityType === done.entityType && q.entityId === done.entityId)
+    : undefined;
+  const doneTitle = doneItem?.title;
   const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const page = Math.min(pageCount, Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1));
   const items = shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const doneShown = !!doneItem && items.includes(doneItem);
   const href = (changes: Record<string, string | null>) => {
     const q = new URLSearchParams();
     const merged = { c: current.id, status: filter, kind, page: null, ...changes };
@@ -131,6 +160,29 @@ export default async function ReviewPage({
         ))}
       </nav>
 
+      {done ? (
+        // Keyed by the decision, so each new confirmation takes focus again.
+        <FocusOnMount
+          key={done.id}
+          className="border-primary bg-accent rounded-xl border-2 px-4 py-3 font-bold focus:outline-none focus-visible:ring-2"
+        >
+          Recorded: {KIND_LABEL[done.entityType].toLowerCase()}{" "}
+          {doneTitle ? (
+            done.entityType === "CURRICULUM" ? (
+              doneTitle
+            ) : (
+              <span lang="zh" className="hanzi">
+                {doneTitle}
+              </span>
+            )
+          ) : null}{" "}
+          {done.decision === "APPROVED"
+            ? `approved as ${done.level?.toLowerCase()}.`
+            : "returned with a request for changes."}
+          {doneShown ? "" : " It's no longer in this list."}
+        </FocusOnMount>
+      ) : null}
+
       <ReviewProgressSummary progress={progress} />
 
       <nav aria-label="Filter" className="flex flex-wrap items-center gap-2 text-sm">
@@ -162,13 +214,24 @@ export default async function ReviewPage({
         {shown.length} item(s){pageCount > 1 ? ` · page ${page} of ${pageCount}` : ""}
       </p>
 
-      <ul className="flex flex-col gap-4">
-        {items.map((q) => (
-          <li key={`${q.entityType}:${q.entityId}`}>
-            <ReviewItem item={q} sourceLabel={(id) => sources.get(id)} />
-          </li>
-        ))}
-      </ul>
+      {items.length ? (
+        <ul className="flex flex-col gap-4">
+          {items.map((q) => (
+            <li key={`${q.entityType}:${q.entityId}`}>
+              <ReviewItem
+                item={q}
+                sourceLabel={(id) => sources.get(id)}
+                returnTo={{ c: current.id, status: filter, kind: kind ?? "", page: String(page) }}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground">
+          Nothing to show here.{" "}
+          {filter !== "all" ? <Link href={href({ status: "all" })}>Show all items</Link> : null}
+        </p>
+      )}
 
       {pageCount > 1 ? (
         <nav aria-label="Pages" className="flex gap-3 text-sm font-bold">
@@ -183,8 +246,11 @@ export default async function ReviewPage({
 function ReviewItem({
   item: q,
   sourceLabel,
+  returnTo,
 }: {
   item: QueueItem;
+  /** The current view, so the page can come back to it after a decision. */
+  returnTo: Record<"c" | "status" | "kind" | "page", string>;
   sourceLabel: (
     id: string,
   ) => { title: string; approval: { status: string }; licenseStatus: string } | undefined;
@@ -296,6 +362,12 @@ function ReviewItem({
             submitLabel="Record decision"
             fields={[
               { name: "entityType", type: "hidden", label: "Kind", defaultValue: q.entityType },
+              ...Object.entries(returnTo).map(([name, value]) => ({
+                name,
+                type: "hidden" as const,
+                label: name,
+                defaultValue: value,
+              })),
               { name: "entityId", type: "hidden", label: "Item", defaultValue: q.entityId },
               {
                 name: "fingerprint",
