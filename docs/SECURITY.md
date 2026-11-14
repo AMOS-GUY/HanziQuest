@@ -258,18 +258,25 @@ test.
 
 ## Content review (M14-b)
 
-| Control              | Implementation                                                                                                                                                        | Tests                                                     |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Who decides          | `curriculum:review` (Super Admin, Content reviewer), checked in the server action and again in `recordReview`. Editors don't hold it. Reviewers can't edit or import. | unit permissions matrix; integration; e2e least privilege |
-| Edits                | Verification isn't an edit field. Creating sets PROVISIONAL and updates refuse any change, for every actor, Super Admins included.                                    | integration `provenance.test.ts`                          |
-| Exact version        | Decisions carry the fingerprint the reviewer saw. Any other current version is refused. Later changes return approvals to PROVISIONAL, audited.                       | integration                                               |
-| Self-review          | Refused if the reviewer changed, restructured or imported the version since the last approval.                                                                        | integration                                               |
-| Sources              | Approval follows the import source rules. Withdrawn approvals are handled by `content:provenance -- --reconcile [--apply]`.                                           | unit; integration                                         |
-| History and audit    | `ContentReview` rows are never updated or deleted. Every decision and invalidation is audited in the same transaction.                                                | integration                                               |
-| Concurrency          | Review locks are taken before writing (D-073). Duplicate approvals are refused.                                                                                       | `review-concurrency.test.ts`                              |
-| Revoked or suspended | Roles and status are reloaded on every request. A form left open is refused after revocation (by the action) or suspension (by the proxy, before any action runs).    | e2e `admin-review.spec.ts`                                |
-| Input                | Zod: entity type enum, id ≤ 64 characters, fingerprint format, note ≤ 1000 characters (at least 5 to request changes). Rate limited like admin mutations.             | unit; e2e                                                 |
-| Errors               | Refusals give the reason (no data from other records). Unexpected errors show a generic message, and details go to the server log.                                    | e2e                                                       |
+| Control              | Implementation                                                                                                                                                                 | Tests                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Who decides          | `curriculum:review` (Super Admin, Content reviewer), checked in the server action and again in `recordReview`. Editors don't hold it. Reviewers can't edit or import.          | unit permissions matrix; integration; e2e least privilege |
+| Content files        | May only declare PROVISIONAL: the schema rejects other values with a clear error, and the importer refuses again before writing (D-074). Every import route goes through both. | unit; integration `content-status.test.ts`; e2e           |
+| Independent VERIFIED | VERIFIED needs a current REVIEWED approval of the same fingerprint by a different reviewer. No role is exempt (D-075).                                                         | integration `content-status.test.ts`                      |
+| Edits                | Verification isn't an edit field. Creating sets PROVISIONAL and updates refuse any change, for every actor, Super Admins included.                                             | integration `provenance.test.ts`                          |
+| Exact version        | Decisions carry the fingerprint the reviewer saw. Any other current version is refused. Later changes return approvals to PROVISIONAL, audited.                                | integration                                               |
+| Self-review          | Refused if the reviewer changed, restructured or imported the version since the last approval.                                                                                 | integration                                               |
+| Sources              | Approval follows the import source rules. Withdrawn approvals are handled by `content:provenance -- --reconcile [--apply]`.                                                    | unit; integration                                         |
+| History and audit    | `ContentReview` rows are never updated or deleted. Every decision and invalidation is audited in the same transaction.                                                         | integration                                               |
+| Concurrency          | Review locks are taken before writing (D-073). Duplicate approvals are refused.                                                                                                | `review-concurrency.test.ts`                              |
+| Revoked or suspended | Roles and status are reloaded on every request. A form left open is refused after revocation (by the action) or suspension (by the proxy, before any action runs).             | e2e `admin-review.spec.ts`                                |
+| Input                | Zod: entity type enum, id ≤ 64 characters, fingerprint format, note ≤ 1000 characters (at least 5 to request changes). Rate limited like admin mutations.                      | unit; e2e                                                 |
+| Errors               | Refusals give the reason (no data from other records). Unexpected errors show a generic message, and details go to the server log.                                             | e2e                                                       |
+
+Writers of a review status (audited 2026-11-14): `recordReview` (the only one that raises it),
+creation and edits (PROVISIONAL or unchanged), the importer (PROVISIONAL on create, never on
+update, D-077), and reconciliation (lowers only). Fingerprint v2 covers what learners see
+(D-076).
 
 Limitation (LOW, D-073): inside `/admin`, staff without a page's permission get the not-found
 page with status 200, because the admin loading boundary starts the response first. Non-staff

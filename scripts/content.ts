@@ -21,22 +21,20 @@ import {
   previewCurriculumImport,
 } from "../src/features/curriculum/import-preview";
 import { compareWithWordList, parseWordList } from "../src/features/curriculum/word-list";
-
-const COMMANDS = ["validate", "import", "preview", "coverage"] as const;
+import { parseContentArgs } from "./lib/content-args";
 
 async function main() {
-  const [command, ...rest] = process.argv.slice(2);
-  const draft = rest.includes("--draft");
-  const listIndex = rest.indexOf("--list");
-  const listFile = listIndex >= 0 ? rest[listIndex + 1] : undefined;
-  const file =
-    rest.find((a, i) => !a.startsWith("--") && i !== listIndex + 1) ?? "content/hsk1-starter.json";
-  if (!COMMANDS.includes(command as (typeof COMMANDS)[number])) {
+  const args = parseContentArgs(process.argv.slice(2));
+  if (!args.ok) {
+    console.error(args.error);
     console.error(
       "Usage: content.ts <validate|import|preview|coverage> [file] [--draft] [--list words.txt]",
     );
     process.exit(2);
   }
+  const { command, file, draft, listFile } = args;
+  // Name the file being used, so a run can't silently act on another one.
+  console.log(`Content file: ${file}`);
 
   const input = JSON.parse(fs.readFileSync(path.resolve(file), "utf8"));
   const result = validateCurriculumContent(input, loadStrokeData, sourceRegister());

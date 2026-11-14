@@ -112,7 +112,11 @@ npm run content:validate
   fingerprint (`review-fingerprint.ts`). Any code path that changes content, structure or
   provenance must call `reconcileReviews` in its transaction, and take `lockForReview` before
   writing (imports and `--reconcile` take it exclusively). Never update or delete
-  `ContentReview` rows (D-070 to D-073).
+  `ContentReview` rows (D-070 to D-075). Content files may only declare PROVISIONAL (D-074);
+  VERIFIED needs a second, different reviewer for every role (D-075). Fingerprints are `v2`
+  (D-076): anything learners see must be in them.
+- Backups read each table through one cursor ordered by the full primary key (D-078). Never page
+  backups with LIMIT/OFFSET.
 - Handwriting diagnostics (M13): `features/handwriting/confusables.ts`, `replay.ts`,
   `features/curriculum/confusable-diagnostics.ts`. Diagnostic only: never change grading from
   them. Synthetic ink lives in `features/handwriting/synthetic-ink.ts`; its results aren't

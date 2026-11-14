@@ -52,20 +52,21 @@ export function verificationBadge(verification: Verification): VerificationBadge
         label,
         variant: "warning",
         description:
-          "Pinyin and meanings are provisional: they haven't been reviewed by a qualified teacher yet.",
+          "Pinyin and meanings are provisional: no reviewer has approved this version yet.",
       };
     case "REVIEWED":
       return {
         label,
         variant: "muted",
         description:
-          "Reviewed by a qualified teacher. Not yet verified against licensed sources for every detail.",
+          "Approved by a content reviewer. A second, independent check against licensed sources is still to come.",
       };
     case "VERIFIED":
       return {
         label,
         variant: "default",
-        description: "Reviewed by a qualified teacher and verified against licensed sources.",
+        description:
+          "Approved by two independent content reviewers and verified against licensed sources.",
       };
   }
 }

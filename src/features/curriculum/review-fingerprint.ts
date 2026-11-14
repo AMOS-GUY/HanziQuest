@@ -7,13 +7,19 @@
  *
  * Not part of a version: verification status, review stamps, timestamps, publication status and
  * exercises (they don't change what was reviewed). Stroke data is included as a hash.
+ *
+ * v2 (D-076) adds what v1 left out although learners see it: stroke outlines (v1 hashed only the
+ * medians), the character's assets with their source and licence, and a word's audio URL.
+ * Compatibility: a v1 approval no longer matches, so it shows as changed and reconciling returns
+ * it to PROVISIONAL, audited. None can exist in a real environment (approvals need an
+ * owner-approved source and the register has none), so no data migration is needed.
  */
 import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
-export const FINGERPRINT_VERSION = "v1";
+export const FINGERPRINT_VERSION = "v2";
 
 export interface ContentVersion {
   snapshot: Record<string, unknown>;
@@ -65,7 +71,11 @@ export async function characterVersions(db: Db, ids: readonly string[]) {
       hsk20Level: true,
       hsk30Level: true,
       hsk30Handwriting: true,
-      strokes: { orderBy: { strokeIndex: "asc" }, select: { median: true } },
+      strokes: { orderBy: { strokeIndex: "asc" }, select: { path: true, median: true } },
+      assets: {
+        orderBy: [{ type: "asc" }, { url: "asc" }],
+        select: { type: true, url: true, source: true, licenseStatus: true, checksum: true },
+      },
     },
   });
   return new Map(
@@ -75,7 +85,7 @@ export async function characterVersions(db: Db, ids: readonly string[]) {
         kind: "CHARACTER",
         ...c,
         sourceRefs: sorted(sourceRefs),
-        strokesSha256: sha256(canonicalJson(strokes.map((s) => s.median))),
+        strokesSha256: sha256(canonicalJson(strokes.map((s) => [s.path, s.median]))),
       }),
     ]),
   );
@@ -92,6 +102,7 @@ export async function vocabularyVersions(db: Db, ids: readonly string[]) {
       pinyin: true,
       meaning: true,
       partOfSpeech: true,
+      audioUrl: true,
       exampleZh: true,
       examplePinyin: true,
       exampleEn: true,

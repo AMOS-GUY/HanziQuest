@@ -38,7 +38,12 @@ test("a content reviewer can review but not edit; refused approvals explain why"
   await form.getByLabel("Decision").selectOption("REQUEST_CHANGES");
   await form.getByLabel("Note").fill("E2E: please check the gloss.");
   await form.getByRole("button", { name: "Record decision" }).click();
-  await expect(page.getByText(/Changes requested\. \(review/)).toBeVisible({ timeout: 15_000 });
+  // The page confirms what was recorded and moves focus to the confirmation.
+  const confirmation = page.getByRole("status").filter({ hasText: /^Recorded:/ });
+  await expect(confirmation).toContainText("returned with a request for changes", {
+    timeout: 15_000,
+  });
+  await expect(confirmation).toBeFocused();
 
   // Least privilege: no editing or importing. Inside /admin the response is a "soft" not-found
   // (status 200, because the admin loading boundary streams first): assert what's rendered.
@@ -137,4 +142,107 @@ test("an open review form is refused once the reviewer loses the permission or i
   } finally {
     await setAccountStatus(email, "ACTIVE");
   }
+});
+
+test("the admin import refuses files that declare REVIEWED or VERIFIED (D-074)", async ({
+  page,
+}, testInfo) => {
+  test.skip(!!testInfo.project.use.isMobile, "Runs once");
+  await import("dotenv/config");
+  const email = uniqueEmail("status-importer");
+  await register(page, "Importer", email, throwawayPassword());
+  await completeOnboarding(page);
+  await grantRole(email, "CURRICULUM_EDITOR");
+  for (const verification of ["REVIEWED", "VERIFIED"]) {
+    const slug = `e2e-status-${verification.toLowerCase()}-${Date.now()}`;
+    await page.goto("/admin/import");
+    await page.getByLabel("Or paste the JSON").fill(
+      JSON.stringify({
+        curriculum: {
+          slug,
+          name: "Status injection",
+          framework: "CUSTOM",
+          version: slug,
+          source: "e2e",
+          sourceRefs: ["hanziquest-authored"],
+          licenseStatus: "ORIGINAL",
+          verification,
+        },
+        level: { level: 1, name: "L1" },
+        characters: { 人: { pinyin: "rén", meaning: "person" } },
+        units: [
+          {
+            slug: "u1",
+            title: "U1",
+            lessons: [
+              {
+                slug: "l1",
+                title: "L1",
+                words: [{ simplified: "人", pinyin: "rén", meaning: "person; people" }],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    await page.getByRole("button", { name: "Validate" }).click();
+    await expect(page.getByText(/may only declare PROVISIONAL/).first()).toBeVisible();
+    await expect(page.getByText("Validation passed.")).toHaveCount(0);
+    // Importing anyway is refused by the server too.
+    const importButton = page.getByRole("button", { name: "Import as drafts" });
+    if (await importButton.isVisible()) {
+      await importButton.click();
+      await expect(
+        page.getByText(/Fix the validation errors first|may only declare/).first(),
+      ).toBeVisible();
+    }
+    const { Client } = await import("pg");
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+    try {
+      const r = await client.query(`SELECT count(*)::int AS n FROM "Curriculum" WHERE slug = $1`, [
+        slug,
+      ]);
+      expect(r.rows[0].n, verification).toBe(0);
+    } finally {
+      await client.end();
+    }
+  }
+});
+
+test("the review queue works by keyboard alone and fits a phone screen", async ({
+  page,
+}, testInfo) => {
+  const email = uniqueEmail("reviewer-keyboard");
+  await register(page, "Reviewer K", email, throwawayPassword());
+  await completeOnboarding(page);
+  await grantRole(email, "CONTENT_REVIEWER");
+  await page.goto("/admin/review");
+  await expect(page.getByRole("heading", { level: 1, name: "Content review" })).toBeVisible();
+
+  if (testInfo.project.use.isMobile) {
+    // No sideways scrolling at phone width, even with long Chinese text and fingerprints.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+    return;
+  }
+
+  // Keyboard only: reach the first decision, choose, write a note, submit with Enter.
+  const form = page.locator("form").filter({ hasText: "Record decision" }).first();
+  const decision = form.getByLabel("Decision");
+  await decision.focus();
+  await page.keyboard.press("Tab"); // to the note
+  await expect(form.getByLabel("Note")).toBeFocused();
+  await page.keyboard.type("E2E: keyboard-only request.");
+  await page.keyboard.press("Tab"); // to the submit button
+  await expect(form.getByRole("button", { name: "Record decision" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  const confirmation = page.getByRole("status").filter({ hasText: /^Recorded:/ });
+  await expect(confirmation).toContainText("returned with a request for changes", {
+    timeout: 15_000,
+  });
+  // Focus lands on the confirmation, so keyboard and screen-reader users know where they are.
+  await expect(confirmation).toBeFocused();
 });

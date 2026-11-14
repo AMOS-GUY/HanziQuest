@@ -190,6 +190,13 @@ A production backup restored into staging restores, but staging won't serve it: 
 The app-read comparison covered 0 learners, because the synthetic source has no attempts. The
 M10 drill on development data covered 5.
 
+## Backup completeness (D-078)
+
+Each table is read through one cursor in the backup's snapshot, ordered by its full primary key,
+and the backup aborts unless the rows written equal the snapshot's count. Before D-078, paging by
+the first column only could duplicate or skip rows in tables where that column repeats. The
+backup drill includes a join table spanning several 1000-row pages.
+
 ## Drill log
 
 **M10 (2026-11-11), local disposable database, development data:**

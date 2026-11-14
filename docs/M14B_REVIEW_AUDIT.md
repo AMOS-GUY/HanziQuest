@@ -1,5 +1,17 @@
 # M14-b review workflow audit (2026-11-13)
 
+> **Update (owner decisions D-074 and D-075):**
+>
+> - **Content files:** they can no longer declare REVIEWED or VERIFIED. The schema and the
+>   importer both refuse it, on every route.
+> - **VERIFIED:** it needs two independent reviewers, and no role is exempt.
+> - **Bugs found by the new tests:**
+>   - The self-review window let an author verify their own version after someone else
+>     reviewed it.
+>   - `scripts/content.ts` ignored a file path given first.
+>
+> Both are fixed. See "Status injection and independent verification" below.
+
 What was checked after PR #25's first CI run, what was fixed and what remains. Decisions:
 D-070 to D-073.
 
@@ -65,6 +77,19 @@ D-070 to D-073.
   permission check. They described only the caller's own file (2 MB cap), and the proxy blocks
   non-staff, so nothing leaked. The permission is now checked first, as `validateImportAction`
   already did.
+
+## Status injection and independent verification (D-074, D-075)
+
+| Route that writes a status        | REVIEWED or VERIFIED possible?                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------ |
+| Admin validate and import actions | No: the schema rejects it, and the importer refuses again (e2e)                      |
+| `content:validate` and `:import`  | No: the same validator, then the importer (integration runs the CLI)                 |
+| Seed                              | No: validator, then importer, on `content/hsk1-starter.json` (PROVISIONAL)           |
+| Direct `importCurriculumContent`  | No: `ContentStatusError` before the transaction (integration)                        |
+| Create and edit forms             | No: creation forces PROVISIONAL; edits refuse changes (integration)                  |
+| Reconciliation                    | Only lowers to PROVISIONAL                                                           |
+| `recordReview`                    | The only way up: version-bound, independent, source rules                            |
+| Backup restore                    | Restores existing rows exactly. Not an ingestion path; guarded by the restore checks |
 
 ## Accessibility
 
@@ -135,3 +160,117 @@ These figures are for the HSK 1 Starter queue on the local test database: 184 it
 | Review queue completeness | 183 items plus the curriculum. 0 approved, 183 blocked by sources (correct)                                                                        | —        |
 
 No content was changed, and no source was approved.
+
+## Independent audit, round 2 (2026-11-14)
+
+The review system was audited again from the code, not from the earlier tests. Decisions:
+D-076 to D-078.
+
+### Findings
+
+| #   | Finding                                                                                                    | Severity | Status                     |
+| --- | ---------------------------------------------------------------------------------------------------------- | -------- | -------------------------- |
+| 1   | Backups could duplicate or skip rows in tables paged by a repeating first column (pre-existing since M10)  | HIGH     | Fixed (D-078), drill added |
+| 2   | Re-importing a curriculum silently demoted an approved curriculum, with no audit entry                     | MEDIUM   | Fixed (D-077), test        |
+| 3   | Fingerprint v1 missed stroke outlines, stroke-data asset provenance and word audio                         | MEDIUM   | Fixed (v2, D-076), test    |
+| 4   | After an approval, the item left the "Open" list with its own confirmation, and focus was lost             | MEDIUM   | Fixed (D-077), e2e         |
+| 5   | Learner status descriptions claimed review "by a qualified teacher", which the system can't know           | LOW      | Fixed (D-077)              |
+| 6   | "Changed since approval" reported nested objects (examples, assets) as changed because jsonb reorders keys | LOW      | Fixed (D-077)              |
+| 7   | A double-submitted request for changes recorded two decisions and two audit entries                        | LOW      | Fixed (D-077), test        |
+| 8   | The content CLI ignored unknown options and extra files                                                    | LOW      | Fixed (D-077), unit tests  |
+| 9   | CLI and seed imports have no actor, so self-review can't attribute them                                    | LOW      | Kept, documented           |
+| 10  | The terms page says content will be "checked by a qualified teacher" (a plan, not a status claim)          | INFO     | Left: legal text, owner    |
+
+### Content ingestion
+
+| Route                                | REVIEWED, VERIFIED or example status in a file                             |
+| ------------------------------------ | -------------------------------------------------------------------------- |
+| Admin validate                       | Refused by the schema (e2e)                                                |
+| Admin import                         | Refused by the schema, then by the importer (e2e)                          |
+| `content:validate`, `content:import` | Same; the CLI now names the file it uses (integration, unit)               |
+| Seed                                 | Validator, then importer                                                   |
+| `importCurriculumContent` directly   | `ContentStatusError` before the transaction; nothing written (integration) |
+| Admin create and edit                | PROVISIONAL on create; changes refused (integration)                       |
+
+Every database writer of `verification` is listed in DECISIONS.md under "Review status". An
+invalid import writes nothing: validation fails before the transaction, and a failure inside it
+rolls back, including any invalidation (integration).
+
+### Two-reviewer state machine
+
+Tested in `content-status.test.ts`:
+
+- **Refusals:**
+  - Skipping REVIEWED.
+  - Verifying your own review, Super Admin included.
+  - The author or importer approving.
+  - A stale fingerprint.
+  - An unknown licence.
+- **Independent success:** two separate audit entries.
+- **Invalidation:** by content change, by provenance change and by source withdrawal.
+- **Concurrency and repeats:**
+  - Repeated and concurrent requests.
+  - Concurrent second reviewers (exactly one VERIFIED).
+  - First review racing the second, with both orders observed.
+- **Accounts:**
+  - Deleted reviewers: history keeps the role and decision.
+  - Suspended or demoted reviewers: refused (e2e).
+- **Attribution:** with several roles, the recorded role is the one that grants review (unit).
+
+### Database and recovery
+
+- **Foreign keys:** `ContentReview.reviewerId` is set to null on account deletion, and the
+  decision, level, fingerprint, role and snapshot are kept. Audit entries keep their review id.
+- **Restore drill:** run on the local test database, which holds review history (852 reviews,
+  one with a deleted reviewer). The steps: backup, a fresh migrated database, restore, then
+  `db:verify`. Review tables were identical by digest, and fingerprints recomputed after the
+  restore were identical. Before D-078 the same drill failed (a duplicate `UserRole` row).
+- **Full drill:** `npm run drill:backup` passes. The `age` encryption part is skipped here
+  because the tool isn't installed; CI installs it.
+- **Roles:** `CONTENT_REVIEWER` has no dependency on seeded rows. The seed creates every role,
+  and granting a role creates a missing row (integration).
+
+### Performance (synthetic, measured)
+
+Local test database on PostgreSQL 18 (Intel i7-10870H, 16 cores, 34 GB). Synthetic curricula
+use CJK Extension A characters with 10 synthetic strokes each, plus one word per character.
+This isn't real content. The script is `.local/bench-review.ts` (not committed).
+
+| Review items | Import (exclusive lock) | Identical re-import | Queue queries | Queue median | Queue heap | All fingerprints | Item approval | Curriculum approval check |
+| ------------ | ----------------------- | ------------------- | ------------- | ------------ | ---------- | ---------------- | ------------- | ------------------------- |
+| 184          | 1.4 s                   | 0.8 s               | 23            | 29 ms        | 10 MB      | 17 ms            | 41 ms         | 71 ms                     |
+| 600          | 3.2 s                   | 2.3 s               | 23            | 48 ms        | 24 MB      | 31 ms            | 16 ms         | 140 ms                    |
+| 1,500        | 7.6 s                   | 5.9 s               | 23            | 120 ms       | 17 MB      | 88 ms            | 35 ms         | 347 ms                    |
+| 3,000        | 15.3 s                  | 11.4 s              | 23            | 210 ms       | 31 MB      | 162 ms           | 19 ms         | 634 ms                    |
+
+- **Queue:** constant query count (no N+1), and time grows linearly. The page renders 20 items
+  at a time.
+- **Limit (estimate, not measured):** the import holds the exclusive review lock. Approvals and
+  edits wait for it, with a 30 s transaction limit. By extrapolation, an import of about 6,000
+  items would make a waiting approval time out; it would fail with nothing written.
+- **Cause:** the cost is the importer's per-item upserts (M7). Batching them is a contained
+  follow-up. The lock stays exclusive (D-073).
+
+### Accessibility (automated)
+
+- **axe:** `/admin/review` is clean (WCAG A/AA, light and dark, desktop and mobile).
+- **New e2e:**
+  - A keyboard-only decision, with focus landing on the confirmation.
+  - No sideways scrolling at phone width.
+- **Changes:**
+  - An empty-result message.
+  - Each review card is an `<article>` named by its heading.
+  - Chinese text is marked `lang="zh"`.
+- **Not tested:** a manual screen-reader pass (NOT RUN).
+
+### Curriculum (read-only, `content/hsk1-starter.json`)
+
+The earlier findings stand: no duplicates, consistent pinyin, standard neutral tones and 不
+sandhi, and the 3 known warnings. Additional findings, in priority order:
+
+1. **Owner:** sources await approval, so all 183 items are blocked from review (correct).
+2. **Teacher:** confirm the neutral-tone conventions, plus the 3 warnings.
+3. **INFO: simplified only.** No traditional forms are recorded (0 of 102 characters, 0 of 81
+   words), and no radicals. The app doesn't claim traditional support.
+4. **INFO: reuse.** 17 characters appear in more than one word, and 7 span lessons. Every word
+   has a part of speech. The reading alternatives (谁 shuí, 子 zi, 兴 xīng) are standard.

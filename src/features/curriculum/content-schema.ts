@@ -22,7 +22,42 @@ const sourceRefsSchema = z
   .max(10)
   .optional();
 
-const verificationSchema = z.enum(["PROVISIONAL", "REVIEWED", "VERIFIED"]);
+/**
+ * Content files may only declare PROVISIONAL (D-074). REVIEWED and VERIFIED are assigned only
+ * through the review workflow, which binds them to an exact version and a named reviewer role.
+ * Other values are rejected, never silently downgraded.
+ */
+export const CONTENT_STATUS_MESSAGE =
+  "Content files may only declare PROVISIONAL. REVIEWED and VERIFIED are assigned through the review workflow (Admin → Review), never by a file.";
+const verificationSchema = z
+  .enum(["PROVISIONAL", "REVIEWED", "VERIFIED"])
+  .refine((v) => v === "PROVISIONAL", CONTENT_STATUS_MESSAGE);
+
+/** Every status a content file declares, with its path (for the importer's own check). */
+export function declaredStatuses(content: {
+  curriculum: { verification: string };
+  units: readonly {
+    lessons: readonly {
+      words: readonly { example?: { verification: string } | undefined }[];
+    }[];
+  }[];
+}) {
+  const out: { path: string; verification: string }[] = [
+    { path: "curriculum.verification", verification: content.curriculum.verification },
+  ];
+  content.units.forEach((u, ui) =>
+    u.lessons.forEach((l, li) =>
+      l.words.forEach((w, wi) => {
+        if (w.example)
+          out.push({
+            path: `units.${ui}.lessons.${li}.words.${wi}.example.verification`,
+            verification: w.example.verification,
+          });
+      }),
+    ),
+  );
+  return out;
+}
 
 /**
  * Per-standard level tags (M14). Optional: an untagged item makes no membership claim.

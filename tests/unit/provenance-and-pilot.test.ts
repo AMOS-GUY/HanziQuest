@@ -141,10 +141,12 @@ describe("content source checks", () => {
     );
   });
 
-  it("refuses REVIEWED or VERIFIED content resting on unapproved sources", () => {
-    expect(errors(content({ curriculum: { verification: "REVIEWED" } }))[0]).toMatch(
-      /isn't approved/,
-    );
+  it("refuses REVIEWED or VERIFIED declared by a file, even with approved sources (D-074)", () => {
+    // The schema itself refuses them: no register, approval or licence can make them valid.
+    for (const verification of ["REVIEWED", "VERIFIED"])
+      expect(() => content({ curriculum: { verification } })).toThrow(
+        /may only declare PROVISIONAL/,
+      );
   });
 
   it("refuses HSK level tags without an approved list source", () => {
@@ -192,7 +194,9 @@ describe("content source checks", () => {
     expect(errors(example({ sourceRef: "hanzi-writer-data-2.0.1" }))[0]).toMatch(
       /may not supply example/,
     );
-    expect(errors(example({ verification: "VERIFIED" })).join(" ")).toMatch(/isn't approved/);
+    // A file can't declare an example REVIEWED or VERIFIED either (D-074).
+    expect(() => example({ verification: "VERIFIED" })).toThrow(/may only declare PROVISIONAL/);
+    expect(() => example({ verification: "REVIEWED" })).toThrow(/may only declare PROVISIONAL/);
     expect(() => example({ zh: "nihao" })).toThrow();
   });
 

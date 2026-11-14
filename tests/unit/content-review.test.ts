@@ -29,6 +29,7 @@ const row = (
   decision,
   level: decision === "APPROVED" ? level : null,
   reviewerRole: "CONTENT_REVIEWER",
+  reviewerId: "r1",
   note: null,
   createdAt: new Date(),
   snapshot: {},
@@ -39,7 +40,7 @@ describe("content versions (fingerprints)", () => {
     const a = versionOf({ kind: "CHARACTER", hanzi: "你", meaning: "you", sourceRefs: ["x"] });
     const b = versionOf({ sourceRefs: ["x"], meaning: "you", hanzi: "你", kind: "CHARACTER" });
     expect(a.fingerprint).toBe(b.fingerprint);
-    expect(a.fingerprint).toMatch(/^v1:[0-9a-f]{64}$/);
+    expect(a.fingerprint).toMatch(/^v2:[0-9a-f]{64}$/);
     expect(
       versionOf({ kind: "CHARACTER", hanzi: "你", meaning: "you (sg.)", sourceRefs: ["x"] })
         .fingerprint,

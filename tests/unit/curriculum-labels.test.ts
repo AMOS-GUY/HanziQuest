@@ -27,7 +27,13 @@ describe("learner-facing verification badges (M14-b)", () => {
     expect(verificationBadge("PROVISIONAL").label).toBe("Provisional content");
     expect(verificationBadge("REVIEWED").label).toBe("Reviewed (not yet verified)");
     expect(verificationBadge("VERIFIED").label).toBe("Verified");
-    expect(verificationBadge("REVIEWED").description).toMatch(/not yet verified/i);
+    expect(verificationBadge("REVIEWED").description).toMatch(
+      /second, independent check .* still to come/,
+    );
+    // Claims only what the system knows: who approved, not their qualifications (D-075).
+    for (const v of ["PROVISIONAL", "REVIEWED", "VERIFIED"] as const)
+      expect(verificationBadge(v).description).not.toMatch(/teacher/i);
+    expect(verificationBadge("VERIFIED").description).toMatch(/two independent/);
   });
 
   it("only VERIFIED content describes itself as verified", () => {
