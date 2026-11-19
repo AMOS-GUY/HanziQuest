@@ -66,8 +66,10 @@ export async function measurementCurriculum(
     () => strokes,
   );
   if (!v.ok || !v.content) throw new Error(JSON.stringify(v.issues.slice(0, 3)));
+  // Drafts: synthetic content must never reach learners or other tests that pick published
+  // lessons (measurement doesn't look at publication status).
   const { curriculumId } = await importCurriculumContent(prisma, v.content, {
-    publishNewLessons: true,
+    publishNewLessons: false,
     lookupStrokes: () => strokes,
   });
   const lesson = await prisma.lesson.findFirstOrThrow({
