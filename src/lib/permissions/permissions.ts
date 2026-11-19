@@ -12,6 +12,8 @@ export const PERMISSIONS = [
   "handwriting:validate",
   /** Erase a pilot participant's handwriting data (withdrawal or end of retention). */
   "handwriting:erase",
+  /** Review learners' handwriting disputes (M13, D-081). Never changes grading or progress. */
+  "handwriting:review-disputes",
   "feedback:manage",
   "invites:manage",
   "users:read",
@@ -33,6 +35,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly Permission[]> = {
     "curriculum:publish",
     "content:import",
     "handwriting:validate",
+    "handwriting:review-disputes",
     "feedback:manage",
   ],
   MODERATOR: ["admin:access", "curriculum:read", "users:read", "users:moderate", "feedback:manage"],

@@ -11,6 +11,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { HandwritingCanvas } from "@/components/handwriting/handwriting-canvas";
 import { GuidedStrokeQuiz } from "@/components/handwriting/guided-stroke-quiz";
 import { BAND_COPY, BandBanner, WritingFeedback } from "@/components/feedback/writing-feedback";
+import { DisputeResult } from "@/components/feedback/dispute-result";
 import { evaluateWord } from "@/features/handwriting/evaluate";
 import { fromMakeMeAHanzi } from "@/features/handwriting/reference";
 import type { EvaluationBand, InkStroke, WordEvaluation } from "@/features/handwriting/types";
@@ -653,14 +654,13 @@ export function PracticeRunner({
             </p>
 
             {outcome?.kind === "writing" && mode.kind !== "preview" ? (
-              <Link
-                href={`/feedback?kind=HANDWRITING&from=${encodeURIComponent(
-                  typeof window === "undefined" ? "/practice" : window.location.pathname,
-                )}`}
-                className="text-muted-foreground self-center text-xs font-bold underline"
-              >
-                Grading looks wrong? Tell us
-              </Link>
+              // M13 (D-081): a structured dispute instead of free-text feedback.
+              <DisputeResult
+                key={outcome.eventId}
+                clientEventId={outcome.eventId}
+                result={outcome.band}
+                saved={currentSave === "saved"}
+              />
             ) : null}
             <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" size="lg" onClick={() => resetFor(index)}>

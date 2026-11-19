@@ -152,6 +152,8 @@ export const passwordChangeLimiter = createLimit("password", 5, 60 * 60 * 1000);
 export const passwordResetLimiter = createLimit("password-reset", 10, 60 * 60 * 1000);
 /** 10 feedback messages per hour per user. */
 export const feedbackLimiter = createLimit("feedback", 10, 60 * 60 * 1000);
+/** 10 handwriting disputes per day per learner (M13, D-081). */
+export const disputeLimiter = createLimit("dispute", 10, 24 * 60 * 60 * 1000);
 /** 600 public stroke-data reads per minute per IP (the data is cacheable, so this is generous). */
 export const publicReadLimiter = createLimit("public-read", 600, 60 * 1000);
 /** 30 client error reports per 10 minutes per IP. */

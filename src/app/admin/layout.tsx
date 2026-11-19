@@ -51,6 +51,12 @@ const NAV: (AdminNavItem & { permission: Permission })[] = [
     icon: "pen-line",
     permission: "handwriting:validate",
   },
+  {
+    href: "/admin/disputes",
+    label: "Disputes",
+    icon: "flag",
+    permission: "handwriting:review-disputes",
+  },
   { href: "/admin/feedback", label: "Feedback", icon: "message", permission: "feedback:manage" },
   { href: "/admin/invites", label: "Invites", icon: "ticket", permission: "invites:manage" },
   { href: "/admin/users", label: "Users", icon: "users", permission: "users:read" },
