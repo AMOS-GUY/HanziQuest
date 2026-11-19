@@ -73,7 +73,7 @@ export default async function ProgressPage() {
           <p className="mt-1 text-2xl font-black">
             {summary.mastery.FAMILIAR + summary.mastery.MASTERED}
           </p>
-          <p className="text-muted-foreground text-sm">Characters learned</p>
+          <p className="text-muted-foreground text-sm">Familiar or mastered</p>
         </Card>
         <Card className="p-4">
           <Trophy className="text-primary size-5" aria-hidden />
