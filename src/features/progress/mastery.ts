@@ -117,8 +117,41 @@ export interface ReplayResult {
   review: ReviewState;
 }
 
-/** Replays a character's history. Returns null when there is no countable practice. */
-export function replayCharacter(events: readonly CharacterEvent[]): ReplayResult | null {
+/**
+ * What one counted event meant to the schedule (M15 measurement). Read-only snapshots: the
+ * observer can't change the replay, and replay results are identical with or without it.
+ */
+export interface ReplayStep {
+  occurredAt: Date;
+  mode: PracticeMode;
+  success: boolean;
+  /**
+   * For independent attempts: "learning" while repetitions were 0 (first recalls), "due" when the
+   * review was due (within the early tolerance), "early" otherwise. Guided attempts: "guided".
+   */
+  kind: "guided" | "learning" | "due" | "early";
+  /** The interval in force before this event (days; 0 while learning or relearning). */
+  intervalBefore: number;
+  /** When the review was due before this event (null before the first scheduled review). */
+  dueBefore: Date | null;
+  repetitionsBefore: number;
+  /** A failed independent recall of a character that had been learned (repetitions > 0). */
+  lapse: boolean;
+  /** Mastery level after this event, by the same rule as the final result. */
+  levelAfter: MasteryLevel;
+  /** When the review is due after this event. */
+  dueAfter: Date;
+  intervalAfter: number;
+}
+
+/**
+ * Replays a character's history. Returns null when there is no countable practice.
+ * `observe`, if given, receives a snapshot after each counted event (never the live state).
+ */
+export function replayCharacter(
+  events: readonly CharacterEvent[],
+  observe?: (step: ReplayStep) => void,
+): ReplayResult | null {
   const ordered = events
     .filter((e) => e.result !== "SKIPPED")
     .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
@@ -148,6 +181,15 @@ export function replayCharacter(events: readonly CharacterEvent[]): ReplayResult
     const q = QUALITY[e.result as keyof typeof QUALITY];
     m.lastPracticedAt = e.occurredAt;
 
+    // Snapshot before the event, for the observer only.
+    const before = observe
+      ? {
+          interval: review?.intervalDays ?? 0,
+          due: review ? new Date(review.dueAt) : null,
+          repetitions: review?.repetitions ?? 0,
+        }
+      : null;
+
     if (e.mode === "GUIDED") {
       m.guidedAttempts += 1;
       if (success) m.guidedSuccesses += 1;
@@ -162,6 +204,20 @@ export function replayCharacter(events: readonly CharacterEvent[]): ReplayResult
         lapses: 0,
         lastReviewedAt: null,
       };
+      if (observe && before)
+        observe({
+          occurredAt: e.occurredAt,
+          mode: e.mode,
+          success,
+          kind: "guided",
+          intervalBefore: before.interval,
+          dueBefore: before.due,
+          repetitionsBefore: before.repetitions,
+          lapse: false,
+          levelAfter: levelFor(review, lastIndependentSucceeded, m.consecutiveCleanTechnique),
+          dueAfter: new Date(review.dueAt),
+          intervalAfter: review.intervalDays,
+        });
       continue;
     }
 
@@ -227,6 +283,29 @@ export function replayCharacter(events: readonly CharacterEvent[]): ReplayResult
       r.lastReviewedAt = e.occurredAt;
     }
     review = r;
+    if (observe && before) {
+      // The same due test the schedule uses for successes (early tolerance included).
+      const earlyMs = before.interval * SRS.earlyFraction * DAY;
+      const kind =
+        before.repetitions === 0
+          ? "learning"
+          : before.due && t >= before.due.getTime() - earlyMs
+            ? "due"
+            : "early";
+      observe({
+        occurredAt: e.occurredAt,
+        mode: e.mode,
+        success,
+        kind,
+        intervalBefore: before.interval,
+        dueBefore: before.due,
+        repetitionsBefore: before.repetitions,
+        lapse: !success && before.repetitions > 0,
+        levelAfter: levelFor(r, lastIndependentSucceeded, m.consecutiveCleanTechnique),
+        dueAfter: new Date(r.dueAt),
+        intervalAfter: r.intervalDays,
+      });
+    }
   }
 
   m.strength = round2(Math.min(1, Math.max(0, m.strength)));
