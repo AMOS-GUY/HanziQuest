@@ -48,7 +48,7 @@ export function PlacementQuiz({
           <p className="text-muted-foreground mt-2">
             {summary.lessonsTestedOut > 0
               ? `${summary.unitsTestedOut} unit${summary.unitsTestedOut === 1 ? "" : "s"} (${summary.lessonsTestedOut} lessons) marked as tested out. You can still open them any time, and their characters are waiting in Review so you can show you can write them.`
-              : "We'll start you at the first lesson so nothing is skipped."}
+              : "A unit is skipped only when you recognise every character we asked about from it, starting with the first unit. So you'll start at the first lesson, and nothing is skipped."}
           </p>
         </Card>
         <Button asChild size="lg">
