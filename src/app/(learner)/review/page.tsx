@@ -6,18 +6,10 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/database/prisma";
 import { getDueReviews, REVIEW_BATCH_SIZE } from "@/features/learning/sessions";
+import { nextReviewText } from "@/features/progress/next-review";
 import { getProgressSummary, getReviewForecast } from "@/features/progress/queries";
 
 export const metadata: Metadata = { title: "Review" };
-
-function formatDue(date: Date, timezone: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: timezone,
-  }).format(date);
-}
 
 export default async function ReviewPage() {
   const user = await requireUser();
@@ -93,7 +85,9 @@ export default async function ReviewPage() {
           <CircleCheck className="text-primary mt-0.5 size-6 shrink-0" aria-hidden />
           <div>
             <CardTitle className="text-base">You&apos;re all caught up</CardTitle>
-            <CardDescription>Next review: {formatDue(summary.dueNext!, timezone)}.</CardDescription>
+            <CardDescription>
+              Next review: {nextReviewText(summary.dueNext!, now, timezone)}.
+            </CardDescription>
           </div>
         </Card>
       )}

@@ -65,60 +65,63 @@ export default async function LearningMeasurementPage() {
         </p>
       </div>
       {cohorts.map((c) => (
-        <Card key={c.week} aria-labelledby={`cohort-${c.week}`}>
-          <CardTitle id={`cohort-${c.week}`} className="mb-3">
-            Signed up in {c.week}:{" "}
-            {c.learners.shown ? `${c.learners.count} learners` : REASON["small-group"]}
-          </CardTitle>
-          <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
-            {c.funnel.map((f) => (
-              <div key={f.stage} className="contents">
-                <dt>{f.label}</dt>
-                <dd>
-                  <Rate value={f.reached} />
-                </dd>
-              </div>
-            ))}
-            <dt>First lesson within 24 h</dt>
-            <dd>
-              <Rate value={c.activation} />
-            </dd>
-            <dt>Practised on day 1 / 7 / 30</dt>
-            <dd className="flex flex-col">
-              <Rate value={c.returns.d1} />
-              <Rate value={c.returns.d7} />
-              <Rate value={c.returns.d30} />
-            </dd>
-            <dt>Due reviews done within a day</dt>
-            <dd>
-              <Rate value={c.dueReviewCompletion} />
-            </dd>
-            {c.recallByInterval.map((b) => (
-              <div key={b.bucket} className="contents">
-                <dt>Recall when due, interval {b.label}</dt>
-                <dd>
-                  <Rate value={b.recall} />
-                </dd>
-              </div>
-            ))}
-            <dt>Lapse rate</dt>
-            <dd>
-              <Rate value={c.lapseRate} />
-            </dd>
-            <dt>Days to Familiar</dt>
-            <dd>
-              <Days value={c.daysToFamiliar} />
-            </dd>
-            <dt>Days to Mastered</dt>
-            <dd>
-              <Days value={c.daysToMastered} />
-            </dd>
-            <dt>Placement accuracy</dt>
-            <dd>
-              <Rate value={c.placementAccuracy} />
-            </dd>
-          </dl>
-        </Card>
+        // A section named by its heading (a plain div can't carry a name).
+        <section key={c.week} aria-labelledby={`cohort-${c.week}`}>
+          <Card>
+            <CardTitle id={`cohort-${c.week}`} className="mb-3">
+              Signed up in {c.week}:{" "}
+              {c.learners.shown ? `${c.learners.count} learners` : REASON["small-group"]}
+            </CardTitle>
+            <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
+              {c.funnel.map((f) => (
+                <div key={f.stage} className="contents">
+                  <dt>{f.label}</dt>
+                  <dd>
+                    <Rate value={f.reached} />
+                  </dd>
+                </div>
+              ))}
+              <dt>First lesson within 24 h</dt>
+              <dd>
+                <Rate value={c.activation} />
+              </dd>
+              <dt>Practised on day 1 / 7 / 30</dt>
+              <dd className="flex flex-col">
+                <Rate value={c.returns.d1} />
+                <Rate value={c.returns.d7} />
+                <Rate value={c.returns.d30} />
+              </dd>
+              <dt>Due reviews done within a day</dt>
+              <dd>
+                <Rate value={c.dueReviewCompletion} />
+              </dd>
+              {c.recallByInterval.map((b) => (
+                <div key={b.bucket} className="contents">
+                  <dt>Recall when due, interval {b.label}</dt>
+                  <dd>
+                    <Rate value={b.recall} />
+                  </dd>
+                </div>
+              ))}
+              <dt>Lapse rate</dt>
+              <dd>
+                <Rate value={c.lapseRate} />
+              </dd>
+              <dt>Days to Familiar</dt>
+              <dd>
+                <Days value={c.daysToFamiliar} />
+              </dd>
+              <dt>Days to Mastered</dt>
+              <dd>
+                <Days value={c.daysToMastered} />
+              </dd>
+              <dt>Placement accuracy</dt>
+              <dd>
+                <Rate value={c.placementAccuracy} />
+              </dd>
+            </dl>
+          </Card>
+        </section>
       ))}
     </div>
   );
