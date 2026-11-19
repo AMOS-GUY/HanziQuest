@@ -117,6 +117,12 @@ npm run content:validate
   (D-076): anything learners see must be in them.
 - Backups read each table through one cursor ordered by the full primary key (D-078). Never page
   backups with LIMIT/OFFSET.
+- Learning measurement (M15, D-079): `features/measurement` reads only through `readOnlyClient`
+  and returns aggregates through `analytics.ts` (k = 5, dominance and complementary suppression).
+  Never add identifiers or per-learner values to its output, and never collect new data for it.
+  Cohorts are fixed signup weeks. `/admin/learning` stays off unless `LEARNING_ANALYTICS=on`,
+  which needs the owner's privacy approval. The replay observer must never change replay
+  results.
 - Handwriting diagnostics (M13): `features/handwriting/confusables.ts`, `replay.ts`,
   `features/curriculum/confusable-diagnostics.ts`. Diagnostic only: never change grading from
   them. Synthetic ink lives in `features/handwriting/synthetic-ink.ts`; its results aren't

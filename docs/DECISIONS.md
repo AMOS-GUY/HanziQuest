@@ -2,6 +2,55 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-19 — M15 measurement, analytics foundations, first run
+
+**D-079 · Learning measurement from stored records; aggregate-only, off until approved.**
+
+- **Engine** (`features/measurement`): computes the metrics in M15_MEASUREMENT.md from records
+  the app already keeps. It collects no new data and adds no tracking. It reads only through
+  `readOnlyClient` (moved to `lib/database`), so it can't change learning history.
+- **Replay observer:** the metrics reuse the scheduler's replay through an optional observer. The
+  replay's results are identical with or without it (tested on random and stored histories).
+  No scheduling, scoring or streak rule changed.
+- **Cohorts:** fixed ISO signup weeks only. There's no current week, no date ranges and no
+  totals across weeks.
+- **Population:** every account that isn't deleted, holds no staff role and isn't
+  `@hanziquest.test`.
+  - Suspended accounts are counted, so suspending someone can't single them out by
+    differencing (tested).
+  - Residual risk: a staff-role grant or revocation changes membership. It's rare,
+    Super-Admin-only and audited.
+- **Disclosure:**
+  - k = 5 by default. It's a safeguard, not an anonymity claim.
+  - Values are suppressed on learners, not events.
+  - Event-level values are withheld when one learner contributes more than half.
+  - The interval buckets have complementary suppression.
+  - A suppressed value carries no numbers.
+- **Activation:**
+  - `/admin/learning` requires `analytics:read` and stays off unless `LEARNING_ANALYTICS=on`. It
+    has no navigation entry, and production start-up warns when it's on.
+  - The owner decides activation, together with the privacy wording and `LEGAL_VERSION`
+    (M15_PRIVACY_PROPOSAL.md). Neither is changed.
+- **Overview:** a suppressed version of the admin overview's 7-day learner figures is prepared
+  (`overview.ts`) but not wired in.
+
+**D-080 · First run and the way back.** From a recorded walkthrough of both onboarding paths,
+skipping and taking placement, on desktop and phone. No screen scrolls sideways.
+
+- **Fixed:**
+  - A new learner's review page said "You're all caught up" over a week of zeros. It now says
+    nothing is scheduled yet, hides the forecast and links to a lesson.
+  - "Characters learned" counted only familiar or mastered characters; it's relabelled.
+  - The placement result explains when a unit is skipped.
+  - Home now says when the next review is due ("tomorrow at 09:05"), in the learner's time zone,
+    from the existing schedule. The review page uses the same wording.
+- **Deferred:**
+  - The lesson-complete screen doesn't say when the characters come back. Its client doesn't
+    receive the schedule, and the home and review pages now say it.
+  - "220/20 XP" once the daily goal is far exceeded: goals were out of scope.
+  - Placement length (18 questions) and the 18-exercise first lesson: no evidence they cause
+    drop-off yet. M15's funnel will show it.
+
 ## 2026-11-14 — M14-b independent audit
 
 **Review status: what each value means and who sets it.**

@@ -12,6 +12,11 @@ export interface Proportion {
   n: number;
   /** Distinct learners contributing to n. */
   contributors: number;
+  /**
+   * The largest share of n from one learner, as a count. Internal: it lets suppression refuse a
+   * cell dominated by one person. Never shown (the public layer drops it).
+   */
+  largest: number;
   /** successes / n, or null when n = 0. */
   rate: number | null;
   /** 95 % Wilson score interval, or null when n = 0. */
@@ -24,6 +29,8 @@ export interface Distribution {
   /** Items observed that haven't reached it yet (censored: excluded from the quantiles). */
   notYet: number;
   contributors: number;
+  /** Items from the learner with the most (internal, as for Proportion). */
+  largest: number;
   /** Days, or null when n = 0. */
   median: number | null;
   p25: number | null;
@@ -43,11 +50,17 @@ export function wilson(k: number, n: number, z = Z95): [number, number] {
   return [Math.max(0, centre - half), Math.min(1, centre + half)];
 }
 
-export function proportion(successes: number, n: number, contributors: number): Proportion {
+export function proportion(
+  successes: number,
+  n: number,
+  contributors: number,
+  largest = 0,
+): Proportion {
   return {
     successes,
     n,
     contributors,
+    largest,
     rate: n ? successes / n : null,
     interval: n ? wilson(successes, n) : null,
   };
@@ -62,12 +75,18 @@ export function quantile(sorted: readonly number[], q: number): number | null {
   return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (pos - lo);
 }
 
-export function distribution(values: number[], notYet: number, contributors: number): Distribution {
+export function distribution(
+  values: number[],
+  notYet: number,
+  contributors: number,
+  largest = 0,
+): Distribution {
   const sorted = [...values].sort((a, b) => a - b);
   return {
     n: sorted.length,
     notYet,
     contributors,
+    largest,
     median: quantile(sorted, 0.5),
     p25: quantile(sorted, 0.25),
     p75: quantile(sorted, 0.75),

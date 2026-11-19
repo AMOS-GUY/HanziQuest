@@ -6,18 +6,10 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/database/prisma";
 import { getDueReviews, REVIEW_BATCH_SIZE } from "@/features/learning/sessions";
+import { nextReviewText } from "@/features/progress/next-review";
 import { getProgressSummary, getReviewForecast } from "@/features/progress/queries";
 
 export const metadata: Metadata = { title: "Review" };
-
-function formatDue(date: Date, timezone: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: timezone,
-  }).format(date);
-}
 
 export default async function ReviewPage() {
   const user = await requireUser();
@@ -30,6 +22,8 @@ export default async function ReviewPage() {
   ]);
   const maxCount = Math.max(1, ...forecast.map((f) => f.count));
   const placementChecks = due.filter((d) => d.kind === "placement").length;
+  // Nothing due and nothing scheduled: a learner who hasn't written anything yet (M15-c).
+  const nothingYet = due.length === 0 && !summary.dueNext;
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,49 +67,62 @@ export default async function ReviewPage() {
             <Link href="/practice/review">Start review</Link>
           </Button>
         </Card>
+      ) : nothingYet ? (
+        <Card className="flex flex-col gap-4">
+          <div>
+            <CardTitle className="text-base">Nothing to review yet</CardTitle>
+            <CardDescription>
+              After you write characters in a lesson, they come back here a day or so later, just as
+              you&apos;re about to forget them.
+            </CardDescription>
+          </div>
+          <Button asChild className="self-start">
+            <Link href="/learn">Start a lesson</Link>
+          </Button>
+        </Card>
       ) : (
         <Card className="flex items-start gap-3">
           <CircleCheck className="text-primary mt-0.5 size-6 shrink-0" aria-hidden />
           <div>
             <CardTitle className="text-base">You&apos;re all caught up</CardTitle>
             <CardDescription>
-              {summary.dueNext
-                ? `Next review: ${formatDue(summary.dueNext, timezone)}.`
-                : "Characters appear here after you practise them in a lesson."}
+              Next review: {nextReviewText(summary.dueNext!, now, timezone)}.
             </CardDescription>
           </div>
         </Card>
       )}
 
-      <section aria-labelledby="forecast">
-        <h2 id="forecast" className="mb-3 flex items-center gap-2 text-xl font-extrabold">
-          <CalendarClock className="size-5" aria-hidden /> Coming up
-        </h2>
-        <Card>
-          <ol className="grid grid-cols-7 gap-2 text-center">
-            {forecast.map((f, i) => (
-              <li key={f.day} className="flex flex-col items-center gap-1">
-                <div className="flex h-20 w-full items-end" aria-hidden>
-                  <div
-                    className={f.count > 0 ? "bg-primary/70 w-full rounded-t-md" : "w-full"}
-                    style={{ height: `${Math.round((f.count / maxCount) * 100)}%` }}
-                  />
-                </div>
-                <span className="text-sm font-black">{f.count}</span>
-                <span className="text-muted-foreground text-[11px] font-bold">
-                  {i === 0
-                    ? "Today"
-                    : new Intl.DateTimeFormat("en-GB", {
-                        weekday: "short",
-                        timeZone: "UTC",
-                      }).format(new Date(`${f.day}T12:00:00Z`))}
-                </span>
-                <span className="sr-only">reviews due on {f.day}</span>
-              </li>
-            ))}
-          </ol>
-        </Card>
-      </section>
+      {nothingYet ? null : (
+        <section aria-labelledby="forecast">
+          <h2 id="forecast" className="mb-3 flex items-center gap-2 text-xl font-extrabold">
+            <CalendarClock className="size-5" aria-hidden /> Coming up
+          </h2>
+          <Card>
+            <ol className="grid grid-cols-7 gap-2 text-center">
+              {forecast.map((f, i) => (
+                <li key={f.day} className="flex flex-col items-center gap-1">
+                  <div className="flex h-20 w-full items-end" aria-hidden>
+                    <div
+                      className={f.count > 0 ? "bg-primary/70 w-full rounded-t-md" : "w-full"}
+                      style={{ height: `${Math.round((f.count / maxCount) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-black">{f.count}</span>
+                  <span className="text-muted-foreground text-[11px] font-bold">
+                    {i === 0
+                      ? "Today"
+                      : new Intl.DateTimeFormat("en-GB", {
+                          weekday: "short",
+                          timeZone: "UTC",
+                        }).format(new Date(`${f.day}T12:00:00Z`))}
+                  </span>
+                  <span className="sr-only">reviews due on {f.day}</span>
+                </li>
+              ))}
+            </ol>
+          </Card>
+        </section>
+      )}
     </div>
   );
 }

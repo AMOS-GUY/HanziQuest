@@ -7,6 +7,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { requireUser } from "@/lib/auth/session";
 import { getLearnerPath } from "@/features/curriculum/queries";
 import { prisma } from "@/lib/database/prisma";
+import { nextReviewText } from "@/features/progress/next-review";
 import { getProgressSummary } from "@/features/progress/queries";
 
 export const metadata: Metadata = { title: "Home" };
@@ -109,7 +110,14 @@ export default async function HomePage() {
           <CardDescription>
             {summary.dueNow > 0
               ? `${summary.dueNow} character${summary.dueNow === 1 ? "" : "s"} ready to review.`
-              : "Nothing due right now."}
+              : summary.dueNext
+                ? // M15-d: say when to come back, from the existing schedule.
+                  `Nothing due right now. Your next review is ${nextReviewText(
+                    summary.dueNext,
+                    new Date(),
+                    user.profile?.timezone ?? "UTC",
+                  )}.`
+                : "Nothing to review yet. Characters you write in a lesson come back here."}
           </CardDescription>
           {summary.dueNow > 0 ? (
             <Button asChild size="sm" variant="secondary" className="self-start">

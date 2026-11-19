@@ -17,6 +17,9 @@
  *   first time it reached that level; characters not there yet are counted as "not yet".
  * - placement accuracy: of characters in lessons the learner tested out of, the share whose first
  *   independent recall after the placement succeeded.
+ * - onboarding funnel: the share of the cohort that has, so far, finished onboarding, started a
+ *   placement check, started a lesson (tested-out lessons don't count), completed a lesson, and
+ *   written a due review. Each stage is "ever, as of now", so the stages needn't be nested.
  *
  * Every rate is computed with the scheduling rules in force today (`SRS`). If M16 changes them,
  * historical due dates and intervals are reinterpreted under the new rules.
@@ -40,6 +43,12 @@ export interface LearnerHistory {
   activeDays: ReadonlySet<string>;
   /** First COMPLETED lesson (TESTED_OUT doesn't count). */
   firstLessonCompletedAt: Date | null;
+  /** Onboarding finished (the profile's timestamp). */
+  onboardedAt: Date | null;
+  /** Started any placement check (completed or not). */
+  startedPlacement: boolean;
+  /** Started any lesson (IN_PROGRESS or COMPLETED; TESTED_OUT doesn't count). */
+  startedLesson: boolean;
   /** Counted attempt results per character. */
   characters: ReadonlyMap<string, readonly CharacterEvent[]>;
   /** The learner's completed placement, if any, and the characters it tested them out of. */
@@ -47,6 +56,15 @@ export interface LearnerHistory {
 }
 
 export const RETURN_DAYS = [1, 7, 30] as const;
+
+export const FUNNEL_STAGES = [
+  { key: "onboarded", label: "Finished onboarding" },
+  { key: "placementStarted", label: "Started the placement check" },
+  { key: "lessonStarted", label: "Started a lesson" },
+  { key: "lessonCompleted", label: "Completed a lesson" },
+  { key: "dueReviewWritten", label: "Wrote a due review" },
+] as const;
+export type FunnelStage = (typeof FUNNEL_STAGES)[number]["key"];
 
 export const INTERVAL_BUCKETS = [
   { key: "relearn", label: "Relearning (under 1 day)", min: 0, max: 1 },
@@ -81,6 +99,7 @@ interface LearnerCounts {
   toFamiliar: { days: number[]; notYet: number };
   toMastered: { days: number[]; notYet: number };
   placement: Tally;
+  funnel: Record<FunnelStage, Tally>;
 }
 
 /** Counts for one learner, as of `now`. */
@@ -96,8 +115,12 @@ export function learnerCounts(h: LearnerHistory, now: Date): LearnerCounts {
     toFamiliar: { days: [], notYet: 0 },
     toMastered: { days: [], notYet: 0 },
     placement: tally(),
+    funnel: Object.fromEntries(
+      FUNNEL_STAGES.map((s) => [s.key, tally()]),
+    ) as LearnerCounts["funnel"],
   };
   const nowMs = now.getTime();
+  let wroteDueReview = false;
   const signup = h.createdAt.getTime();
 
   if (nowMs >= signup + DAY_MS) {
@@ -123,6 +146,7 @@ export function learnerCounts(h: LearnerHistory, now: Date): LearnerCounts {
 
     for (const s of independent) {
       if (s.kind === "due") {
+        wroteDueReview = true;
         const b = c.recall[intervalBucket(s.intervalBefore)];
         b.n += 1;
         if (s.success) b.k += 1;
@@ -166,6 +190,14 @@ export function learnerCounts(h: LearnerHistory, now: Date): LearnerCounts {
       }
     }
   }
+  const reached: Record<FunnelStage, boolean> = {
+    onboarded: !!h.onboardedAt,
+    placementStarted: h.startedPlacement,
+    lessonStarted: h.startedLesson,
+    lessonCompleted: !!h.firstLessonCompletedAt,
+    dueReviewWritten: wroteDueReview,
+  };
+  for (const s of FUNNEL_STAGES) c.funnel[s.key] = { k: reached[s.key] ? 1 : 0, n: 1 };
   return c;
 }
 
@@ -173,27 +205,30 @@ export function learnerCounts(h: LearnerHistory, now: Date): LearnerCounts {
 export class MeasurementTotals {
   private learners = 0;
   private readonly sums = {
-    activation: { ...tally(), who: 0 },
-    returns: Object.fromEntries(RETURN_DAYS.map((n) => [n, { ...tally(), who: 0 }])) as Record<
-      (typeof RETURN_DAYS)[number],
-      Tally & { who: number }
-    >,
-    dueCompletion: { ...tally(), who: 0 },
+    activation: { ...tally(), who: 0, big: 0 },
+    returns: Object.fromEntries(
+      RETURN_DAYS.map((n) => [n, { ...tally(), who: 0, big: 0 }]),
+    ) as Record<(typeof RETURN_DAYS)[number], Tally & { who: number; big: number }>,
+    dueCompletion: { ...tally(), who: 0, big: 0 },
     recall: Object.fromEntries(
-      INTERVAL_BUCKETS.map((b) => [b.key, { ...tally(), who: 0 }]),
-    ) as Record<IntervalBucket, Tally & { who: number }>,
-    lapses: { ...tally(), who: 0 },
-    placement: { ...tally(), who: 0 },
+      INTERVAL_BUCKETS.map((b) => [b.key, { ...tally(), who: 0, big: 0 }]),
+    ) as Record<IntervalBucket, Tally & { who: number; big: number }>,
+    lapses: { ...tally(), who: 0, big: 0 },
+    placement: { ...tally(), who: 0, big: 0 },
+    funnel: Object.fromEntries(
+      FUNNEL_STAGES.map((s) => [s.key, { ...tally(), who: 0, big: 0 }]),
+    ) as Record<FunnelStage, Tally & { who: number; big: number }>,
   };
-  private readonly familiar = { days: [] as number[], notYet: 0, who: 0 };
-  private readonly mastered = { days: [] as number[], notYet: 0, who: 0 };
+  private readonly familiar = { days: [] as number[], notYet: 0, who: 0, big: 0 };
+  private readonly mastered = { days: [] as number[], notYet: 0, who: 0, big: 0 };
 
   add(c: LearnerCounts) {
     this.learners += 1;
-    const into = (to: Tally & { who: number }, from: Tally) => {
+    const into = (to: Tally & { who: number; big: number }, from: Tally) => {
       to.k += from.k;
       to.n += from.n;
       if (from.n > 0) to.who += 1;
+      to.big = Math.max(to.big, from.n);
     };
     into(this.sums.activation, c.activation);
     for (const n of RETURN_DAYS) into(this.sums.returns[n], c.returns[n]);
@@ -201,6 +236,7 @@ export class MeasurementTotals {
     for (const b of INTERVAL_BUCKETS) into(this.sums.recall[b.key], c.recall[b.key]);
     into(this.sums.lapses, c.lapses);
     into(this.sums.placement, c.placement);
+    for (const s of FUNNEL_STAGES) into(this.sums.funnel[s.key], c.funnel[s.key]);
     for (const [to, from] of [
       [this.familiar, c.toFamiliar],
       [this.mastered, c.toMastered],
@@ -208,11 +244,12 @@ export class MeasurementTotals {
       to.days.push(...from.days);
       to.notYet += from.notYet;
       if (from.days.length || from.notYet) to.who += 1;
+      to.big = Math.max(to.big, from.days.length);
     }
   }
 
   result(): CohortMetrics {
-    const p = (t: Tally & { who: number }) => proportion(t.k, t.n, t.who);
+    const p = (t: Tally & { who: number; big: number }) => proportion(t.k, t.n, t.who, t.big);
     return {
       learners: this.learners,
       activation: p(this.sums.activation),
@@ -228,9 +265,24 @@ export class MeasurementTotals {
         recall: p(this.sums.recall[b.key]),
       })),
       lapseRate: p(this.sums.lapses),
-      daysToFamiliar: distribution(this.familiar.days, this.familiar.notYet, this.familiar.who),
-      daysToMastered: distribution(this.mastered.days, this.mastered.notYet, this.mastered.who),
+      daysToFamiliar: distribution(
+        this.familiar.days,
+        this.familiar.notYet,
+        this.familiar.who,
+        this.familiar.big,
+      ),
+      daysToMastered: distribution(
+        this.mastered.days,
+        this.mastered.notYet,
+        this.mastered.who,
+        this.mastered.big,
+      ),
       placementAccuracy: p(this.sums.placement),
+      funnel: FUNNEL_STAGES.map((s) => ({
+        stage: s.key,
+        label: s.label,
+        reached: p(this.sums.funnel[s.key]),
+      })),
     };
   }
 }
@@ -246,4 +298,5 @@ export interface CohortMetrics {
   daysToFamiliar: Distribution;
   daysToMastered: Distribution;
   placementAccuracy: Proportion;
+  funnel: { stage: FunnelStage; label: string; reached: Proportion }[];
 }

@@ -208,6 +208,13 @@ added until sources are registered and approved.
 
 ## M15 — Onboarding, retention and learning measurement (first-party, privacy-preserving)
 
+- **Status (2026-11-19, `feature/m15`):**
+  - **Built:** the measurement engine, the analytics foundations (off until approved), the
+    first-run fixes, and the next review time on home.
+  - **Waiting on the owner:** privacy wording, `LEGAL_VERSION` and activation, plus streak and
+    reminder policy.
+  - See D-079, D-080 and `docs/M15_MEASUREMENT.md`.
+
 - **Objective.** Know whether learners get started, come back and actually remember, so M16 can
   calibrate on evidence rather than guesses.
 - **Scope.**

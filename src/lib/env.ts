@@ -137,6 +137,13 @@ export function checkEnvironment(
           "is 'open': anyone can sign up. Keep the beta invite-only until the legal and operational prerequisites are approved",
         fatal: false,
       });
+    if (env.LEARNING_ANALYTICS?.trim().toLowerCase() === "on")
+      issues.push({
+        name: "LEARNING_ANALYTICS",
+        problem:
+          "is 'on': the aggregate learning measurement page is available. Only after the owner approves the privacy notice wording and the legal-version decision (D-079)",
+        fatal: false,
+      });
     if (env.PASSWORD_RESET_LINKS?.trim().toLowerCase() === "on")
       issues.push({
         name: "PASSWORD_RESET_LINKS",

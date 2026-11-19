@@ -218,6 +218,16 @@ Target public beta: **2026-12-08**.
 - [ ] **Not started:** dispute route, technique-cap decision, tuning (need real samples, a teacher, owner decisions)
 - [ ] **No accuracy evidence:** 0 human samples; synthetic results only
 
+### M15 measurement and first run (2026-11-19, `feature/m15`): PRs pending, not merged
+
+- [x] M15-a measurement engine: replay observer (results unchanged, tested), metrics with eligibility rules and Wilson intervals, onboarding funnel, signup-week cohorts, read-only (D-079, `docs/M15_MEASUREMENT.md`)
+- [x] M15-b analytics foundations: k = 5, learner-based and dominance suppression, complementary suppression, staff and test exclusions, suspended counted (differencing), aggregate-only contract, `analytics:read`; `/admin/learning` off unless `LEARNING_ANALYTICS=on`; suppressed overview figures prepared, not wired
+- [x] M15-c first-run walkthrough (desktop and phone) and fixes (D-080)
+- [x] M15-d next review time on the home page
+- [x] Performance: 1,000 synthetic learners and 100,000 attempts measured in about 1.2–1.5 s locally
+- [ ] **Owner:** privacy wording and `LEGAL_VERSION` (`docs/M15_PRIVACY_PROPOSAL.md`), then activation; wiring the suppressed overview; k
+- [ ] **Not built (policy):** streak grace, goal-based streaks, reminders
+
 ### M14-b review workflow (2026-11-13, `feature/m14b-review-workflow`): PR pending, not merged
 
 - [x] Learner-facing edition and status labels; REVIEWED is distinct from VERIFIED (D-070)
