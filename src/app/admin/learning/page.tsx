@@ -71,6 +71,14 @@ export default async function LearningMeasurementPage() {
             {c.learners.shown ? `${c.learners.count} learners` : REASON["small-group"]}
           </CardTitle>
           <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
+            {c.funnel.map((f) => (
+              <div key={f.stage} className="contents">
+                <dt>{f.label}</dt>
+                <dd>
+                  <Rate value={f.reached} />
+                </dd>
+              </div>
+            ))}
             <dt>First lesson within 24 h</dt>
             <dd>
               <Rate value={c.activation} />

@@ -7,7 +7,11 @@ import {
   publicDistribution,
   publicRate,
 } from "@/features/measurement/analytics";
-import { INTERVAL_BUCKETS, type CohortMetrics } from "@/features/measurement/metrics";
+import {
+  FUNNEL_STAGES,
+  INTERVAL_BUCKETS,
+  type CohortMetrics,
+} from "@/features/measurement/metrics";
 import { distribution, proportion, type Proportion } from "@/features/measurement/stats";
 import { checkEnvironment } from "@/lib/env";
 
@@ -28,6 +32,11 @@ function metrics(over: Partial<CohortMetrics> = {}, learners = 20): CohortMetric
     daysToFamiliar: distribution([1, 2, 3, 4, 5, 6], 3, 6, 1),
     daysToMastered: distribution([], 9, 9, 0),
     placementAccuracy: p(9, 12, 6, 2),
+    funnel: FUNNEL_STAGES.map((s, i) => ({
+      stage: s.key,
+      label: s.label,
+      reached: p(20 - i * 3, 20, 20),
+    })),
     ...over,
   };
 }

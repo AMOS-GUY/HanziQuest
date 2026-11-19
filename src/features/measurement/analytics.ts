@@ -67,6 +67,7 @@ export interface PublicCohort {
   daysToFamiliar: PublicDistribution;
   daysToMastered: PublicDistribution;
   placementAccuracy: PublicRate;
+  funnel: { stage: string; label: string; reached: PublicRate }[];
 }
 
 const round3 = (x: number) => Math.round(x * 1000) / 1000;
@@ -145,6 +146,7 @@ export function publicCohort(m: CohortMeasurement, k = DEFAULT_MIN_GROUP): Publi
       daysToFamiliar: SUPPRESSED_DISTRIBUTION,
       daysToMastered: SUPPRESSED_DISTRIBUTION,
       placementAccuracy: SUPPRESSED_RATE,
+      funnel: x.funnel.map((f) => ({ stage: f.stage, label: f.label, reached: SUPPRESSED_RATE })),
     };
   const buckets = x.recallByInterval.map((b) => ({
     bucket: b.bucket,
@@ -169,6 +171,11 @@ export function publicCohort(m: CohortMeasurement, k = DEFAULT_MIN_GROUP): Publi
     daysToFamiliar: publicDistribution(x.daysToFamiliar, k),
     daysToMastered: publicDistribution(x.daysToMastered, k),
     placementAccuracy: publicRate(x.placementAccuracy, k, true),
+    funnel: x.funnel.map((f) => ({
+      stage: f.stage,
+      label: f.label,
+      reached: publicRate(f.reached, k, false),
+    })),
   };
 }
 

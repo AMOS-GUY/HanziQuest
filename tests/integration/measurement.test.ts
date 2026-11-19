@@ -1,7 +1,7 @@
 /**
  * M15-a learning measurement on the local test database, with SYNTHETIC learners.
  * - Known values for one signup-week cohort, and who is excluded (staff, test accounts,
- *   suspended and deleted accounts, other weeks).
+ *   deleted accounts, other weeks). Suspended accounts are counted.
  * - The observer never changes replay: stored mastery and schedules (written by the real
  *   `recomputeCharacter`) equal a replay with the observer.
  * - Measuring writes nothing.
@@ -44,12 +44,17 @@ beforeAll(async () => {
   fx = await measurementCurriculum(prisma, `m15-${RUN}`, 4, 0x4d20);
 
   // A: activated (lesson 2 h after signing up), returned on D1 and D7, three good recalls.
-  const a = await syntheticLearner(prisma, { email: email("a"), createdAt: monday });
+  const a = await syntheticLearner(prisma, {
+    email: email("a"),
+    createdAt: monday,
+    onboardedAt: at(monday, 0.01),
+  });
   await prisma.lessonProgress.create({
     data: {
       userId: a,
       lessonId: fx.lessonId,
       status: "COMPLETED",
+      startedAt: at(monday, 1 / 24),
       completedAt: at(monday, 2 / 24),
     },
   });
@@ -66,6 +71,12 @@ beforeAll(async () => {
   ]);
   // B: signed up, did nothing.
   await syntheticLearner(prisma, { email: email("b"), createdAt: at(monday, 2) });
+  // C: suspended, did nothing. Still counted: suspension mustn't change who is measured.
+  await syntheticLearner(prisma, {
+    email: email("suspended"),
+    createdAt: at(monday, 3),
+    status: "SUSPENDED",
+  });
 
   // Excluded, each with activity that would change the results if counted.
   const excluded = [
@@ -77,11 +88,6 @@ beforeAll(async () => {
     await syntheticLearner(prisma, {
       email: `m15-tester-${RUN}@hanziquest.test`,
       createdAt: monday,
-    }),
-    await syntheticLearner(prisma, {
-      email: email("suspended"),
-      createdAt: monday,
-      status: "SUSPENDED",
     }),
     await syntheticLearner(prisma, {
       email: email("deleted"),
@@ -115,16 +121,24 @@ describe("a signup-week cohort (synthetic)", () => {
     const { metrics: m, week, asOf } = await measureCohort(prisma, WEEK, { now: NOW });
     expect(week).toBe(WEEK);
     expect(asOf).toEqual(NOW);
-    expect(m.learners).toBe(2);
-    expect(m.activation).toMatchObject({ successes: 1, n: 2, contributors: 2, rate: 0.5 });
-    expect(m.returns.d1).toMatchObject({ successes: 1, n: 2 });
-    expect(m.returns.d7).toMatchObject({ successes: 1, n: 2 });
-    expect(m.returns.d30).toMatchObject({ successes: 0, n: 2 });
+    expect(m.learners).toBe(3);
+    expect(m.activation).toMatchObject({ successes: 1, n: 3, contributors: 3 });
+    expect(m.returns.d1).toMatchObject({ successes: 1, n: 3 });
+    expect(m.returns.d7).toMatchObject({ successes: 1, n: 3 });
+    expect(m.returns.d30).toMatchObject({ successes: 0, n: 3 });
     const bucket = (k: string) => m.recallByInterval.find((b) => b.bucket === k)!.recall;
     expect(bucket("1")).toMatchObject({ successes: 1, n: 1, contributors: 1 });
     expect(bucket("2-3")).toMatchObject({ successes: 1, n: 1, contributors: 1 });
     // No lapses: the excluded learners' failure isn't counted.
     expect(m.lapseRate).toMatchObject({ successes: 0, n: 2, contributors: 1 });
+    // Onboarding funnel: A finished onboarding, started and completed a lesson and wrote due
+    // reviews; B and C did nothing; nobody started a placement check.
+    const stage = (s: string) => m.funnel.find((f) => f.stage === s)!.reached;
+    expect(stage("onboarded")).toMatchObject({ successes: 1, n: 3 });
+    expect(stage("placementStarted")).toMatchObject({ successes: 0, n: 3 });
+    expect(stage("lessonStarted")).toMatchObject({ successes: 1, n: 3 });
+    expect(stage("lessonCompleted")).toMatchObject({ successes: 1, n: 3 });
+    expect(stage("dueReviewWritten")).toMatchObject({ successes: 1, n: 3 });
     expect(m.activation.interval![0]).toBeGreaterThan(0);
     expect(m.activation.interval![1]).toBeLessThan(1);
   });
@@ -139,6 +153,20 @@ describe("a signup-week cohort (synthetic)", () => {
     const { metrics } = await measureCohort(prisma, "2019-W10", { now: NOW });
     expect(metrics.learners).toBe(0);
     expect(metrics.activation).toMatchObject({ n: 0, rate: null, interval: null });
+  });
+});
+
+describe("differencing", () => {
+  it("suspending a learner changes no cohort figure", async () => {
+    const before = await measureCohort(prisma, WEEK, { now: NOW });
+    const a = await prisma.user.findFirstOrThrow({ where: { email: email("a") } });
+    await prisma.user.update({ where: { id: a.id }, data: { status: "SUSPENDED" } });
+    try {
+      const after = await measureCohort(prisma, WEEK, { now: NOW });
+      expect(after.metrics).toEqual(before.metrics);
+    } finally {
+      await prisma.user.update({ where: { id: a.id }, data: { status: "ACTIVE" } });
+    }
   });
 });
 

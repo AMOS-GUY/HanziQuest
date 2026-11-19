@@ -140,6 +140,9 @@ const base = (over: Partial<LearnerHistory> = {}): LearnerHistory => ({
   timezone: "UTC",
   activeDays: new Set(),
   firstLessonCompletedAt: null,
+  onboardedAt: null,
+  startedPlacement: false,
+  startedLesson: false,
   characters: new Map(),
   placement: null,
   ...over,
@@ -230,6 +233,33 @@ describe("learner counts (definitions)", () => {
       ]),
     });
     expect(learnerCounts(h, at(10)).placement).toEqual({ k: 1, n: 2 }); // "c" never written
+  });
+});
+
+describe("onboarding funnel", () => {
+  it("records each stage reached so far, as 0 or 1 per learner", () => {
+    const ind = (d: number): CharacterEvent => ({
+      occurredAt: at(d),
+      mode: "INDEPENDENT",
+      result: "GOOD",
+    });
+    const c = learnerCounts(
+      base({
+        onboardedAt: at(0.01),
+        startedLesson: true,
+        firstLessonCompletedAt: at(0.1),
+        characters: new Map([["c", [ind(0), ind(1)]]]),
+      }),
+      at(5),
+    );
+    expect(c.funnel).toEqual({
+      onboarded: { k: 1, n: 1 },
+      placementStarted: { k: 0, n: 1 },
+      lessonStarted: { k: 1, n: 1 },
+      lessonCompleted: { k: 1, n: 1 },
+      dueReviewWritten: { k: 1, n: 1 },
+    });
+    expect(learnerCounts(base(), at(5)).funnel.onboarded).toEqual({ k: 0, n: 1 });
   });
 });
 

@@ -45,7 +45,11 @@ export async function measureCohort(
 
   const learners = await db.user.findMany({
     where: { ...MEASURED_LEARNER, createdAt: { gte: range.start, lt: range.end, lte: now } },
-    select: { id: true, createdAt: true, profile: { select: { timezone: true } } },
+    select: {
+      id: true,
+      createdAt: true,
+      profile: { select: { timezone: true, onboardingCompletedAt: true } },
+    },
     orderBy: { id: "asc" },
   });
 
@@ -53,41 +57,56 @@ export async function measureCohort(
   for (let i = 0; i < learners.length; i += batchSize) {
     const batch = learners.slice(i, i + batchSize);
     const ids = batch.map((l) => l.id);
-    const [results, activity, completed, placements, testedOut] = await Promise.all([
-      db.attemptCharacterResult.findMany({
-        where: { userId: { in: ids }, occurredAt: { lte: now }, result: { not: "SKIPPED" } },
-        select: {
-          userId: true,
-          characterId: true,
-          mode: true,
-          result: true,
-          techniqueOk: true,
-          occurredAt: true,
-        },
-      }),
-      db.dailyActivity.findMany({
-        where: { userId: { in: ids }, exercisesCompleted: { gt: 0 } },
-        select: { userId: true, date: true },
-      }),
-      db.lessonProgress.findMany({
-        where: { userId: { in: ids }, status: "COMPLETED", completedAt: { not: null, lte: now } },
-        select: { userId: true, completedAt: true },
-      }),
-      db.placementAssessment.findMany({
-        where: { userId: { in: ids }, status: "COMPLETED", completedAt: { not: null, lte: now } },
-        select: { userId: true, completedAt: true },
-        orderBy: { completedAt: "asc" },
-      }),
-      db.lessonProgress.findMany({
-        where: { userId: { in: ids }, status: "TESTED_OUT" },
-        select: {
-          userId: true,
-          lesson: {
-            select: { characters: { where: { isNew: true }, select: { characterId: true } } },
+    const [results, activity, completed, placements, testedOut, started, placementStarts] =
+      await Promise.all([
+        db.attemptCharacterResult.findMany({
+          where: { userId: { in: ids }, occurredAt: { lte: now }, result: { not: "SKIPPED" } },
+          select: {
+            userId: true,
+            characterId: true,
+            mode: true,
+            result: true,
+            techniqueOk: true,
+            occurredAt: true,
           },
-        },
-      }),
-    ]);
+        }),
+        db.dailyActivity.findMany({
+          where: { userId: { in: ids }, exercisesCompleted: { gt: 0 } },
+          select: { userId: true, date: true },
+        }),
+        db.lessonProgress.findMany({
+          where: { userId: { in: ids }, status: "COMPLETED", completedAt: { not: null, lte: now } },
+          select: { userId: true, completedAt: true },
+        }),
+        db.placementAssessment.findMany({
+          where: { userId: { in: ids }, status: "COMPLETED", completedAt: { not: null, lte: now } },
+          select: { userId: true, completedAt: true },
+          orderBy: { completedAt: "asc" },
+        }),
+        db.lessonProgress.findMany({
+          where: { userId: { in: ids }, status: "TESTED_OUT" },
+          select: {
+            userId: true,
+            lesson: {
+              select: { characters: { where: { isNew: true }, select: { characterId: true } } },
+            },
+          },
+        }),
+        db.lessonProgress.findMany({
+          where: {
+            userId: { in: ids },
+            status: { in: ["IN_PROGRESS", "COMPLETED"] },
+            startedAt: { lte: now },
+          },
+          select: { userId: true },
+          distinct: ["userId"],
+        }),
+        db.placementAssessment.findMany({
+          where: { userId: { in: ids }, startedAt: { lte: now } },
+          select: { userId: true },
+          distinct: ["userId"],
+        }),
+      ]);
 
     const byUser = new Map<string, Map<string, CharacterEvent[]>>();
     for (const r of results) {
@@ -123,6 +142,9 @@ export async function measureCohort(
       for (const c of t.lesson.characters) set.add(c.characterId);
     }
 
+    const lessonStarted = new Set(started.map((x) => x.userId));
+    const placementStarted = new Set(placementStarts.map((x) => x.userId));
+
     for (const l of batch) {
       const placed = placementAt.get(l.id);
       const history: LearnerHistory = {
@@ -130,6 +152,12 @@ export async function measureCohort(
         timezone: l.profile?.timezone ?? "UTC",
         activeDays: days.get(l.id) ?? new Set(),
         firstLessonCompletedAt: firstLesson.get(l.id) ?? null,
+        onboardedAt:
+          l.profile?.onboardingCompletedAt && l.profile.onboardingCompletedAt <= now
+            ? l.profile.onboardingCompletedAt
+            : null,
+        startedPlacement: placementStarted.has(l.id),
+        startedLesson: lessonStarted.has(l.id),
         characters: byUser.get(l.id) ?? new Map(),
         placement: placed
           ? { completedAt: placed, testedOut: tested.get(l.id) ?? new Set() }

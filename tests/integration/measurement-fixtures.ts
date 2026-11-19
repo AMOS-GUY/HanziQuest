@@ -101,6 +101,7 @@ export async function syntheticLearner(
     timezone?: string;
     status?: UserStatus;
     roles?: RoleKey[];
+    onboardedAt?: Date;
   },
 ) {
   const user = await prisma.user.create({
@@ -109,7 +110,11 @@ export async function syntheticLearner(
       createdAt: opts.createdAt,
       status: opts.status ?? "ACTIVE",
       profile: {
-        create: { displayName: "Synthetic", timezone: opts.timezone ?? "UTC" },
+        create: {
+          displayName: "Synthetic",
+          timezone: opts.timezone ?? "UTC",
+          onboardingCompletedAt: opts.onboardedAt ?? null,
+        },
       },
     },
   });
