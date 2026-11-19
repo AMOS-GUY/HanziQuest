@@ -165,6 +165,8 @@ export interface DisputeQueueItem {
   ownDispute: boolean;
   claimedByViewer: boolean;
   claimedByOther: boolean;
+  /** Claimed, but the reviewer is gone or idle for STALE_CLAIM_DAYS: anyone may take it over. */
+  claimStale: boolean;
 }
 
 /**
@@ -191,6 +193,7 @@ export async function disputeQueue(
       engineVersion: true,
       userId: true,
       reviewerId: true,
+      claimedAt: true,
       attempt: { select: { strokeData: true, evaluation: true } },
     },
   });
@@ -222,6 +225,11 @@ export async function disputeQueue(
       ownDispute: d.userId === actor.id,
       claimedByViewer: d.reviewerId === actor.id,
       claimedByOther: !!d.reviewerId && d.reviewerId !== actor.id,
+      claimStale:
+        d.status === "UNDER_REVIEW" &&
+        d.reviewerId !== actor.id &&
+        (!d.reviewerId ||
+          (!!d.claimedAt && d.claimedAt.getTime() < Date.now() - STALE_CLAIM_DAYS * DAY_MS)),
     };
   });
 }
@@ -279,18 +287,39 @@ async function transition(
   if (!done) await explainRefusal(prisma, actor, id);
 }
 
-export async function claimDispute(prisma: PrismaClient, actor: DisputeActor, id: string) {
+/** A claim nobody has acted on for this long can be taken over by another reviewer. */
+export const STALE_CLAIM_DAYS = 7;
+
+export async function claimDispute(
+  prisma: PrismaClient,
+  actor: DisputeActor,
+  id: string,
+  options: { now?: Date } = {},
+) {
+  const now = options.now ?? new Date();
   await transition(
     prisma,
     actor,
     id,
     "handwriting.dispute.claim",
-    { status: "SUBMITTED" },
+    {
+      OR: [
+        { status: "SUBMITTED" },
+        // A claim can't be left stuck: its reviewer's account was deleted (reviewer cleared),
+        // or nothing happened for STALE_CLAIM_DAYS (for example, they lost the permission).
+        { status: "UNDER_REVIEW", reviewerId: null },
+        {
+          status: "UNDER_REVIEW",
+          claimedAt: { lt: new Date(now.getTime() - STALE_CLAIM_DAYS * DAY_MS) },
+          reviewerId: { not: actor.id },
+        },
+      ],
+    },
     {
       status: "UNDER_REVIEW",
       reviewerId: actor.id,
       reviewerRole: reviewerRoleOf(actor.roles),
-      claimedAt: new Date(),
+      claimedAt: now,
     },
     { status: "UNDER_REVIEW" },
   );

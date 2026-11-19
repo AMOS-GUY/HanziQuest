@@ -341,6 +341,46 @@ describe("reviewing", () => {
   });
 });
 
+describe("claims can't get stuck", () => {
+  it("a deleted reviewer's claim, or one idle for a week, can be taken over; a fresh one can't", async () => {
+    const me = await learner("stuck");
+    const r1 = await learner("stuck-r1", ["CURRICULUM_EDITOR"]);
+    const r2 = await learner("stuck-r2", ["CURRICULUM_EDITOR"]);
+    const r3 = await learner("stuck-r3", ["CURRICULUM_EDITOR"]);
+    const submit = async () => {
+      const a = await attempt(me.id, "大");
+      return submitDispute(prisma, me, {
+        clientEventId: a.clientEventId,
+        reason: "CORRECT_MARKED_WRONG",
+        consent: true,
+      });
+    };
+    // A fresh claim belongs to its reviewer.
+    const fresh = await submit();
+    await claimDispute(prisma, r1, fresh.id);
+    expect(await code(claimDispute(prisma, r2, fresh.id))).toBe("conflict");
+    // Idle for 8 days: another reviewer may take it over.
+    const idle = await submit();
+    await claimDispute(prisma, r1, idle.id, { now: new Date(Date.now() - 8 * 86_400_000) });
+    await claimDispute(prisma, r2, idle.id);
+    expect(
+      (await prisma.handwritingDispute.findUniqueOrThrow({ where: { id: idle.id } })).reviewerId,
+    ).toBe(r2.id);
+    // The claiming reviewer's account was deleted: the claim is free again.
+    const orphan = await submit();
+    await claimDispute(prisma, r3, orphan.id);
+    await deleteAccount(prisma, r3.id, { password: PASSWORD, confirm: "DELETE" });
+    expect(
+      (await prisma.handwritingDispute.findUniqueOrThrow({ where: { id: orphan.id } })).status,
+    ).toBe("UNDER_REVIEW");
+    await claimDispute(prisma, r2, orphan.id);
+    await decideDispute(prisma, r2, orphan.id, { outcome: "GRADING_CORRECT" });
+    expect(
+      (await prisma.handwritingDispute.findUniqueOrThrow({ where: { id: orphan.id } })).status,
+    ).toBe("RESOLVED");
+  });
+});
+
 describe("account deletion", () => {
   it("removes the learner's disputes; a deleted reviewer's decisions stay", async () => {
     const me = await learner("leaving");

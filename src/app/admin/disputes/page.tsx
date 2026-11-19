@@ -170,10 +170,10 @@ export default async function DisputesPage({
                       <p className="text-muted-foreground text-sm" role="note">
                         You submitted this dispute, so another reviewer has to review it.
                       </p>
-                    ) : d.status === "SUBMITTED" ? (
+                    ) : d.status === "SUBMITTED" || d.claimStale ? (
                       <ActionButton
                         action={claimDisputeAction.bind(null, d.id)}
-                        label="Review this"
+                        label={d.claimStale ? "Take over this review" : "Review this"}
                       />
                     ) : d.status === "UNDER_REVIEW" && d.claimedByViewer ? (
                       <div className="flex flex-wrap items-center gap-1">
