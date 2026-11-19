@@ -173,27 +173,27 @@ export function learnerCounts(h: LearnerHistory, now: Date): LearnerCounts {
 export class MeasurementTotals {
   private learners = 0;
   private readonly sums = {
-    activation: { ...tally(), who: 0 },
-    returns: Object.fromEntries(RETURN_DAYS.map((n) => [n, { ...tally(), who: 0 }])) as Record<
-      (typeof RETURN_DAYS)[number],
-      Tally & { who: number }
-    >,
-    dueCompletion: { ...tally(), who: 0 },
+    activation: { ...tally(), who: 0, big: 0 },
+    returns: Object.fromEntries(
+      RETURN_DAYS.map((n) => [n, { ...tally(), who: 0, big: 0 }]),
+    ) as Record<(typeof RETURN_DAYS)[number], Tally & { who: number; big: number }>,
+    dueCompletion: { ...tally(), who: 0, big: 0 },
     recall: Object.fromEntries(
-      INTERVAL_BUCKETS.map((b) => [b.key, { ...tally(), who: 0 }]),
-    ) as Record<IntervalBucket, Tally & { who: number }>,
-    lapses: { ...tally(), who: 0 },
-    placement: { ...tally(), who: 0 },
+      INTERVAL_BUCKETS.map((b) => [b.key, { ...tally(), who: 0, big: 0 }]),
+    ) as Record<IntervalBucket, Tally & { who: number; big: number }>,
+    lapses: { ...tally(), who: 0, big: 0 },
+    placement: { ...tally(), who: 0, big: 0 },
   };
-  private readonly familiar = { days: [] as number[], notYet: 0, who: 0 };
-  private readonly mastered = { days: [] as number[], notYet: 0, who: 0 };
+  private readonly familiar = { days: [] as number[], notYet: 0, who: 0, big: 0 };
+  private readonly mastered = { days: [] as number[], notYet: 0, who: 0, big: 0 };
 
   add(c: LearnerCounts) {
     this.learners += 1;
-    const into = (to: Tally & { who: number }, from: Tally) => {
+    const into = (to: Tally & { who: number; big: number }, from: Tally) => {
       to.k += from.k;
       to.n += from.n;
       if (from.n > 0) to.who += 1;
+      to.big = Math.max(to.big, from.n);
     };
     into(this.sums.activation, c.activation);
     for (const n of RETURN_DAYS) into(this.sums.returns[n], c.returns[n]);
@@ -208,11 +208,12 @@ export class MeasurementTotals {
       to.days.push(...from.days);
       to.notYet += from.notYet;
       if (from.days.length || from.notYet) to.who += 1;
+      to.big = Math.max(to.big, from.days.length);
     }
   }
 
   result(): CohortMetrics {
-    const p = (t: Tally & { who: number }) => proportion(t.k, t.n, t.who);
+    const p = (t: Tally & { who: number; big: number }) => proportion(t.k, t.n, t.who, t.big);
     return {
       learners: this.learners,
       activation: p(this.sums.activation),
@@ -228,8 +229,18 @@ export class MeasurementTotals {
         recall: p(this.sums.recall[b.key]),
       })),
       lapseRate: p(this.sums.lapses),
-      daysToFamiliar: distribution(this.familiar.days, this.familiar.notYet, this.familiar.who),
-      daysToMastered: distribution(this.mastered.days, this.mastered.notYet, this.mastered.who),
+      daysToFamiliar: distribution(
+        this.familiar.days,
+        this.familiar.notYet,
+        this.familiar.who,
+        this.familiar.big,
+      ),
+      daysToMastered: distribution(
+        this.mastered.days,
+        this.mastered.notYet,
+        this.mastered.who,
+        this.mastered.big,
+      ),
       placementAccuracy: p(this.sums.placement),
     };
   }

@@ -94,6 +94,7 @@ describe("statistics", () => {
       successes: 0,
       n: 0,
       contributors: 0,
+      largest: 0,
       rate: null,
       interval: null,
     });
