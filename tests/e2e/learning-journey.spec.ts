@@ -50,6 +50,10 @@ test("learner completes the first lesson by writing every exercise; progress per
   await page.getByRole("link", { name: "Next lesson" }).click();
   await expect(page.getByRole("heading", { name: "Thanks and goodbye" })).toBeVisible();
 
+  // M15-d: home says when to come back for the first review.
+  await page.goto("/home");
+  await expect(page.getByText(/Your next review is (today|tomorrow) at \d\d:\d\d\./)).toBeVisible();
+
   // Progress persists across reloads.
   await page.goto("/learn");
   await page.reload();
