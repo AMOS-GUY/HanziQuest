@@ -236,6 +236,8 @@ model User {
   auditLogs           AuditLog[]
   contentRevisions    ContentRevision[]
   contentReviews      ContentReview[]
+  disputesFiled       HandwritingDispute[]       @relation("DisputesFiled")
+  disputesReviewed    HandwritingDispute[]       @relation("DisputesReviewed")
   subscriptions       Subscription[]
   paymentCustomers    PaymentCustomer[]
   paymentTransactions PaymentTransaction[]
@@ -697,6 +699,7 @@ model ExerciseAttempt {
   curriculum Curriculum       @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
 
   characterResults AttemptCharacterResult[]
+  dispute          HandwritingDispute?
 
   @@index([userId, occurredAt])
   @@index([userId, characterId, occurredAt])
@@ -1343,4 +1346,62 @@ model ContentReview {
 
   @@index([entityType, entityId, createdAt])
   @@index([decision, createdAt])
+}
+
+/// Why a learner disputes a handwriting result (M13, D-081). Structured only: no free text.
+enum DisputeReason {
+  /// "I wrote the right character, but it was marked wrong."
+  CORRECT_MARKED_WRONG
+  /// "It was accepted, but I think I wrote it wrong."
+  WRONG_MARKED_CORRECT
+  /// "The stroke order or direction feedback is wrong."
+  TECHNIQUE_FEEDBACK_WRONG
+  /// "My strokes weren't captured properly."
+  INPUT_PROBLEM
+}
+
+enum DisputeStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+/// A reviewer's finding. Never changes the attempt, XP, mastery or schedules (D-081).
+enum DisputeOutcome {
+  /// The engine's result was wrong: evidence for M13, not a correction.
+  GRADING_WRONG
+  GRADING_CORRECT
+  /// The writing can't be judged (incomplete, input problem): dismissed.
+  NOT_ASSESSABLE
+}
+
+/// A learner's dispute of one handwriting attempt (M13, D-081). The attempt itself is never
+/// changed; the original result is also snapshotted here. Deleted with the account.
+model HandwritingDispute {
+  id             String          @id @default(cuid())
+  attemptId      String          @unique
+  userId         String
+  reason         DisputeReason
+  status         DisputeStatus   @default(SUBMITTED)
+  outcome        DisputeOutcome?
+  /// What was disputed, as recorded at submission.
+  originalResult AttemptResult
+  engineVersion  String?
+  /// The learner agreed that a reviewer may look at this writing.
+  consentedAt    DateTime
+  reviewerId     String?
+  reviewerRole   String?
+  claimedAt      DateTime?
+  decidedAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  attempt  ExerciseAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  user     User            @relation("DisputesFiled", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User?           @relation("DisputesReviewed", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([reviewerId])
 }

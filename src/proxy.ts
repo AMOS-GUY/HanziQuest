@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
+import { issuedBeforeCredentialsChange } from "@/lib/auth/issued";
 import { prisma } from "@/lib/database/prisma";
 import { ADMIN_ROLES } from "@/lib/permissions/permissions";
 
@@ -25,9 +26,7 @@ export default auth(async (request) => {
       roles: { select: { role: { select: { key: true } } } },
     },
   });
-  const revoked =
-    user?.credentialsChangedAt &&
-    (request.auth?.issuedAt ?? 0) * 1000 < user.credentialsChangedAt.getTime();
+  const revoked = issuedBeforeCredentialsChange(user?.credentialsChangedAt, request.auth);
   const isStaff = user?.roles.some((r) => ADMIN_ROLES.includes(r.role.key));
   if (!user || user.status !== "ACTIVE" || revoked || !isStaff) {
     return NextResponse.rewrite(new URL("/not-found-404", request.nextUrl), { status: 404 });

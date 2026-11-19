@@ -7,6 +7,9 @@ import { OfflineDataCard } from "@/components/offline/offline-data-card";
 import { requireUser } from "@/lib/auth/session";
 import { ROLE_DEFINITIONS } from "@/lib/permissions/permissions";
 import { DAILY_GOAL_OPTIONS } from "@/features/onboarding/schema";
+import { prisma } from "@/lib/database/prisma";
+import { DISPUTE_OUTCOMES, DISPUTE_REASONS } from "@/features/handwriting/dispute-reasons";
+import { learnerDisputes } from "@/features/handwriting/disputes";
 import {
   changePasswordAction,
   deleteAccountAction,
@@ -21,6 +24,7 @@ export default async function ProfilePage() {
   const user = await requireUser();
   const visibleRoles = user.roles.filter((r) => r !== "LEARNER");
   const timezone = user.profile?.timezone ?? "UTC";
+  const disputes = await learnerDisputes(prisma, user.id);
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -71,6 +75,35 @@ export default async function ProfilePage() {
           ]}
         />
       </Card>
+
+      {disputes.length > 0 ? (
+        <Card>
+          <CardTitle>Handwriting results you disputed</CardTitle>
+          <CardDescription className="mb-3">
+            A reviewer looks at each one. Findings help improve the handwriting checker; they
+            don&apos;t change your results or progress.
+          </CardDescription>
+          <ul className="flex flex-col gap-2 text-sm">
+            {disputes.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-baseline gap-2">
+                {d.hanzi ? (
+                  <span lang="zh" className="hanzi text-lg font-bold">
+                    {d.hanzi}
+                  </span>
+                ) : null}
+                <span>{DISPUTE_REASONS.find((r) => r.key === d.reason)?.label}</span>
+                <Badge variant="muted">
+                  {d.outcome
+                    ? DISPUTE_OUTCOMES.find((o) => o.key === d.outcome)?.label
+                    : d.status === "UNDER_REVIEW"
+                      ? "Being reviewed"
+                      : "Waiting for a reviewer"}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <Card>
         <CardTitle>Offline on this device</CardTitle>

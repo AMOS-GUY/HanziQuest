@@ -218,6 +218,13 @@ Target public beta: **2026-12-08**.
 - [ ] **Not started:** dispute route, technique-cap decision, tuning (need real samples, a teacher, owner decisions)
 - [ ] **No accuracy evidence:** 0 human samples; synthetic results only
 
+### M13 engineering preparation (2026-11-19, `feature/m13-disputes`): PR pending, not merged
+
+- [x] Handwriting disputes (D-081, `docs/HANDWRITING_DISPUTES.md`): structured reasons, consent, no free text, one per attempt, 14 days, rate limited; reviewer queue without identifiers, no self-review, single-update transitions, audited; never changes grading or progress (tested); stuck claims can be taken over
+- [x] Validation protocol (D-082, `docs/M13_VALIDATION_PROTOCOL.md`): independence, writer splits, look-alike pairs, sample sizes (computed), stopping rules, exclusions
+- [ ] **Owner:** the proposed validation minimum, the look plan, dispute retention, whether disputed ink may become validation samples, the technique cap (with a teacher), recruiting
+- [ ] **Not started (needs people and approval):** recruiting, samples, the study, any tuning
+
 ### M15 measurement and first run (2026-11-19, `feature/m15`): PRs pending, not merged
 
 - [x] M15-a measurement engine: replay observer (results unchanged, tested), metrics with eligibility rules and Wilson intervals, onboarding funnel, signup-week cohorts, read-only (D-079, `docs/M15_MEASUREMENT.md`)

@@ -2,6 +2,43 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-19 — M13 engineering preparation
+
+**D-081 · Handwriting disputes are evidence, never corrections.** Learners can dispute a
+handwriting result (HANDWRITING_DISPUTES.md).
+
+- **Input:** a structured reason, explicit consent each time, no free text. One per attempt,
+  within 14 days, 10 a day.
+- **Learning untouched:** a dispute never changes the result, score, XP, mastery, schedules,
+  streak or the attempt. Tests snapshot all of them. There is deliberately **no** score
+  correction mechanism: a correction would change learning history.
+  - If one were ever wanted, it would need its own decision.
+  - It would be a new, audited record beside the original, never an edit.
+  - It would need owner approval.
+- **Reviewers:**
+  - They need `handwriting:review-disputes` (Super Admin, Curriculum editor).
+  - They see the ink without learner identifiers.
+  - They can't review their own disputes.
+  - Every transition is a single conditional update, and is audited without ink.
+- **Stuck claims:** a claim left behind by a deleted or idle reviewer (7 days) can be taken
+  over. The security review found claims could otherwise get stuck.
+- **Not validation samples:** disputes are self-selected, so they only point at failure modes.
+
+**D-082 · M13 validation protocol (draft, owner decisions pending).** M13_VALIDATION_PROTOCOL.md.
+
+- **Unit of analysis:** the writer.
+- **Intervals:** writer-level cluster bootstrap. Zero-event cells use the exact bound on the
+  effective n (n / design effect).
+- **Repeats:** at most 2 samples per writer for each (character, condition).
+- **Split:** by writer, 50 % training, 25 % validation, 25 % test. Test writers are locked by
+  hashed code before analysis, and looking burns them.
+- **Looks:** three pre-planned looks (15, 25 and 40 writers) with Bonferroni-adjusted one-sided
+  bounds.
+- **Proposed minimum:** ≥ 30 writers; ≥ 600 wrong-character, ≥ 300 structural and ≥ 300 correct
+  samples. This replaces "300 / 300 / 15 writers", which assumed independent samples.
+- **Excluded:** synthetic ink, `TEST` codes, `@hanziquest.test` and disputes. No study is
+  started.
+
 ## 2026-11-19 — M15 measurement, analytics foundations, first run
 
 **D-079 · Learning measurement from stored records; aggregate-only, off until approved.**

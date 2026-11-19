@@ -89,3 +89,8 @@ export async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<
   }
   throw lastError;
 }
+
+/** Disputes one of your handwriting results (M13, D-081). Changes no grade or progress. */
+export function submitDispute(body: { clientEventId: string; reason: string; consent: true }) {
+  return post<{ id: string; status: string }>("/api/disputes", body);
+}

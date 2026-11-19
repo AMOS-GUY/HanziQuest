@@ -18,6 +18,7 @@ import {
   Upload,
   Users,
   type LucideIcon,
+  Flag,
 } from "lucide-react";
 import { cn } from "@/lib/utilities/cn";
 
@@ -36,6 +37,7 @@ const ICONS: Record<string, LucideIcon> = {
   activity: Activity,
   ticket: Ticket,
   "clipboard-check": ClipboardCheck,
+  flag: Flag,
 };
 
 export interface AdminNavItem {

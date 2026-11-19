@@ -282,6 +282,16 @@ Limitation (LOW, D-073): inside `/admin`, staff without a page's permission get 
 page with status 200, because the admin loading boundary starts the response first. Non-staff
 and suspended accounts get a real 404.
 
+## Handwriting disputes (M13, D-081)
+
+| Control       | Implementation                                                                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ownership     | The attempt is looked up with the learner's id. Another learner's attempt is indistinguishable from a missing one (404).                        |
+| Authorization | Learner API: session, origin, 2 KB body, 10 a day. Reviewer actions and service: `handwriting:review-disputes`. No self-review.                 |
+| Integrity     | No code path changes grading or progress (snapshot tests). Transitions are single conditional updates (concurrency tests).                      |
+| Minimisation  | No free text. Ink is not copied. Audit entries carry codes only. The queue shows no learner identifiers. Failure logs hold the error type only. |
+| Deletion      | Disputes are deleted with the learner's account. A reviewer's findings survive their account (reviewer cleared, role kept).                     |
+
 ## Reporting
 
 Report suspected vulnerabilities privately to the project owner. Don't open a public issue.

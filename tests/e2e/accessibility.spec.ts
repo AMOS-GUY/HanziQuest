@@ -125,6 +125,7 @@ const ADMIN_LISTS = [
   "/admin/import",
   "/admin/content-quality",
   "/admin/review",
+  "/admin/disputes",
   "/admin/handwriting",
   "/admin/feedback",
   "/admin/users",

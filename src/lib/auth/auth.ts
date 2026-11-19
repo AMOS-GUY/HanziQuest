@@ -60,13 +60,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user?.id) {
         token.sub = user.id;
         // Fixed at sign-in; Auth.js refreshes `iat` on rotation, so keep our own copy.
-        token.issuedAt = Math.floor(Date.now() / 1000);
+        const now = Date.now();
+        token.issuedAt = Math.floor(now / 1000);
+        // Millisecond precision: see lib/auth/issued.ts.
+        token.issuedAtMs = now;
       }
       return token;
     },
     session({ session, token }) {
       if (token.sub) session.user.id = token.sub;
       if (typeof token.issuedAt === "number") session.issuedAt = token.issuedAt;
+      if (typeof token.issuedAtMs === "number") session.issuedAtMs = token.issuedAtMs;
       return session;
     },
   },

@@ -5,11 +5,14 @@ declare module "next-auth" {
     user: { id: string } & DefaultSession["user"];
     /** When the session token was first issued (seconds since epoch). */
     issuedAt?: number;
+    /** The same, in milliseconds (tokens issued since the fix in lib/auth/issued.ts). */
+    issuedAtMs?: number;
   }
 }
 
 declare module "@auth/core/jwt" {
   interface JWT {
     issuedAt?: number;
+    issuedAtMs?: number;
   }
 }
