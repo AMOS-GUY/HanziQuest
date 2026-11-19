@@ -123,6 +123,10 @@ npm run content:validate
   Cohorts are fixed signup weeks. `/admin/learning` stays off unless `LEARNING_ANALYTICS=on`,
   which needs the owner's privacy approval. The replay observer must never change replay
   results.
+- Handwriting disputes (M13, D-081): `features/handwriting/disputes.ts`. A dispute never changes
+  grading, XP, mastery, schedules or the attempt: findings are evidence, not corrections. No free
+  text. Look attempts up with the learner's id (no IDOR). Transitions are conditional single
+  updates; no self-review. Disputes aren't validation samples (M13_VALIDATION_PROTOCOL.md).
 - Handwriting diagnostics (M13): `features/handwriting/confusables.ts`, `replay.ts`,
   `features/curriculum/confusable-diagnostics.ts`. Diagnostic only: never change grading from
   them. Synthetic ink lives in `features/handwriting/synthetic-ink.ts`; its results aren't
