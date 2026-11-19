@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { issuedBeforeCredentialsChange } from "@/lib/auth/issued";
 import { notFound, redirect } from "next/navigation";
 import type { RoleKey } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/database/prisma";
@@ -37,11 +38,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   });
   if (!user || user.status !== "ACTIVE") return null;
   // Sessions issued before a password change are no longer valid.
-  if (
-    user.credentialsChangedAt &&
-    (session?.issuedAt ?? 0) * 1000 < user.credentialsChangedAt.getTime()
-  )
-    return null;
+  if (issuedBeforeCredentialsChange(user.credentialsChangedAt, session)) return null;
 
   const roles = user.roles.map((r) => r.role.key);
   return {
