@@ -222,7 +222,7 @@ Target public beta: **2026-12-08**.
 
 - [x] Handwriting disputes (D-081, `docs/HANDWRITING_DISPUTES.md`): structured reasons, consent, no free text, one per attempt, 14 days, rate limited; reviewer queue without identifiers, no self-review, single-update transitions, audited; never changes grading or progress (tested); stuck claims can be taken over
 - [x] Validation protocol (D-082, `docs/M13_VALIDATION_PROTOCOL.md`): independence, writer splits, look-alike pairs, sample sizes (computed), stopping rules, exclusions
-- [ ] **Owner:** the proposed validation minimum, the look plan, dispute retention, whether disputed ink may become validation samples, the technique cap (with a teacher), recruiting
+- [ ] **Owner:** which claim the first validation study aims for (estimation with 30–40 writers, or confirmation of ≤ 1 % with about 75–160 writers; D-083), the look plan, the ρ assumption, dispute retention, whether disputed ink may become validation samples, the technique cap (with a teacher), recruiting
 - [ ] **Not started (needs people and approval):** recruiting, samples, the study, any tuning
 
 ### M15 measurement and first run (2026-11-19, `feature/m15`): PRs pending, not merged

@@ -2,6 +2,31 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-20 — M13 protocol statistical review
+
+**D-083 · The M13 sample-size proposal is withdrawn and replaced by power-based requirements.**
+An independent re-check (M13_VALIDATION_PROTOCOL.md §13).
+
+- **What was right:** the exact bounds, writer-level intervals, repeat caps and exclusions.
+- **What was wrong:** "≥ 30 writers, ≥ 600 wrong-character samples" (D-082).
+  - It isn't defensible. At the protocol's own ρ floor of 0.10, 600 samples over 30 writers are
+    worth about 207 effective samples, fewer than the 299 that even a perfect result needs.
+  - It ignored power. At 408 effective samples (three looks), an engine whose true rate is
+    0.25 % passes only about 22 % of the time.
+- **What it takes to demonstrate wrong-character acceptance ≤ 1 %** with 80 % power, if the true
+  rate is 0.25 %:
+  - 775 effective samples in one look, or 1,100 with three looks;
+  - roughly **75–160 writers** at 20 samples each, depending on ρ and the number of looks.
+- **What a study of about 30–40 writers can do:** estimate each rate honestly, detect a failing
+  engine, and show the ≤ 3 % level.
+- **The choice of claim** is an owner decision: an estimation study, a confirmatory study, or
+  one then the other (recommended).
+- **Also fixed:**
+  - Mode A (validate the unchanged engine) needs no split.
+  - After tuning (Mode B), claims rest on a test cohort that must meet the requirement itself.
+  - Test data is read only at planned looks, and any tuning burns it.
+  - The looks follow the planned writer count.
+
 ## 2026-11-19 — M13 engineering preparation
 
 **D-081 · Handwriting disputes are evidence, never corrections.** Learners can dispute a
@@ -36,6 +61,7 @@ handwriting result (HANDWRITING_DISPUTES.md).
   bounds.
 - **Proposed minimum:** ≥ 30 writers; ≥ 600 wrong-character, ≥ 300 structural and ≥ 300 correct
   samples. This replaces "300 / 300 / 15 writers", which assumed independent samples.
+  **Withdrawn:** this minimum and the look schedule are superseded by D-083.
 - **Excluded:** synthetic ink, `TEST` codes, `@hanziquest.test` and disputes. No study is
   started.
 

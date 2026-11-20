@@ -64,6 +64,8 @@ wrong-character samples** with zero accepted, and more if any are accepted. For 
 acceptance ≤ 2 % it needs about **150 structural-error samples** on the same basis. Both are on
 top of 300 correct samples, and spread across at least 15 writers. Changing the minimum is a
 documentation and lab change, not an engine change, and would be recorded in DECISIONS.md.
+**Superseded (2026-11-20, D-083):** this amendment assumed independent samples and ignored
+power. The current requirements are in M13_VALIDATION_PROTOCOL.md §8.
 
 ## 3. Participants and recruitment criteria
 

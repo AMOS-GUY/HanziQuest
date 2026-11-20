@@ -377,8 +377,9 @@ merge without the owner.
 2. Approve or change the draft consent form, and whether ethics or legal review is needed first.
    Fill the retention date and the contact.
 3. Optional participant bands (experience, handedness) in the app, or on paper only.
-4. Whether to adopt the proposed validation minimum (about 300 wrong-character and about 150
-   structural-error samples).
+4. Which claim the first validation study aims for, and so its size. The earlier minimum (about
+   300 wrong-character and about 150 structural-error samples) is superseded by D-083; see
+   M13_VALIDATION_PROTOCOL.md §8 and §12.
 5. HSK edition for new learners. Recommendation: HSK 3.0, with the handwriting list driving
    writing-from-memory; keep HSK 1 Starter labelled HSK 2.0.
 6. Teacher: who, and on what terms.
