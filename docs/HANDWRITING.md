@@ -109,8 +109,9 @@ The synthetic baseline report is `docs/handwriting-baseline-synthetic.md`.
 
 Before the beta goes public, collect real samples (correct and incorrect writing) and
 measure false accept and false reject rates per band. Change `THRESHOLDS` in `evaluate.ts`
-only under the rules in HANDWRITING_VALIDATION.md: at least 15 participants and 300 correct
-and 300 incorrect samples (`MIN_SAMPLES`), and bump `ENGINE_VERSION` with any change.
+only under the rules in HANDWRITING_VALIDATION.md, and bump `ENGINE_VERSION` with any change.
+The lab floor (`MIN_SAMPLES`: 15 participants, 300 correct, 300 incorrect) is necessary but not
+sufficient: the writer-level requirements are in M13_VALIDATION_PROTOCOL.md §8 (D-083).
 
 _Corrected 2026-11-13 (M13 audit): this paragraph used to say "at least 10 testers … and
 retune", which contradicted the validation rules and the code's `MIN_SAMPLES`._

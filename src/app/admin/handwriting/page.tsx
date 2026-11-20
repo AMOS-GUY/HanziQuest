@@ -61,6 +61,12 @@ export default async function HandwritingLabPage({
 
       <Card>
         <CardTitle className="mb-3">Results so far ({metrics.total} samples)</CardTitle>
+        <p className="text-muted-foreground mb-3 text-sm">
+          These rates count every sample as independent, but samples from one writer are correlated,
+          so the real uncertainty is larger. The minimums in the warnings are a floor before tuning,
+          not enough for a validation claim. No accuracy claim follows from this page: see{" "}
+          <code>docs/M13_VALIDATION_PROTOCOL.md</code> §8.
+        </p>
         {metrics.warnings.length ? (
           <Alert className="mb-3">
             <ul className="list-disc pl-5">

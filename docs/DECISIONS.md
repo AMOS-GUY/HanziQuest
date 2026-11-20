@@ -26,6 +26,12 @@ An independent re-check (M13_VALIDATION_PROTOCOL.md §13).
   - After tuning (Mode B), claims rest on a test cohort that must meet the requirement itself.
   - Test data is read only at planned looks, and any tuning burns it.
   - The looks follow the planned writer count.
+- **Applied across the docs (2026-11-21):** the lab's `MIN_SAMPLES` (300 / 300 / 15) is a floor
+  before tuning, necessary but not sufficient. HANDWRITING_VALIDATION.md, HANDWRITING.md,
+  ROADMAP.md, M12_PILOT_PROTOCOL.md and M13_HANDWRITING_DIAGNOSTICS.md now say so. The lab page
+  and the report carry a fixed caveat; no metric or grading changed. Tuning rule 3 ("two thirds /
+  one third") now points to the §5 study design. The replay harness's split (D-069) is diagnostic,
+  not the study split. Before the first session: M13_VALIDATION_READINESS.md.
 
 ## 2026-11-19 — M13 engineering preparation
 

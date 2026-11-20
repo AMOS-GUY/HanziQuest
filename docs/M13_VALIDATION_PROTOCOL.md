@@ -12,6 +12,8 @@ It builds on:
 - M12_PILOT_PROTOCOL.md: the exploratory pilot, consent and data handling.
 - M13_HANDWRITING_DIAGNOSTICS.md: the synthetic diagnostics, which are not evidence.
 
+What must be true before the first session: M13_VALIDATION_READINESS.md.
+
 ## 1. Questions the study answers
 
 On human handwriting from consenting participants, with the current engine (`hq-eval-1`, or the

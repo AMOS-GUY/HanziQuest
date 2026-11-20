@@ -181,8 +181,12 @@ format and is left for a decision.
   correct and 300 incorrect samples, and an empty held-out set.
 
 Even after the M12 pilot (5 people), the held-out third would be 1–2 writers. That's useful
-for spotting gross failures, but it's not an independent validation. That needs the M13 study
-with 15 or more participants.
+for spotting gross failures, but it's not an independent validation. That needs the M13 study,
+sized by M13_VALIDATION_PROTOCOL.md §8 (D-083); its reasons above are the lab floor only.
+
+**Not the study split.** This `sha256(code)` third is a diagnostic split for the replay harness
+(D-069). The study's Mode B split (§5) assigns writers 50 / 25 / 25 with a salted hash recorded
+in advance. Don't use the replay split as a study's test set.
 
 ## Limitations
 

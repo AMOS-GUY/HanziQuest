@@ -39,8 +39,8 @@ accuracy either, and must not be quoted as such.
 
 |                              | M12 exploratory pilot                                          | M13 validation study (before any threshold change)                                                                                  |
 | ---------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Participants                 | 5 (P01–P05)                                                    | ≥ 15 (target 20–30), new participants not in the pilot for the held-out set                                                         |
-| Samples                      | 180: 120 correct, 60 deliberate errors (10 of each error type) | ≥ 300 correct and ≥ 300 incorrect (current minimum); proposed additions below                                                       |
+| Participants                 | 5 (P01–P05)                                                    | Set by M13_VALIDATION_PROTOCOL.md §8 (D-083); pilot participants are never test writers                                             |
+| Samples                      | 180: 120 correct, 60 deliberate errors (10 of each error type) | Lab floor ≥ 300 correct and ≥ 300 incorrect (necessary, not sufficient); requirements in M13 §8                                     |
 | Output                       | Findings list; descriptive counts with 95 % intervals          | FRR, structural false acceptance, wrong-character acceptance, specific-error rate, with intervals, per device and size              |
 | May change thresholds?       | **No**                                                         | Only if a target is missed, via the six rules in HANDWRITING_VALIDATION.md, with held-out confirmation and an `ENGINE_VERSION` bump |
 | May support accuracy claims? | **No**                                                         | Only for the population, devices and characters tested, with intervals                                                              |
