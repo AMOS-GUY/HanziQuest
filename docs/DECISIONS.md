@@ -67,7 +67,8 @@ handwriting result (HANDWRITING_DISPUTES.md).
   bounds.
 - **Proposed minimum:** ≥ 30 writers; ≥ 600 wrong-character, ≥ 300 structural and ≥ 300 correct
   samples. This replaces "300 / 300 / 15 writers", which assumed independent samples.
-  **Withdrawn:** this minimum and the look schedule are superseded by D-083.
+  **Withdrawn:** this minimum and the look schedule are superseded by D-083. The 50 / 25 / 25
+  split now applies only after tuning (Mode B); validating the unchanged engine needs none.
 - **Excluded:** synthetic ink, `TEST` codes, `@hanziquest.test` and disputes. No study is
   started.
 

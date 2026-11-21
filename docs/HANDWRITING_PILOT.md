@@ -80,7 +80,8 @@ every character gets several different error types.
 3. Record the results in `docs/PROGRESS.md`: false rejection, structural false acceptance,
    wrong-character acceptance, technique errors judged, and per-device numbers.
 4. **Five testers is too few to tune thresholds** (the lab warns below 15 participants and 300
-   samples each way). The pilot answers whether anything is badly wrong, for example
+   samples each way, and even that floor isn't enough for validation: M13_VALIDATION_PROTOCOL.md
+   §8). The pilot answers whether anything is badly wrong, for example
    one device type being rejected far more often. Report it as a pilot, not as validation.
 
 ### Stop-and-fix signals
