@@ -11,6 +11,20 @@
  *   the per-pair finding rule for look-alike pairs (§6).
  *
  * Synthetic inputs (tests, simulations) are never evidence about real learners.
+ *
+ * **Status: not validated for confirmatory decisions.** The planning functions are exact
+ * arithmetic. The decision intervals rest on assumptions that haven't been independently
+ * reviewed (docs/M13_STATISTICAL_REVIEW_PROPOSAL.md):
+ * - writers are independent, and samples are exchangeable within a writer;
+ * - one intra-writer correlation ρ describes a measure, floored at 0.10 when it can't be
+ *   estimated well (it rarely can with rare events);
+ * - scaling events to an effective n and applying an exact binomial bound approximates a
+ *   clustered binomial (a design-effect approximation, not an exact method);
+ * - the percentile bootstrap under-covers with few writers or rare events.
+ *
+ * Until that review is done, results from these functions are **exploratory**: fine for
+ * planning, synthetic dry runs and descriptive reporting with their caveats, but not for a pass
+ * or fail claim about the engine.
  */
 import { wilson } from "@/features/measurement/stats";
 import { binomialCdf, exactLowerBound, exactUpperBound } from "@/lib/statistics/binomial";
@@ -289,13 +303,16 @@ export interface DecisionBound {
  * How the deciding bounds are chosen when both intervals exist.
  *
  * - `"conservative"` (default): the worse bound of the two in each direction (the larger upper,
- *   the smaller lower). With sparse events the percentile bootstrap is optimistic: for 3 events
- *   among 40 writers × 20 samples, its upper bound is about 0.75 %, below even the naive Wilson
- *   bound (about 1.1 %), while the exact bound on the effective n is about 2.3 %. Taking the
- *   worse of the two keeps D-083's conclusion true: 30–40 writers can't show ≤ 1 %.
+ *   the smaller lower). This is a **heuristic, not a validated confidence procedure**: the
+ *   maximum of two bounds has no stated coverage of its own. It's the default because the
+ *   alternative is known to be optimistic. In a synthetic simulation sketch (beta-binomial
+ *   writers, equal sizes, one look; scripts/m13-coverage-sketch.ts), the §3 rule's nominal 95 %
+ *   upper bound covered the true rate only 80–88 % of the time when events varied, and at a
+ *   true rate equal to a 1 % target it "passed" 15–24 % of studies. The exact bound on the
+ *   effective n, and so this rule, covered 95–100 %. Other designs weren't tested.
  * - `"bootstrap-first"`: §3 as written. The bootstrap whenever it exists, the exact bound only
- *   where it can't be used. Kept so the protocol's literal rule can be reproduced; whether §3
- *   should be amended is an owner decision (M13_VALIDATION_READINESS.md).
+ *   where it can't be used. Kept so the protocol's literal rule can be reproduced. Changing §3
+ *   is an owner decision after an independent statistical review.
  */
 export type DecisionRule = "conservative" | "bootstrap-first";
 

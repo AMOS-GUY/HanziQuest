@@ -93,19 +93,22 @@ Legend: ☐ not done · ◐ partly done · ☑ done (with where it's done).
   | Per-pair counts and the §6 finding rule          | `pairSummaries`                                |
   | Report by device, size and recruitment source    | Device and size exist; source doesn't          |
 
-- ☐ **owner (with a statistician if possible): amend §3's decision interval.** §3 makes the
-  writer-level percentile bootstrap the decision interval whenever events vary, and the exact
-  bound on the effective n only for zero-event cells. With sparse events the bootstrap is
-  optimistic, and that **contradicts §8 and D-083**:
-  - **Example** (synthetic): 3 accepted wrong characters among 40 writers × 20 samples.
-    - Bootstrap upper bound: about 0.75 %. Under §3 as written, this **passes** ≤ 1 %.
-    - Naive Wilson bound: about 1.1 %. The protocol already calls this optimistic.
-    - Exact bound on the effective n: about 2.3 %.
-  - D-083 says 30–40 writers can't credibly show ≤ 1 %.
-  - **What the toolkit does:** its default (`rule: "conservative"`) takes the worse bound of the
-    two in each direction. §3's literal rule stays available as `rule: "bootstrap-first"`.
-  - **Proposed amendment:** §3 adopts the conservative rule. It needs a decision entry before
-    the first look (pre-registration).
+- ☐ **owner: commission an independent statistical review of the decision intervals** before
+  any confirmatory use (docs/M13_STATISTICAL_REVIEW_PROPOSAL.md).
+  - **The problem:** §3's bootstrap rule is optimistic with sparse events, which contradicts §8
+    and D-083.
+    - **Example** (synthetic): 3 accepted wrong characters among 40 writers × 20 samples.
+      - Bootstrap upper bound: about 0.75 %. Under §3, this **passes** ≤ 1 %.
+      - Naive Wilson bound: about 1.1 %.
+      - Exact bound on the effective n: about 2.3 %.
+    - **In a simulation sketch,** §3's nominal 95 % bound covered 80–88 %. When the true rate
+      equalled the target, it falsely passed 15–24 % of studies.
+  - **What the toolkit does:** by default it takes the worse bound of the two. That's a
+    conservative **heuristic, not a validated procedure**. §3's literal rule remains available.
+  - **§3 is unchanged.** Any amendment follows the review, as a decision entry, before the first
+    look (pre-registration).
+- ☐ **Until then, toolkit results are exploratory only:** planning, synthetic dry runs and
+  descriptive reporting with caveats. They support no pass or fail claim about the engine.
 
 - ☐ **Wiring:** a writer-level section in `npm run handwriting:report`. It needs the decisions
   above, and it must not change grading.
