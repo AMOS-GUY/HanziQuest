@@ -2,6 +2,36 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-21 — Learning integrity
+
+**D-084 · A lesson with no published exercises can't be completed or published.** Authorized
+by the owner on 2026-11-21.
+
+- **The defect (reproduced):** with no published exercises, both completion guards passed
+  vacuously (0 exercises remaining; 0 of 0 genuinely attempted). Two authenticated requests
+  marked such a lesson COMPLETED with no attempt. The learner got 50 XP (lesson 20, first-lesson
+  achievement 20, daily goal 10), and the next lesson unlocked. The offline sync path did the
+  same. The UI never offered it, and the quality check already reported such a lesson as an
+  error.
+- **Completion:**
+  - `completeLessonSession` refuses (`conflict`) when the lesson has no published exercises.
+    It's the one function behind the API route and offline sync, where the event is rejected
+    and not retried.
+  - A session completed before the fix stays idempotent and grants nothing more.
+  - Completions already granted are left alone: changing them would be a separate data
+    decision.
+- **Publishing:**
+  - `setLessonStatus(…, "PUBLISHED")` needs at least one published exercise. This follows the
+    quality check's error rule, and the existing rule that publishing a curriculum needs a
+    published lesson.
+  - Unpublishing is always allowed.
+  - Unpublishing exercises can still empty a published lesson, but the completion guard covers
+    that case.
+- **Unchanged:** XP amounts, reward rules, mastery, streaks, review scheduling, placement
+  (`TESTED_OUT` grants no XP) and the importer.
+- **Tests:** `tests/integration/empty-lesson.test.ts`. Five of its seven tests fail without the
+  fix.
+
 ## 2026-11-20 — M13 protocol statistical review
 
 **D-083 · The M13 sample-size proposal is withdrawn and replaced by power-based requirements.**

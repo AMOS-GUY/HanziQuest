@@ -40,6 +40,10 @@ export async function startLessonSession(prisma: PrismaClient, userId: string, l
 /**
  * Completes a lesson session once every exercise in the lesson has at least one attempt
  * recorded in this session. Idempotent.
+ *
+ * A lesson with no published exercises can't be completed: there is nothing to practise, so it
+ * earns no completion, XP, achievement, daily-goal credit or unlock. Both completion paths (the
+ * API route and offline sync) come through here.
  */
 export async function completeLessonSession(
   prisma: PrismaClient,
@@ -73,6 +77,11 @@ export async function completeLessonSession(
       select: { exerciseId: true, result: true },
     }),
   ]);
+  // Without this, both guards below pass vacuously (0 remaining, 0 of 0 engaged). A session
+  // completed before this check existed stays idempotent: completing it again changes nothing.
+  if (exercises.length === 0 && !session.completedAt) {
+    throw new DomainError("conflict", "This lesson has no exercises yet.");
+  }
   const done = new Set(attempts.map((a) => a.exerciseId));
   const remaining = exercises.filter((e) => !done.has(e.exerciseId)).length;
   if (remaining > 0) {
