@@ -18,24 +18,24 @@ repository is public, and GitHub Actions is blocked by an account billing restri
 than by private minutes. Current state: docs/PROGRESS.md and
 docs/reports/2026-11-13-m13-overnight-engineering-report.md._
 
-| Area                  | Built                                                                                   | Missing                                                                                                                       |
-| --------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Handwriting engine    | `hq-eval-1`; lab, consent, metrics, export, report; synthetic baseline                  | **0 real samples.** Accuracy for real learners is unknown. The validation procedure needs ≥ 15 participants before any tuning |
-| False positives       | Wrong character = TRY_AGAIN; technique faults capped at Good                            | Measured only on synthetic ink. Learners have no "this was marked wrong" route                                                |
-| Curriculum            | HSK 1 Starter: 6 units, 16 lessons, 102 characters, 81 words; provenance rules enforced | Everything PROVISIONAL; no teacher review, no examples, no audio; 3 validator warnings; no HSK 2/3; HSK 3.0 not modelled      |
-| Review and mastery    | SM-2-style SRS, replayed from history; recall vs technique policy; placement            | No evidence that intervals fit real learners; no recall-rate measurement                                                      |
-| Onboarding, retention | Onboarding and placement flows; "active in the last 7 days" count                       | No activation, return or review-completion metrics                                                                            |
-| Beta launch           | Invite-only, legal drafts, staging design, local CI                                     | Legal review, age, retention periods, reset decision, staging, devices and Firefox, GitHub CI after 2026-12-01                |
+| Area                  | Built                                                                                   | Missing                                                                                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Handwriting engine    | `hq-eval-1`; lab, consent, metrics, export, report; synthetic baseline                  | **0 real samples.** Accuracy for real learners is unknown. Before any tuning: the lab floor (15 participants) **and** M13 §8's writer-level requirements (D-083) |
+| False positives       | Wrong character = TRY_AGAIN; technique faults capped at Good                            | Measured only on synthetic ink. Learners have no "this was marked wrong" route                                                                                   |
+| Curriculum            | HSK 1 Starter: 6 units, 16 lessons, 102 characters, 81 words; provenance rules enforced | Everything PROVISIONAL; no teacher review, no examples, no audio; 3 validator warnings; no HSK 2/3; HSK 3.0 not modelled                                         |
+| Review and mastery    | SM-2-style SRS, replayed from history; recall vs technique policy; placement            | No evidence that intervals fit real learners; no recall-rate measurement                                                                                         |
+| Onboarding, retention | Onboarding and placement flows; "active in the last 7 days" count                       | No activation, return or review-completion metrics                                                                                                               |
+| Beta launch           | Invite-only, legal drafts, staging design, local CI                                     | Legal review, age, retention periods, reset decision, staging, devices and Firefox, GitHub CI after 2026-12-01                                                   |
 
 ## Exploratory pilot vs validation study: two separate steps
 
-|                   | **M12 exploratory pilot**                                                                   | **M13 validation study**                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Who               | 5 consenting adults (P01–P05)                                                               | ≥ 15 participants (target 20–30), with a held-out third                                                                         |
-| Samples           | 180: 120 correct, 60 deliberate errors (10 per error type, 10 wrong-character)              | ≥ 300 correct and ≥ 300 incorrect (current minimum). Proposed: about 300 wrong-character and about 150 structural-error samples |
-| Purpose           | Does the procedure work? Gross failures by device, size or character? Is the feedback fair? | Estimate accuracy against the beta targets, per device and size                                                                 |
-| Threshold changes | **Never**                                                                                   | Only if a target is missed, under HANDWRITING_VALIDATION.md's six rules, with `ENGINE_VERSION` bumped                           |
-| Accuracy claims   | **None**: the report is headed "not an accuracy estimate"                                   | Only for what was tested, with intervals                                                                                        |
+|                   | **M12 exploratory pilot**                                                                   | **M13 validation study**                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Who               | 5 consenting adults (P01–P05)                                                               | Set by M13_VALIDATION_PROTOCOL.md §8 (D-083): about 30–40 writers to estimate, 75–160 to show ≤ 1 % wrong-character         |
+| Samples           | 180: 120 correct, 60 deliberate errors (10 per error type, 10 wrong-character)              | Lab floor ≥ 300 correct and ≥ 300 incorrect (necessary, not sufficient). Requirements: effective, writer-level samples (§8) |
+| Purpose           | Does the procedure work? Gross failures by device, size or character? Is the feedback fair? | Estimate accuracy against the beta targets, per device and size                                                             |
+| Threshold changes | **Never**                                                                                   | Only if a target is missed, under HANDWRITING_VALIDATION.md's six rules, with `ENGINE_VERSION` bumped                       |
+| Accuracy claims   | **None**: the report is headed "not an accuracy estimate"                                   | Only for what was tested, with intervals                                                                                    |
 
 Why: with zero errors observed, 10 wrong-character samples still leave a 95 % upper bound of
 about 26 % against a ≤ 1 % target (M12_PILOT_PROTOCOL.md §2). The synthetic baseline is not
@@ -52,7 +52,7 @@ evidence for real learners either.
 
 ```
 M12 pilot (5) ──────────────┐
-M14 provenance (parallel) ──┼─> M15 measurement ─> M13 validation (≥ 15) ─> M16 SRS calibration
+M14 provenance (parallel) ──┼─> M15 measurement ─> M13 validation (§8) ─> M16 SRS calibration
                             │
 M17 beta blockers ──────────┴── owner-driven, gates the first invites
 ```
@@ -138,12 +138,13 @@ decision and any tuning. Those still need real samples, a teacher and owner deci
   - **Technique-cap decision:** should a reversed stroke or wrong order still count as recall?
     The owner decides with a teacher; implemented as a scoring-policy change (D-entry), not a
     threshold change.
-  - **Tuning,** only when the minimum sample size is reached: follow the six rules in
+  - **Tuning,** only when the lab floor and M13 §8 are met: follow the six rules in
     HANDWRITING_VALIDATION.md and bump `ENGINE_VERSION`.
 - **Dependencies.**
   - M12 findings.
-  - At least 15 participants for any tuning; another 10 or more after the pilot. This may happen
-    during the invite-only beta, with consent.
+  - Enough writers for the claim the owner chooses (M13_VALIDATION_PROTOCOL.md §8 and §12:
+    about 30–40 to estimate, 75–160 to show ≤ 1 %). The lab floor of 15 is only a floor. This
+    may happen during the invite-only beta, with consent.
   - A teacher for the technique policy.
 - **Risks.**
   - Overfitting to a few writers; the held-out split and device breakdown mitigate it.
@@ -377,8 +378,9 @@ merge without the owner.
 2. Approve or change the draft consent form, and whether ethics or legal review is needed first.
    Fill the retention date and the contact.
 3. Optional participant bands (experience, handedness) in the app, or on paper only.
-4. Whether to adopt the proposed validation minimum (about 300 wrong-character and about 150
-   structural-error samples).
+4. Which claim the first validation study aims for, and so its size. The earlier minimum (about
+   300 wrong-character and about 150 structural-error samples) is superseded by D-083; see
+   M13_VALIDATION_PROTOCOL.md §8 and §12.
 5. HSK edition for new learners. Recommendation: HSK 3.0, with the handwriting list driving
    writing-from-memory; keep HSK 1 Starter labelled HSK 2.0.
 6. Teacher: who, and on what terms.

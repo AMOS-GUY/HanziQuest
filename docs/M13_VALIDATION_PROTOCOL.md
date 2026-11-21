@@ -12,6 +12,8 @@ It builds on:
 - M12_PILOT_PROTOCOL.md: the exploratory pilot, consent and data handling.
 - M13_HANDWRITING_DIAGNOSTICS.md: the synthetic diagnostics, which are not evidence.
 
+What must be true before the first session: M13_VALIDATION_READINESS.md.
+
 ## 1. Questions the study answers
 
 On human handwriting from consenting participants, with the current engine (`hq-eval-1`, or the
@@ -81,21 +83,42 @@ version under test):
   one writer moves a measure across its target, the result is reported as unstable, and no
   decision is based on it.
 
-## 5. Writer-based train, validation and test split
+## 5. Two study modes, and the writer-based split
 
-- **Assignment by writer:** writers, not samples, are assigned before any sample is analysed,
-  stratified by experience (beginner, some, fluent) and main input (finger, stylus, mouse):
-  - **Training:** 50 % of writers. Used for any tuning candidates.
-  - **Validation:** 25 %. Used to choose between candidates.
-  - **Test:** 25 %. Analysed **once**, for the final decision.
-- **Locking the test set:**
-  - The test writers' participant codes are hashed (SHA-256 with a salt the owner keeps), and
-    the hashes are recorded in DECISIONS.md before anyone looks at their samples.
-  - Looking at test data before the final evaluation **burns** it: those writers move to
-    training, and new test writers must be recruited.
-- **Pilot participants** (P01–P05) are never in the test set; they may be training writers.
-- **Engine version:** the test set is evaluated on a single, frozen `ENGINE_VERSION`, recorded
-  with the result.
+The split depends on whether the engine is changed.
+
+- **Mode A: validate the engine as it is** (`hq-eval-1`, no tuning).
+  - Nothing is fitted, so there's nothing to hold out: **every eligible writer is an
+    evaluation writer**. No train or validation split is needed.
+  - This is the first study to run.
+- **Mode B: after tuning** (only if Mode A misses a target, under the six rules in
+  HANDWRITING_VALIDATION.md).
+  - Writers, not samples, are assigned before any sample is analysed. They're stratified by
+    experience (beginner, some, fluent) and main input (finger, stylus, mouse):
+    - **Training:** 50 % of writers, used for tuning candidates.
+    - **Validation:** 25 %, used to choose between candidates.
+    - **Test:** the remaining writers, used only to confirm.
+  - **Claims after tuning rest on the test writers alone,** so the test group by itself must
+    meet the sample-size requirement in section 8. In practice, Mode B needs a **newly
+    recruited test cohort** of that size. A 25 % slice of a Mode A-sized study can't support a
+    claim.
+- **Locking the test writers** (Mode B):
+  - Their participant codes are hashed (SHA-256 with a salt the owner keeps), and the hashes are
+    recorded in DECISIONS.md before anyone looks at their samples.
+  - Test data may be read **only** at the pre-planned looks in section 9, and only for the
+    pass, expand or fail decision. No tuning may follow any look at test data. If a look leads
+    to tuning, those test writers are **burned**: they move to training, and a new test cohort
+    is needed.
+- **Independence of the test population:**
+  - Test writers must be different people from training and validation writers. Pilot
+    participants (P01–P05) are never test writers.
+  - The lab collects no identity, so one person enrolling twice under two codes can't be
+    detected from the data. The session procedure must check this in person, on paper (M12
+    rules). This is an unresolved limitation.
+  - Writers recruited from one class or group are themselves correlated: record the
+    recruitment source, and report results by source.
+- **Engine version:** each evaluation uses a single, frozen `ENGINE_VERSION`, recorded with the
+  result.
 
 ## 6. Look-alike (confusable) pairs
 
@@ -144,44 +167,78 @@ version under test):
 
 ## 8. Sample size
 
-Exact one-sided 95 % Clopper–Pearson bounds, computed for this protocol. These are the
-**effective** samples needed, after dividing by the design effect:
+**Exact one-sided Clopper–Pearson bounds** (computed for this protocol, and re-checked in the
+statistical review). These are **effective** samples, after dividing by the design effect.
+"3 looks" uses α = 0.05 / 3 (section 9).
 
-| Target                                 | 0 observed | 1 observed | 2 observed | 3 observed |
-| -------------------------------------- | ---------- | ---------- | ---------- | ---------- |
-| Wrong-character acceptance ≤ 1 %       | 299        | 473        | 628        | 773        |
-| Structural false acceptance ≤ 2 %      | 149        | 236        | 313        | 386        |
-| FRR ≤ 10 % (judged on the upper bound) | 29         | 46         | 61         | 76         |
+| Target                            | Allowed acceptances | 1 look | 3 looks |
+| --------------------------------- | ------------------- | ------ | ------- |
+| Wrong-character acceptance ≤ 1 %  | 0                   | 299    | 408     |
+| Wrong-character acceptance ≤ 1 %  | 1                   | 473    | 603     |
+| Structural false acceptance ≤ 2 % | 0                   | 149    | 203     |
+| Structural false acceptance ≤ 2 % | 1                   | 236    | 300     |
 
-- **Few errors are allowed.** Even with zero acceptances, ≤ 1 % needs about 300 effective
-  wrong-character samples. With a design effect around 2 that's roughly **600 written samples
-  from ≥ 30 writers**.
-- **A proposed minimum, to be decided by the owner:**
-  - **≥ 30 writers**, of whom ≥ 8 are locked test writers;
-  - **≥ 600** wrong-character samples (substitutions) and **≥ 300** structural-error samples;
-  - **≥ 300** correct samples;
-  - the per-writer cap in section 4.
+**These minimums are not enough to plan with.**
 
-  This is above the earlier "300 / 300 / 15 writers". That earlier minimum treats samples as
-  independent, which they aren't.
+- **The problem:** they're the sample sizes at which a **perfect** result just passes. A good
+  but imperfect engine usually observes a few acceptances, and then fails to show the target.
+- **Power:** the chance of passing if the engine really is good. A design must have enough of
+  it (80 % here). Computed for wrong-character acceptance ≤ 1 %:
 
-- **FRR precision:** with 300 correct samples and an observed FRR of 5 %, the naive Wilson upper
-  bound is about 8 %. At 8 % observed, it's about 11.6 %, which is inconclusive.
+  | Effective n | Pass probability if the true rate is 0.10 % (1 look / 3 looks) | 0.25 %      | 0.50 %      |
+  | ----------- | -------------------------------------------------------------- | ----------- | ----------- |
+  | 300         | 74 % / 0 %                                                     | 47 % / 0 %  | 22 % / 0 %  |
+  | 600         | 88 % / 55 %                                                    | 56 % / 22 % | 20 % / 5 %  |
+  | 800         | 99 % / 95 %                                                    | 86 % / 68 % | 43 % / 24 % |
+  | 1,000       | 100 % / 98 %                                                   | 89 % / 76 % | 44 % / 26 % |
+
+**Effective n needed for 80 % power, and the writers it takes.** The writer counts assume 20
+samples per writer. Every count is rounded up.
+
+| Target (true rate assumed)     | Effective n, 1 look / 3 looks | Writers if ρ = 0.05 | Writers if ρ = 0.10 |
+| ------------------------------ | ----------------------------- | ------------------- | ------------------- |
+| Wrong-character ≤ 1 % (0.25 %) | 775 / 1,100                   | 76 / 108            | 113 / 160           |
+| Wrong-character ≤ 2 % (0.50 %) | 400 / 550                     | 40 / 54             | 59 / 80             |
+| Wrong-character ≤ 3 % (0.75 %) | 275 / 375                     | 27 / 37             | 40 / 55             |
+| Structural ≤ 2 % (0.50 %)      | 400 / 550                     | 40 / 54             | 59 / 80             |
+
+- **Writers are the binding constraint.** With correlation ρ, no number of samples per writer
+  gives more than writers ÷ ρ effective samples. At ρ = 0.10, even 600 samples from 30 writers
+  (20 each) are worth about 207, below the 299 a perfect result needs.
+- **The earlier proposal doesn't hold:** "≥ 30 writers, ≥ 600 wrong-character samples" (draft of
+  2026-11-19) is **withdrawn**. It can't demonstrate ≤ 1 % under this protocol's own ρ floor
+  of 0.10.
+- **What a study of about 30–40 writers can do:**
+  - estimate each rate with an honest, writer-level interval;
+  - detect a clearly failing engine (lower bound above target);
+  - demonstrate the **≤ 3 %** wrong-character level, if the engine is good.
+
+  It **can't** credibly demonstrate the ≤ 1 % wrong-character target. That needs roughly **75 to
+  160 writers**, depending on ρ and the number of looks. Which path to take is an owner decision
+  (section 12).
+
+- **Correct samples (FRR ≤ 10 %):** about 300 correct samples (effective) give a useful
+  interval. With 300 correct samples at an observed 5 %, the naive Wilson upper bound is about
+  8 %, and the writer-level bound is wider.
+- **What remains assumed:** ρ for these outcomes is unknown. Planning uses ρ = 0.05 and 0.10;
+  the M12 pilot gives a first, rough estimate. If ρ is larger, every writer count above grows
+  proportionally.
 
 ## 9. Stopping, expanding or rejecting
 
-The study is analysed at up to **three pre-planned looks**: at 15, 25 and 40 writers. Looking
-repeatedly raises the chance of a false "pass", so each look uses α = 0.05 / 3, a one-sided
-98.3 % bound (Bonferroni). Under that rule, zero wrong-character acceptances need 408 effective
-samples, and zero structural acceptances need 203.
+**Planned looks** are set by the study's planned writer count W (section 12): at about 50 %,
+75 % and 100 % of W evaluation writers. In Mode B, the looks count test writers only. Each look
+uses α = 0.05 / 3, a one-sided 98.3 % bound (Bonferroni). That's conservative: it keeps the
+overall chance of a false "pass" at or below 5 %. Looks are only for the decisions in the
+table; nothing is tuned between them.
 
-| At a look                                                                                      | Decision                                                                                                                                                        |
-| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Every target's upper bound (writer-level, Bonferroni) meets the target on the **test** writers | **Stop: pass.** Report the results with intervals and their population. No tuning.                                                                              |
-| A point estimate meets the target but its upper bound doesn't                                  | **Expand** to the next look, if any. After the last look: **inconclusive**. Report it, and make no claim.                                                       |
-| A measure's **lower** bound is already worse than its target                                   | **Stop: fail** for that measure. Tune on training writers only, choose on validation writers, then confirm on **new** test writers. The old test set is burned. |
-| > 10 % of sessions deviate from the protocol (wrong prompts, device faults, interruptions)     | **Stop: invalid.** Fix the procedure; the samples are kept as exploratory only.                                                                                 |
-| A consent, privacy or safety problem                                                           | **Stop immediately** (M12 rules).                                                                                                                               |
+| At a look                                                              | Decision                                                                                                                                                       |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every target's upper bound (writer-level, Bonferroni) meets its target | **Stop: pass** for the targets met. Report the results with intervals and their population.                                                                    |
+| A point estimate meets a target but its upper bound doesn't            | **Expand** to the next look. After the last look: **inconclusive**. Report the bound actually shown (for example, "≤ 2.6 %"), and make no claim of the target. |
+| A measure's **lower** bound is worse than its target                   | **Stop: fail** for that measure. Mode B may follow (tuning on training writers, choice on validation writers, a new test cohort).                              |
+| > 10 % of sessions deviate from the protocol                           | **Stop: invalid.** Fix the procedure; the samples are kept as exploratory only.                                                                                |
+| A consent, privacy or safety problem                                   | **Stop immediately** (M12 rules).                                                                                                                              |
 
 Any tuning follows the six rules in HANDWRITING_VALIDATION.md and bumps `ENGINE_VERSION`.
 
@@ -218,9 +275,53 @@ Any tuning follows the six rules in HANDWRITING_VALIDATION.md and bumps `ENGINE_
 
 ## 12. Owner decisions
 
-1. Adopt the proposed minimum in section 8 (≥ 30 writers; ≥ 600 substitutions, ≥ 300
-   structural, ≥ 300 correct), or keep the earlier minimum and accept weaker conclusions.
-2. The three-look plan and the Bonferroni rule (section 9).
-3. Whether disputed ink may ever become validation samples (needs per-person consent).
-4. The technique-cap decision, with a teacher. It isn't part of this study.
-5. Recruiting, the location and consent, as in M12. Nothing is started.
+1. **Which claim the first study aims for** (section 8). Each option is honest, and they differ
+   in cost:
+   - **(a) An estimation study of about 30–40 writers.** It reports every rate with
+     writer-level intervals, can show the ≤ 3 % wrong-character level and a clear failure, but
+     **doesn't** claim ≤ 1 %.
+   - **(b) A confirmatory study of about 75–160 writers,** sized to demonstrate ≤ 1 %
+     wrong-character acceptance with 80 % power.
+   - **(c) First (a), then (b),** only if (a) suggests the engine is near target.
+
+   The recommendation is (c).
+
+2. **The look plan:** one look, or three with Bonferroni (section 9).
+3. **The ρ assumption** used for planning: 0.05 and 0.10 are proposed, revisited after the M12
+   pilot.
+4. **Whether disputed ink may ever become validation samples** (needs per-person consent).
+5. **The technique-cap decision,** with a teacher. It isn't part of this study.
+6. **Recruiting, the location and consent,** as in M12. Nothing is started.
+
+## 13. Statistical review (2026-11-20)
+
+An independent re-check of the 2026-11-19 draft.
+
+- **Correct, and kept:**
+  - The single bounds: 299 / 473 for ≤ 1 %, 149 / 236 for ≤ 2 %, and 408 / 603 / 203 / 300 for
+    three looks.
+  - The design-effect reasoning.
+  - Writer-level intervals.
+  - The cap on repeats.
+  - The exclusions.
+  - The distinction between exploratory work and claims.
+- **Fixed:**
+  1. **The minimum wasn't defensible.** It ignored power, and failed the protocol's own ρ
+     floor: 600 samples over 30 writers are worth about 207 effective samples at ρ = 0.10. It's
+     now replaced by power-based requirements and an explicit choice of claim.
+  2. **Mode A vs Mode B.** Validating the unchanged engine needs no split. After tuning, claims
+     rest on the test writers alone, who must meet the requirement themselves. The draft
+     applied the minimums to everyone while making claims on a 25 % slice.
+  3. **"Analysed once" contradicted the three looks** on test writers. Test data is now read
+     only at planned looks, only for pass, expand or fail, and any tuning burns the test
+     writers.
+  4. **The look schedule** now follows the planned writer count, not fixed numbers (15
+     writers would have meant about 4 test writers).
+- **Unresolved, stated rather than hidden:**
+  - ρ for these binary outcomes is unknown, and hard to estimate when acceptances are rare. The
+    zero-event rule uses a ρ floor of 0.10, which is an assumption.
+  - The pooled wrong-character rate depends on which pairs are included and how they're
+    weighted. Claims are limited to the pair set tested, with per-pair findings reported
+    regardless.
+  - Duplicate enrolment can't be detected from the data (section 5).
+  - Volunteers aren't a random sample of learners.

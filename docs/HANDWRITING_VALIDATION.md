@@ -61,8 +61,14 @@ medium (你, 好, 我) and complex (谢, 都, 喜) ones, and record:
    misplaced.
 
 That gives about 36 samples per participant: roughly 24 correct and 12 incorrect. With 15
-participants this exceeds the minimum the lab enforces before tuning: 300 correct, 300
-incorrect, 15 participants. Add more incorrect samples per session to reach 300 sooner.
+participants this exceeds the floor the lab enforces before tuning (`MIN_SAMPLES`: 300
+correct, 300 incorrect, 15 participants). Add more incorrect samples per session to reach 300
+sooner.
+
+> **The lab floor is necessary, not sufficient (D-083).** It counts samples as if they were
+> independent. Samples from one writer are correlated, so a validation claim needs the
+> power-based, writer-level requirements in M13_VALIDATION_PROTOCOL.md §8 (D-083). For example, showing
+> wrong-character acceptance ≤ 1 % needs roughly 75–160 writers.
 
 **Quality notes.** Discard a sample (don't record it) if the participant was interrupted
 mid-character. If the participant writes something other than requested, record it under the
@@ -81,12 +87,15 @@ category that matches what was actually written.
 ## Changing thresholds (rules)
 
 1. Change thresholds only when the real-sample report misses a target, and only once the
-   minimum sample size has been reached.
+   minimum sample size has been reached: the lab floor **and** the requirements in
+   M13_VALIDATION_PROTOCOL.md §8 (D-083).
 2. Evaluate a candidate change on **all** stored samples, including every device and size
    group, and on the synthetic sweep (`tests/unit/handwriting-engine.test.ts`). A change that
    improves FRR but raises structural false acceptance above target is rejected.
-3. Keep a held-out set: tune on samples from two thirds of the participants and confirm on the
-   remaining third.
+3. Keep a held-out set: tune and choose on some writers, and confirm on different writers.
+   The study design is M13_VALIDATION_PROTOCOL.md §5 (Mode B: 50 / 25 / 25 by writer, and a
+   test group that meets §8 by itself, which in practice means a new cohort). _Updated
+   2026-11-21 (D-083): this rule used to say "two thirds / one third"._
 4. Bump `ENGINE_VERSION` in `src/features/handwriting/evaluate.ts`. Stored attempts keep the
    version they were graded with.
 5. Record the before and after reports and the reasoning in `DECISIONS.md`.
