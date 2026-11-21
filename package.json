@@ -114,6 +114,8 @@
     "prisma@7.10.1": true
   },
   "overrides": {
-    "effect": "3.22.5"
+    "@prisma/config": {
+      "effect": "3.22.5"
+    }
   }
 }
