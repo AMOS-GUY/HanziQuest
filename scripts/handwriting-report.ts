@@ -106,6 +106,10 @@ function render(title: string, metrics: ValidationMetrics, note: string) {
   if (metrics.warnings.length) {
     lines.push("", "**Warnings:**", "", ...metrics.warnings.map((w) => `- ${w}`));
   }
+  lines.push(
+    "",
+    "_These rates count every sample as independent; samples from one writer are correlated, so the real uncertainty is larger. The sample minimums are a floor before tuning, not enough for a validation claim. No accuracy claim follows from this report (docs/M13_VALIDATION_PROTOCOL.md §8, D-083)._",
+  );
   return lines.join("\n") + "\n";
 }
 
