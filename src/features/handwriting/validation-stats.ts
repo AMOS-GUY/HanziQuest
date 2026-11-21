@@ -1,13 +1,14 @@
 /**
  * Statistics for the M13 human-validation study (M13_VALIDATION_PROTOCOL.md, D-082, D-083).
  *
- * Pure functions, no database and no grading: nothing here changes how handwriting is scored.
- * The writer is the independent unit, so every function that summarises samples works on
- * per-writer counts ("clusters").
+ * Pure functions, no database and no grading: nothing here changes how handwriting is scored,
+ * and nothing here is wired into the lab or the report. The writer is the independent unit, so
+ * every function that summarises samples works on per-writer counts ("clusters").
  *
- * - Planning: exact sample sizes, power, design effect and the writers a design needs (§8).
- * - Analysis: the per-writer cap (§4), an intra-writer correlation estimate, a writer-level
- *   cluster bootstrap, and the protocol's decision bound for each measure (§3, §9).
+ * - Planning: exact sample sizes, power, design effect, writers needed, look schedule (§8, §9).
+ * - Analysis: the per-writer cap (§4), intra-writer correlation, writer-level cluster bootstrap
+ *   (§3), leave-one-writer-out (§4), the decision bound and rule for each measure (§3, §9), and
+ *   the per-pair finding rule for look-alike pairs (§6).
  *
  * Synthetic inputs (tests, simulations) are never evidence about real learners.
  */
@@ -18,8 +19,8 @@ import { binomialCdf, exactLowerBound, exactUpperBound } from "@/lib/statistics/
 
 /** Design effect for m samples per writer with intra-writer correlation rho. */
 export function designEffect(m: number, rho: number): number {
-  if (m < 1) throw new Error("designEffect: m must be at least 1");
-  if (rho < 0 || rho > 1) throw new Error("designEffect: rho must be between 0 and 1");
+  if (!(m >= 1)) throw new Error("designEffect: m must be at least 1");
+  if (!(rho >= 0 && rho <= 1)) throw new Error("designEffect: rho must be between 0 and 1");
   return 1 + (m - 1) * rho;
 }
 
@@ -28,24 +29,37 @@ export function effectiveSampleSize(n: number, m: number, rho: number): number {
   return n / designEffect(m, rho);
 }
 
+function assertTarget(name: string, target: number) {
+  if (!(target > 0 && target < 1)) throw new Error(`${name}: target must be in (0, 1)`);
+}
+
+/**
+ * True when `events` out of `n` give an exact one-sided upper bound at or below `target`.
+ * Equivalent to P(X ≤ events | n, target) ≤ alpha, which avoids the bisection tolerance.
+ */
+function upperBoundMeets(events: number, n: number, target: number, alpha: number): boolean {
+  return binomialCdf(events, n, target) <= alpha;
+}
+
 /**
  * Smallest effective n for which `allowed` observed events still give an exact one-sided upper
  * bound at or below `target`.
  */
 export function requiredEffectiveN(target: number, allowed: number, alpha = 0.05): number {
-  if (!(target > 0 && target < 1)) throw new Error("requiredEffectiveN: target must be in (0, 1)");
+  assertTarget("requiredEffectiveN", target);
+  if (!Number.isInteger(allowed) || allowed < 0)
+    throw new Error("requiredEffectiveN: allowed must be a non-negative integer");
   let n = allowed + 1;
-  while (binomialCdf(allowed, n, target) > alpha) n += 1;
+  while (!upperBoundMeets(allowed, n, target, alpha)) n += 1;
   return n;
 }
 
 /** The largest number of events that still passes (upper bound ≤ target), or −1 if none does. */
 export function passingEvents(n: number, target: number, alpha = 0.05): number {
+  assertTarget("passingEvents", target);
+  // P(X ≤ x | target) grows with x, so the passing counts are 0..c.
   let c = -1;
-  for (let x = 0; x <= n; x += 1) {
-    if (exactUpperBound(x, n, alpha) <= target) c = x;
-    else break;
-  }
+  while (c + 1 < n && upperBoundMeets(c + 1, n, target, alpha)) c += 1;
   return c;
 }
 
@@ -55,7 +69,11 @@ export function powerToPass(n: number, target: number, trueRate: number, alpha =
   return c < 0 ? 0 : binomialCdf(c, n, trueRate);
 }
 
-/** Smallest effective n with at least `power` probability of passing, searched in `step`s. */
+/**
+ * Smallest effective n, searched in `step`s, with at least `power` probability of passing.
+ * Power is not monotone in n (it saw-tooths as the passing count steps up), so a slightly larger
+ * n can have slightly lower power. Use `powerToPass` to check a planned n directly.
+ */
 export function effectiveNForPower(
   target: number,
   trueRate: number,
@@ -78,24 +96,45 @@ export function lookAlpha(looks: number, alpha = 0.05): number {
   return alpha / looks;
 }
 
+/** The planned looks for W evaluation writers: about 50 %, 75 % and 100 % of W (§9). */
+export function lookSchedule(plannedWriters: number): number[] {
+  if (!Number.isInteger(plannedWriters) || plannedWriters < 2)
+    throw new Error("lookSchedule: plannedWriters must be an integer ≥ 2");
+  return [
+    ...new Set([Math.ceil(plannedWriters * 0.5), Math.ceil(plannedWriters * 0.75), plannedWriters]),
+  ];
+}
+
 // ─── Analysis ───────────────────────────────────────────────────────────────
 
+/** What identifies a capped cell (§4): one writer, one character, one condition. */
+export interface CapKey {
+  writer: string;
+  character: string;
+  /** Correct, a specific substitution, missing stroke, extra stroke, wrong order, wrong direction. */
+  condition: string;
+  /** When the sample was recorded; the earliest samples are kept. */
+  at: number;
+}
+
 /**
- * The per-writer cap (§4): keep at most `cap` samples per writer and condition, the earliest
- * first. Returns the kept samples in their original order, and how many were set aside.
+ * The per-writer cap (§4): keep at most `cap` samples for each (writer, character, condition),
+ * the earliest first. Returns the kept samples in their original order, and how many were set
+ * aside (recorded, but excluded from the estimates).
  */
 export function capPerWriter<T>(
   samples: readonly T[],
-  key: (s: T) => { writer: string; condition: string; at: number },
+  key: (s: T) => CapKey,
   cap = 2,
 ): { kept: T[]; excluded: number } {
+  if (!Number.isInteger(cap) || cap < 1) throw new Error("capPerWriter: cap must be ≥ 1");
   const order = samples
-    .map((s, i) => ({ s, i, k: key(s) }))
+    .map((s, i) => ({ i, k: key(s) }))
     .sort((a, b) => a.k.at - b.k.at || a.i - b.i);
   const seen = new Map<string, number>();
   const keep = new Set<number>();
   for (const { i, k } of order) {
-    const id = `${k.writer}\u0000${k.condition}`;
+    const id = JSON.stringify([k.writer, k.character, k.condition]);
     const count = seen.get(id) ?? 0;
     if (count < cap) keep.add(i);
     seen.set(id, count + 1);
@@ -109,17 +148,38 @@ export interface WriterCount {
   n: number;
 }
 
+/** Validates counts and drops writers with no samples (they carry no information). */
+function clean(writers: readonly WriterCount[]): WriterCount[] {
+  for (const c of writers)
+    if (
+      !Number.isInteger(c.n) ||
+      !Number.isInteger(c.events) ||
+      c.n < 0 ||
+      c.events < 0 ||
+      c.events > c.n
+    )
+      throw new Error("writer counts must be integers with 0 ≤ events ≤ n");
+  return writers.filter((c) => c.n > 0);
+}
+
+function totals(w: readonly WriterCount[]) {
+  return {
+    events: w.reduce((s, c) => s + c.events, 0),
+    samples: w.reduce((s, c) => s + c.n, 0),
+  };
+}
+
 /**
  * Intra-writer correlation for a binary outcome (one-way ANOVA estimator), or null when it can't
  * be estimated: fewer than 2 writers, no within-writer replication, or no variation at all (for
- * example, zero events everywhere). Clamped to [0, 1].
+ * example, zero events everywhere). Clamped to [0, 1]. With rare events it is very imprecise.
  */
 export function intraWriterCorrelation(writers: readonly WriterCount[]): number | null {
-  const w = writers.filter((c) => c.n > 0);
+  const w = clean(writers);
   const k = w.length;
-  const N = w.reduce((s, c) => s + c.n, 0);
+  const { events, samples: N } = totals(w);
   if (k < 2 || N <= k) return null;
-  const pBar = w.reduce((s, c) => s + c.events, 0) / N;
+  const pBar = events / N;
   if (pBar === 0 || pBar === 1) return null;
   const ssb = w.reduce((s, c) => s + c.n * (c.events / c.n - pBar) ** 2, 0);
   const ssw = w.reduce((s, c) => s + c.events * (1 - c.events / c.n), 0);
@@ -133,19 +193,19 @@ export function intraWriterCorrelation(writers: readonly WriterCount[]): number 
 
 /**
  * Leave-one-writer-out stability (§4): the pooled rate without each writer in turn, and whether
- * removing any single writer moves the rate across `target`. An unstable result must not be the
- * basis of a decision.
+ * removing any single writer moves the point estimate across `target`. An unstable result must
+ * not be the basis of a decision.
  */
 export function leaveOneWriterOut(
   writers: readonly WriterCount[],
   target: number,
 ): { rates: (number | null)[]; unstable: boolean } {
-  const events = writers.reduce((s, c) => s + c.events, 0);
-  const total = writers.reduce((s, c) => s + c.n, 0);
-  const full = total ? events / total : null;
-  const rates = writers.map((c) => (total - c.n > 0 ? (events - c.events) / (total - c.n) : null));
-  const side = (r: number) => r <= target;
-  const unstable = full !== null && rates.some((r) => r !== null && side(r) !== side(full));
+  const w = clean(writers);
+  const { events, samples } = totals(w);
+  const full = samples ? events / samples : null;
+  const rates = w.map((c) => (samples - c.n > 0 ? (events - c.events) / (samples - c.n) : null));
+  const meets = (r: number) => r <= target;
+  const unstable = full !== null && rates.some((r) => r !== null && meets(r) !== meets(full));
   return { rates, unstable };
 }
 
@@ -160,22 +220,27 @@ function rng(seed: number) {
   };
 }
 
+/** Writers below which a bootstrap is too coarse to report (resamples repeat too often). */
+export const MIN_BOOTSTRAP_WRITERS = 10;
+
 /**
- * Writer-level cluster bootstrap of the pooled rate: writers are resampled with replacement.
- * Returns the percentile interval (two-sided, 1 − alpha), or null when every resample would be
- * identical (zero events or all events): use `decisionBound` for those.
+ * Writer-level cluster bootstrap of the pooled rate (§3): writers are resampled with
+ * replacement, and the percentile interval (two-sided, 1 − alpha) is returned. Null when every
+ * resample would be identical (zero events or all events) or there are fewer than
+ * `MIN_BOOTSTRAP_WRITERS` writers: the exact bound on the effective n is used then.
  */
 export function clusterBootstrapInterval(
   writers: readonly WriterCount[],
   options: { replicates?: number; seed?: number; alpha?: number } = {},
 ): [number, number] | null {
   const { replicates = 10_000, seed = 20261120, alpha = 0.05 } = options;
-  const w = writers.filter((c) => c.n > 0);
-  const events = w.reduce((s, c) => s + c.events, 0);
-  const total = w.reduce((s, c) => s + c.n, 0);
-  if (w.length < 2 || events === 0 || events === total) return null;
+  if (!Number.isInteger(replicates) || replicates < 100)
+    throw new Error("clusterBootstrapInterval: replicates must be an integer ≥ 100");
+  const w = clean(writers);
+  const { events, samples } = totals(w);
+  if (w.length < MIN_BOOTSTRAP_WRITERS || events === 0 || events === samples) return null;
   const r = rng(seed);
-  const rates: number[] = [];
+  const rates = new Float64Array(replicates);
   for (let b = 0; b < replicates; b += 1) {
     let e = 0;
     let n = 0;
@@ -184,10 +249,12 @@ export function clusterBootstrapInterval(
       e += c.events;
       n += c.n;
     }
-    rates.push(e / n);
+    rates[b] = e / n;
   }
-  rates.sort((a, b) => a - b);
-  const at = (q: number) => rates[Math.min(rates.length - 1, Math.floor(q * rates.length))]!;
+  rates.sort();
+  // Type-1 (inverse empirical CDF) percentiles: the smallest value with at least q of the mass.
+  const at = (q: number) =>
+    rates[Math.min(replicates - 1, Math.max(0, Math.ceil(q * replicates) - 1))]!;
   return [at(alpha / 2), at(1 - alpha / 2)];
 }
 
@@ -196,61 +263,207 @@ export interface DecisionBound {
   samples: number;
   writers: number;
   rate: number | null;
-  /** "Assumes independence (optimistic)": for reference only. */
+  /** "Assumes independence (optimistic)": for reference only, never for a decision. */
   naiveWilson: [number, number] | null;
-  /** The correlation used for the effective sample size (estimate, floored at `rhoFloor`). */
+  /** The correlation used for the design effect (estimate or given, never below the floor). */
   rho: number;
   rhoEstimated: boolean;
+  /** Size-weighted cluster size Σnᵢ² / N, used in the design effect (equals m when equal). */
+  clusterSize: number;
   effectiveSamples: number;
   /** Exact one-sided bounds on the effective sample size, at the look's alpha. */
+  exactUpper: number | null;
+  exactLower: number | null;
+  /** Writer-level bootstrap interval (1 − 2·alpha two-sided, so each end is one-sided alpha). */
+  bootstrap: [number, number] | null;
+  /** The rule that chose the deciding bounds (see `DecisionRule`). */
+  rule: DecisionRule;
+  /** Which interval decided: one of the two, or the worse of both ("conservative"). */
+  method: "bootstrap" | "exact-effective-n" | "conservative" | "none";
+  /** The deciding one-sided bounds. */
   upper: number | null;
   lower: number | null;
-  /** Writer-level bootstrap interval, when events vary (null otherwise). */
-  bootstrap: [number, number] | null;
 }
 
 /**
- * The protocol's decision bound for one measure (§3, §9). The effective sample size uses the
- * estimated intra-writer correlation, never below `rhoFloor` (0.10 by default, §8). Exact
- * one-sided bounds at `alpha` (use `lookAlpha` for planned looks) decide pass and fail.
+ * How the deciding bounds are chosen when both intervals exist.
+ *
+ * - `"conservative"` (default): the worse bound of the two in each direction (the larger upper,
+ *   the smaller lower). With sparse events the percentile bootstrap is optimistic: for 3 events
+ *   among 40 writers × 20 samples, its upper bound is about 0.75 %, below even the naive Wilson
+ *   bound (about 1.1 %), while the exact bound on the effective n is about 2.3 %. Taking the
+ *   worse of the two keeps D-083's conclusion true: 30–40 writers can't show ≤ 1 %.
+ * - `"bootstrap-first"`: §3 as written. The bootstrap whenever it exists, the exact bound only
+ *   where it can't be used. Kept so the protocol's literal rule can be reproduced; whether §3
+ *   should be amended is an owner decision (M13_VALIDATION_READINESS.md).
+ */
+export type DecisionRule = "conservative" | "bootstrap-first";
+
+/**
+ * The protocol's decision bound for one measure (§3, §9).
+ *
+ * - Every decision interval is writer-level: the cluster bootstrap, the exact one-sided bound on
+ *   the effective n, or the worse of the two (`rule`, default `"conservative"`). Where the
+ *   bootstrap can't be used (zero or all events, or too few writers), the exact bound decides.
+ * - The effective n uses the design effect with the size-weighted cluster size Σnᵢ²/N (Kish;
+ *   equal to m when writers contribute equally, larger and so more conservative when they
+ *   don't), and ρ never below `rhoFloor` (0.10, §3). Pass `rho` to use an estimate from other
+ *   cells, as §3 says for zero-event cells.
+ * - Events are scaled to the effective n and rounded **up** for the upper bound and **down** for
+ *   the lower bound, so each bound is conservative in its own direction.
+ * - `alpha` is per look: use `lookAlpha(looks)` for planned looks.
  */
 export function decisionBound(
   writers: readonly WriterCount[],
-  options: { alpha?: number; rhoFloor?: number; rho?: number } = {},
+  options: {
+    alpha?: number;
+    rhoFloor?: number;
+    rho?: number;
+    replicates?: number;
+    seed?: number;
+    rule?: DecisionRule;
+  } = {},
 ): DecisionBound {
-  const { alpha = 0.05, rhoFloor = 0.1 } = options;
-  const w = writers.filter((c) => c.n > 0);
-  const events = w.reduce((s, c) => s + c.events, 0);
-  const samples = w.reduce((s, c) => s + c.n, 0);
+  const { alpha = 0.05, rhoFloor = 0.1, rule = "conservative" } = options;
+  if (!(alpha > 0 && alpha < 0.5)) throw new Error("decisionBound: alpha must be in (0, 0.5)");
+  const w = clean(writers);
+  const { events, samples } = totals(w);
   const estimate = options.rho ?? intraWriterCorrelation(w);
   const rho = Math.max(rhoFloor, estimate ?? 0);
-  const meanPerWriter = w.length ? samples / w.length : 0;
-  const effective = samples ? effectiveSampleSize(samples, Math.max(1, meanPerWriter), rho) : 0;
-  // The observed events, scaled to the effective sample size (rounded up: conservative).
-  const effN = Math.max(0, Math.floor(effective));
-  const effEvents = samples ? Math.min(effN, Math.ceil((events / samples) * effN)) : 0;
+  const clusterSize = samples ? w.reduce((s, c) => s + c.n * c.n, 0) / samples : 0;
+  const effective = samples ? effectiveSampleSize(samples, Math.max(1, clusterSize), rho) : 0;
+  const effN = Math.floor(effective);
+  const rate = samples ? events / samples : null;
+  let exactUpper: number | null = null;
+  let exactLower: number | null = null;
+  if (effN > 0 && rate !== null) {
+    exactUpper = exactUpperBound(Math.min(effN, Math.ceil(rate * effN)), effN, alpha);
+    exactLower = exactLowerBound(Math.min(effN, Math.floor(rate * effN)), effN, alpha);
+  }
+  const bootstrap = clusterBootstrapInterval(w, {
+    alpha: 2 * alpha,
+    replicates: options.replicates,
+    seed: options.seed,
+  });
+  let method: DecisionBound["method"] = "none";
+  let upper: number | null = null;
+  let lower: number | null = null;
+  if (bootstrap && exactUpper !== null && exactLower !== null && rule === "conservative") {
+    method = "conservative";
+    upper = Math.max(bootstrap[1], exactUpper);
+    lower = Math.min(bootstrap[0], exactLower);
+  } else if (bootstrap) {
+    method = "bootstrap";
+    [lower, upper] = bootstrap;
+  } else if (exactUpper !== null) {
+    method = "exact-effective-n";
+    upper = exactUpper;
+    lower = exactLower;
+  }
   return {
     events,
     samples,
     writers: w.length,
-    rate: samples ? events / samples : null,
+    rate,
     naiveWilson: samples ? wilson(events, samples) : null,
     rho,
     rhoEstimated: estimate !== null && options.rho === undefined,
+    clusterSize,
     effectiveSamples: effective,
-    upper: effN > 0 ? exactUpperBound(effEvents, effN, alpha) : null,
-    lower: effN > 0 ? exactLowerBound(effEvents, effN, alpha) : null,
-    bootstrap: clusterBootstrapInterval(w, { alpha: 2 * alpha }),
+    exactUpper,
+    exactLower,
+    bootstrap,
+    rule,
+    method,
+    upper,
+    lower,
   };
 }
 
-/** The protocol's decision for one acceptance-type measure (upper bound against target). */
+export type Decision = "pass" | "fail" | "expand" | "inconclusive" | "no-data";
+
+/**
+ * The §9 decision for one measure at one look.
+ *
+ * - `direction: "at-most"` (default) is for rates that must be low (false acceptance, FRR):
+ *   pass when the upper bound ≤ target, fail when the lower bound > target.
+ * - `direction: "at-least"` is for rates that must be high (specific error named ≥ 80 %):
+ *   pass when the lower bound ≥ target, fail when the upper bound < target.
+ * - Otherwise: **expand** to the next look, or **inconclusive** at the final look (report the
+ *   bound actually shown, and claim nothing about the target).
+ */
 export function decide(
   bound: DecisionBound,
   target: number,
-): "pass" | "fail" | "inconclusive" | "no-data" {
+  options: { direction?: "at-most" | "at-least"; finalLook?: boolean } = {},
+): Decision {
+  const { direction = "at-most", finalLook = true } = options;
+  assertTarget("decide", target);
   if (bound.upper === null || bound.lower === null) return "no-data";
-  if (bound.upper <= target) return "pass";
-  if (bound.lower > target) return "fail";
-  return "inconclusive";
+  if (direction === "at-most") {
+    if (bound.upper <= target) return "pass";
+    if (bound.lower > target) return "fail";
+  } else {
+    if (bound.lower >= target) return "pass";
+    if (bound.upper < target) return "fail";
+  }
+  return finalLook ? "inconclusive" : "expand";
+}
+
+/** One wrong-character sample for a look-alike pair (§6). */
+export interface PairSample {
+  /** The pair, for example "他/她", as the confusable suite names it. */
+  pair: string;
+  writer: string;
+  accepted: boolean;
+}
+
+export interface PairSummary {
+  pair: string;
+  accepted: number;
+  written: number;
+  writers: number;
+  /** Writers with at least one accepted sample. */
+  acceptingWriters: number;
+  /** §6: accepted in ≥ 2 samples from ≥ 2 different writers, whatever the pooled rate. */
+  finding: boolean;
+}
+
+/**
+ * Per-pair descriptive counts for look-alike pairs (§6). Per-pair n is small, so these are never
+ * compared with the 1 % target on their own: the pooled rate is judged with `decisionBound`.
+ */
+export function pairSummaries(samples: readonly PairSample[]): PairSummary[] {
+  const byPair = new Map<string, PairSample[]>();
+  for (const s of samples) byPair.set(s.pair, [...(byPair.get(s.pair) ?? []), s]);
+  return [...byPair.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([pair, list]) => {
+      const accepted = list.filter((s) => s.accepted);
+      const acceptingWriters = new Set(accepted.map((s) => s.writer)).size;
+      return {
+        pair,
+        accepted: accepted.length,
+        written: list.length,
+        writers: new Set(list.map((s) => s.writer)).size,
+        acceptingWriters,
+        finding: accepted.length >= 2 && acceptingWriters >= 2,
+      };
+    });
+}
+
+/** Per-writer counts from labelled samples, for `decisionBound` and friends. */
+export function countByWriter<T>(
+  samples: readonly T[],
+  writer: (s: T) => string,
+  isEvent: (s: T) => boolean,
+): WriterCount[] {
+  const counts = new Map<string, WriterCount>();
+  for (const s of samples) {
+    const c = counts.get(writer(s)) ?? { events: 0, n: 0 };
+    c.n += 1;
+    if (isEvent(s)) c.events += 1;
+    counts.set(writer(s), c);
+  }
+  return [...counts.keys()].sort().map((k) => counts.get(k)!);
 }
