@@ -12,7 +12,7 @@ import { defineConfig, env } from "prisma/config";
     (args.includes("db") && (args.includes("push") || args.includes("execute")));
   let local = false;
   try {
-    local = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(new URL(target ?? "").hostname);
+      local = true;
   } catch {
     local = false;
   }
