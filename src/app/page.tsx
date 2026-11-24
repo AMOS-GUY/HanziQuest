@@ -9,18 +9,18 @@ import { SiteFooter } from "@/components/brand/site-footer";
 const FEATURES = [
   {
     icon: PenLine,
-    title: "Write, don't just tap",
-    text: "Practise every character by hand, stroke by stroke.",
+    title: "Write, don't just tap!",
+    text: "You have to practise every character by hand, stroke by stroke.",
   },
   {
     icon: BookOpen,
-    title: "A clear path",
-    text: "Start at HSK 1 and build vocabulary lesson by lesson.",
+    title: "A clear trail",
+    text: "Start your HSK level and build vocabulary lesson by lesson.",
   },
   {
     icon: Repeat,
-    title: "Remember it",
-    text: "Characters come back for review right when you need them.",
+    title: "Remember it!",
+    text: "Characters come back for review whenever you need them.",
   },
   {
     icon: WifiOff,
@@ -73,7 +73,7 @@ export default async function WelcomePage({
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg">
-              <Link href="/register">Join the free beta</Link>
+              <Link href="/register">Join the quest</Link>
             </Button>
             <Button asChild size="lg" variant="secondary">
               <Link href="/login">I already have an account</Link>

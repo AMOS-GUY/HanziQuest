@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito, Noto_Sans_SC } from "next/font/google";
+import { Nunito, Noto_Sans_SC, Geist } from "next/font/google";
 import "./globals.css";
 import { EnvironmentBanner } from "@/components/system/environment-banner";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const nunito = Nunito({
   subsets: ["latin", "latin-ext"],
@@ -40,7 +43,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${nunito.variable} ${notoSansSc.variable}`}>
+    <html lang="en" className={cn(nunito.variable, notoSansSc.variable, "font-sans", geist.variable)}>
       <body className="min-h-dvh antialiased">
         <EnvironmentBanner />
         {children}
