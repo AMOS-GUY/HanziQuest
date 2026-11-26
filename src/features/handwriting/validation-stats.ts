@@ -272,7 +272,17 @@ export function clusterBootstrapInterval(
   return [at(alpha / 2), at(1 - alpha / 2)];
 }
 
+/**
+ * The evidential status of every result from this module. It stays "exploratory" until an
+ * independent statistical review is done and the decision rule is pre-registered
+ * (docs/M13_STATISTICAL_REVIEW_PROPOSAL.md). Code that displays or stores a decision must show
+ * it, so a "pass" is never read as a validated claim.
+ */
+export const EVIDENCE_STATUS = "exploratory" as const;
+
 export interface DecisionBound {
+  /** Always EVIDENCE_STATUS: no result from this module is confirmatory evidence. */
+  evidence: typeof EVIDENCE_STATUS;
   events: number;
   samples: number;
   writers: number;
@@ -391,12 +401,17 @@ export function decisionBound(
     exactLower,
     bootstrap,
     rule,
+    evidence: EVIDENCE_STATUS,
     method,
     upper,
     lower,
   };
 }
 
+/**
+ * A decision is exploratory (see EVIDENCE_STATUS): "pass" means the chosen bound met the target
+ * under this module's unvalidated assumptions, not that the engine meets it.
+ */
 export type Decision = "pass" | "fail" | "expand" | "inconclusive" | "no-data";
 
 /**
