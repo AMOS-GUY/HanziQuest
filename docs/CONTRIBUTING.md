@@ -39,7 +39,18 @@ are security and data-integrity guards, and changes like that are easy to merge 
   npm run lint && npm run format:check && npm run typecheck && npm test && npm run build
   ```
 
-- **One review from someone else, then the owner merges.** Nobody merges their own PR.
+  Changes to `src/features`, API routes or `prisma/` also need `npm run test:integration` (with
+  `npm run db:local` running).
+
+- **CI must be green before merging.** Both the `verify` and `docker` jobs. Don't merge on red,
+  even when the failure looks unrelated: find out first (docs/BRANCH_PROTECTION.md).
+- **Review, then Amos merges:**
+  - **Anesu's PRs:** Amos reviews. Claude can do a first technical review on request.
+  - **Claude's PRs:** they're pushed from Amos's account, so GitHub shows Amos as the author.
+    Amos is the reviewer, and nobody else needs to approve them.
+  - **Amos's own PRs:** a review from Anesu or Claude when they touch shared UI or architecture.
+- **Dependabot PRs:** merge only when CI is green. A lockfile conflict with another PR is fixed
+  by asking Dependabot to rebase (comment `@dependabot rebase`), never by hand-editing.
 
 ## 3. Ask before changing these
 
@@ -79,12 +90,17 @@ Frontend work rarely needs any of these. If it does, say so in the PR descriptio
 
 ## 5. Working alongside each other (and with Claude)
 
-- **Ownership:**
-  - **Frontend:** Anesu leads UI and UX: layouts, components, visual design.
-  - **Learning logic:** backend, data and grading.
-  - Either can propose changes in the other's area through a PR.
+- **Who does what** (a guide, not a fence):
+  - **Amos:** product ownership, architecture decisions, final approval and merges.
+  - **Anesu:** frontend, UI/UX, design and frontend implementation.
+  - **Claude:** engineering support, including architecture analysis, implementation, tests,
+    audits and integration help.
+  - Anyone can propose a change in any area through a PR.
 - **Before starting something big,** post a one-line note in the team channel (or a draft PR),
   so two people don't build the same thing.
+- **Shared architecture** (data loading, component APIs in `src/components/ui`, design tokens):
+  agree in the PR or a short note before changing it, so nobody builds on something that is
+  about to move.
 - **Claude integrates; it doesn't overwrite.**
   - It works on its own branches and never rewrites or force-pushes someone else's branch.
   - It credits the original author in commit messages.
