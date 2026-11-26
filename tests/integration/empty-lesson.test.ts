@@ -274,6 +274,59 @@ describe("completing a lesson with no published exercises", () => {
   });
 });
 
+describe("concurrent completion requests", () => {
+  it("parallel completions of an emptied lesson are all refused and grant nothing", async () => {
+    const { levelId, first, next } = await publishedLevel();
+    await emptyThroughEditing(first);
+    const learner = await newLearner();
+    const session = await startLessonSession(prisma, learner, first);
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, () => completeLessonSession(prisma, learner, session.id)),
+    );
+    expect(results.every((r) => r.status === "rejected")).toBe(true);
+    for (const r of results)
+      expect((r as PromiseRejectedResult).reason).toMatchObject({ code: "conflict" });
+    await expectNothingGranted(learner, first, levelId, next);
+  });
+
+  it("parallel completions of a practised lesson grant the lesson XP exactly once", async () => {
+    const { first } = await publishedLevel();
+    const learner = await newLearner();
+    const session = await startLessonSession(prisma, learner, first);
+    for (const { exercise } of await exercisesOf(first)) {
+      const chars = (exercise.evaluationConfig as { characters: string[] }).characters;
+      await submitAttempt(prisma, learner, {
+        clientEventId: randomUUID(),
+        exerciseId: exercise.id,
+        sessionId: session.id,
+        occurredAt: new Date().toISOString(),
+        ...(exercise.type === "GUIDED_STROKE"
+          ? { kind: "guided", mistakes: 0 }
+          : {
+              kind: "writing",
+              drawings: chars.map((c, i) =>
+                toInk(fromMakeMeAHanzi(c, loadStrokeData(c)!.medians).medians, { seed: i + 7 }),
+              ),
+            }),
+      });
+    }
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, () => completeLessonSession(prisma, learner, session.id)),
+    );
+    expect(results.filter((r) => r.status === "rejected")).toEqual([]);
+    const awarded = results.map(
+      (r) => (r as PromiseFulfilledResult<{ progress: { xpAwarded: number } | null }>).value,
+    );
+    // The per-learner lock serializes them: one grants the completion, the others see it done.
+    expect(awarded.filter((a) => a.progress !== null)).toHaveLength(1);
+    expect(
+      await prisma.xPTransaction.count({ where: { userId: learner, reason: "LESSON_COMPLETED" } }),
+    ).toBe(1);
+  });
+});
+
 describe("legitimate completion is unchanged", () => {
   it("completes after real attempts, grants the usual rewards once, and unlocks the next lesson", async () => {
     const { levelId, first, next } = await publishedLevel();
