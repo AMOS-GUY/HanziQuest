@@ -34,12 +34,15 @@ export type PracticeMode =
   | { kind: "free" }
   /** Admin preview: graded locally, nothing is saved. */
   | { kind: "preview" };
-/** The page heading for screen readers (the practice screen has no visible title). */
-const PRACTICE_HEADING: Record<PracticeMode["kind"], string> = {
+/**
+ * The page heading for screen readers (the practice screen has no visible title). Admin preview
+ * is embedded in a page that already has its own <h1> (the lesson title), so it adds none.
+ */
+const PRACTICE_HEADING: Record<PracticeMode["kind"], string | null> = {
   lesson: "Lesson practice",
   review: "Review",
   free: "Character practice",
-  preview: "Lesson preview",
+  preview: null,
 };
 
 type Outcome =
@@ -435,7 +438,9 @@ export function PracticeRunner({
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4 py-2">
-      <h1 className="sr-only">{PRACTICE_HEADING[mode.kind]}</h1>
+      {PRACTICE_HEADING[mode.kind] ? (
+        <h1 className="sr-only">{PRACTICE_HEADING[mode.kind]}</h1>
+      ) : null}
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="icon" aria-label="Exit practice">
           <Link href={exitHref}>
