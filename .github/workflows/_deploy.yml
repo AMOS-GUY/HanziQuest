@@ -46,7 +46,7 @@ jobs:
           [ "$CONFIRM" = "deploy $TARGET" ] || { echo "::error::Type exactly: deploy $TARGET"; exit 1; }
           echo "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "::error::Give the full 40-character commit SHA"; exit 1; }
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -107,7 +107,7 @@ jobs:
           [ -n "$APP_URL" ] || missing="$missing APP_URL"
           [ -z "$missing" ] || { echo "::error::Missing secrets on the '$TARGET' environment:$missing (docs/M11_STAGING_CONFIGURATION.md)"; exit 1; }
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.sha }}
           fetch-depth: 0
