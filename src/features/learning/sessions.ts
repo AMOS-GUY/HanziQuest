@@ -28,10 +28,13 @@ export async function startLessonSession(prisma: PrismaClient, userId: string, l
 
   return prisma.$transaction(async (tx) => {
     const session = await tx.learningSession.create({ data: { userId, lessonId, type: "LESSON" } });
-    await tx.lessonProgress.upsert({
-      where: { userId_lessonId: { userId, lessonId } },
-      create: { userId, lessonId, status: "IN_PROGRESS" },
-      update: {},
+    // Mark the lesson in progress if it has no progress yet, and leave any existing row alone
+    // (IN_PROGRESS, COMPLETED or TESTED_OUT). This is a single INSERT … ON CONFLICT DO NOTHING:
+    // an `upsert` here reads, then inserts, so two concurrent first starts both inserted, and one
+    // failed with a unique-constraint error (500).
+    await tx.lessonProgress.createMany({
+      data: [{ userId, lessonId, status: "IN_PROGRESS" }],
+      skipDuplicates: true,
     });
     return session;
   });
