@@ -15,6 +15,7 @@ import {
   decide,
   decisionBound,
   designEffect,
+  EVIDENCE_STATUS,
   effectiveNForPower,
   effectiveSampleSize,
   intraWriterCorrelation,
@@ -422,6 +423,13 @@ describe("decision bound and rule (§3, §9)", () => {
     expect(decide(decisionBound(good), 0.8, { direction: "at-least" })).toBe("pass");
     expect(decide(decisionBound(poor), 0.8, { direction: "at-least" })).toBe("fail");
     expect(() => decide(decisionBound(good), 1)).toThrow();
+  });
+
+  it("labels every result exploratory, so a pass is never read as validated", () => {
+    expect(EVIDENCE_STATUS).toBe("exploratory");
+    for (const w of [[], repeat(120, { events: 0, n: 20 }), repeat(40, { events: 1, n: 20 })])
+      for (const rule of ["conservative", "bootstrap-first"] as const)
+        expect(decisionBound(w, { rule }).evidence).toBe("exploratory");
   });
 
   it("is deterministic for a given seed", () => {
