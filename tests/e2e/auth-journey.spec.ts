@@ -12,7 +12,7 @@ test("learner can register, see the learning path, log out and log back in", asy
 
   await page.goto("/");
   await expect(page.getByRole("img", { name: "HanziQuest" }).first()).toBeVisible();
-  await page.getByRole("link", { name: "Join the free beta" }).click();
+  await page.getByRole("link", { name: "Join the quest" }).click();
 
   await expect(page).toHaveURL(/\/register$/);
   await page.getByLabel("Your name").fill("E2E Learner");
