@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { HanziCanvas } from "@/components/HanziCanvas";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
@@ -10,29 +8,24 @@ import { PracticeRunner } from "@/components/lessons/practice-runner";
 
 export const metadata: Metadata = { title: "Practice" };
 
-export default function LessonPracticePage() {
- 
-    const [mode, setMode] = useState<"animate" | "quiz">("animate"); 
-    // const user = await requireUser();
-    // const user = await requireUser();
-    const user = { id: "test-user" }; // Fake user
-
-    // We need to extract the lessonId from the URL params
-    const lessonId = 1; // Hardcoded for testing, replace with actual logic to get lessonId from URL
-
-    // Fake data so the UI loads without a database
-  
-        const payload = {
-            title: "Test Lesson",
-            characters: ["你", "好"],
-            exercises: [],
-            strokeData: {},
-            candidates: []
-        };
-  
-    return (
-        <div className="flex flex-col items-center justify-center min-h-[80vh]">
-            <HanziCanvas character="你" />
-        </div>
-    );
+export default async function LessonPracticePage({
+  params,
+}: {
+  params: Promise<{ lessonId: string }>;
+}) {
+  const user = await requireUser();
+  const { lessonId } = await params;
+  const state = await getLessonState(prisma, user.id, lessonId);
+  if (!state) notFound();
+  if (state === "LOCKED") redirect(`/learn/${lessonId}`);
+  const payload = await getLessonPractice(lessonId);
+  if (!payload) notFound();
+  return (
+    <PracticeRunner
+      payload={payload}
+      mode={{ kind: "lesson", lessonId }}
+      userId={user.id}
+      exitHref={`/learn/${lessonId}`}
+    />
+  );
 }
