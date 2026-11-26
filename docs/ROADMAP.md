@@ -128,7 +128,8 @@ decision and any tuning. Those still need real samples, a teacher and owner deci
 - **Scope.**
   - **Offline replay harness:** score candidate thresholds against all stored samples, with a
     fixed participant-level held-out third. Report per device and size, and fail on any target
-    regression.
+    regression. That third is a diagnostic split (D-069); a validation study's writers are
+    assigned as in M13_VALIDATION_PROTOCOL.md §5.
   - **Confusable-pair suite:** pairs such as 他/她, 人/八/入, 日/目/白, 土/士, 己/已/巳, in synthetic and
     real ink. It must keep working as the candidate set grows: adding HSK 2/3 characters changes
     identity checking, so every content import re-runs it.
@@ -352,7 +353,7 @@ owner's go-ahead for its milestone.
 | M12       | Withdrawal (delete by code, audited); consent-version field; pilot report with Wilson intervals; notes guard; prompt-coverage test; rehearsal with `TEST` codes; session checklist; LAN pilot mode design and review                                      | Pilot option B (staging). Recruiting and sessions need owner approval, but no money    |
 | M14       | Source register and importer rule; honest provenance for HSK 1 Starter; edition-tag model (local migration); example-sentence format; review queue and metadata; fixing the 3 validator warnings in original content; edition-mapping dry run on fixtures | HSK lists (owner sourcing and legal advice); teacher review (may be paid); audio       |
 | M15       | Every metric service and admin page on stored data; onboarding walkthrough on local builds; retention aids in the app                                                                                                                                     | Meaningful numbers need beta learners; email or push needs a provider                  |
-| M13       | Offline replay harness; confusable-pair suite (synthetic ink); dispute-route design; validation-minimum amendment (docs)                                                                                                                                  | ≥ 15 real participants; teacher input on the technique policy                          |
+| M13       | Offline replay harness; confusable-pair suite (synthetic ink); dispute-route design; validation-minimum amendment (docs)                                                                                                                                  | Real participants as M13 §8 requires (D-083); teacher input on the technique policy    |
 | M16       | Simulation harness in tests                                                                                                                                                                                                                               | Calibration needs weeks of beta data                                                   |
 | M17       | Document the decisions; optional free local tools (`age`, VC++ runtime, a container engine)                                                                                                                                                               | Legal review, staging provisioning, GitHub Actions (from 2026-12-01), physical devices |
 

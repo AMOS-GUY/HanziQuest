@@ -36,7 +36,9 @@ thresholds.
 
 ## Collecting samples
 
-**Who.** At least 15 participants (target 20–30), mixing complete beginners, learners who have
+**Who.** At least 15 participants (the lab floor). How many a study needs depends on the claim
+it aims for: about 30–40 writers to estimate the rates, 75–160 to show ≤ 1 % wrong-character
+acceptance (M13_VALIDATION_PROTOCOL.md §8 and §12, D-083). Mix complete beginners, learners who have
 studied for at least a year, at least 2 native or heritage writers, at least 2 left-handed
 writers, and phone (finger), tablet (stylus) and laptop (mouse or trackpad) users.
 
