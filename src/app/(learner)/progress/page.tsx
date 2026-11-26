@@ -138,7 +138,11 @@ export default async function ProgressPage() {
           A character becomes familiar after you write it from memory on two spaced reviews. It
           becomes mastered after four, once your last two were written with the correct stroke order
           and direction. Traced or hinted practice helps you learn but doesn&apos;t count towards
-          mastery.
+          mastery.{" "}
+          <Link href="/vocabulary" className="text-primary font-bold underline">
+            Browse the words they appear in
+          </Link>
+          .
         </p>
         <ul className="mb-3 flex flex-wrap gap-2 text-xs" aria-label="Mastery counts">
           {(["LEARNING", "FAMILIAR", "MASTERED"] as const).map((l) => (
