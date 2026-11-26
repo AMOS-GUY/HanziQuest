@@ -10,17 +10,17 @@ const FEATURES = [
   {
     icon: PenLine,
     title: "Write, don't just tap!",
-    text: "You have to practise every character by hand, stroke by stroke.",
+    text: "Practise every character by hand, stroke by stroke.",
   },
   {
     icon: BookOpen,
     title: "A clear trail",
-    text: "Start your HSK level and build vocabulary lesson by lesson.",
+    text: "Start at HSK 1 and build vocabulary lesson by lesson.",
   },
   {
     icon: Repeat,
     title: "Remember it!",
-    text: "Characters come back for review whenever you need them.",
+    text: "Characters come back for review right when you need them.",
   },
   {
     icon: WifiOff,

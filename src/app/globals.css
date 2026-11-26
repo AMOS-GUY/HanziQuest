@@ -1,10 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
-/*
- ---break---
- */
-@custom-variant dark (&:is(.dark *));
 
 /*
  * HanziQuest design tokens. Brand palette is defined in docs/BRANDING.md.
@@ -18,49 +12,29 @@
   --brand-ivory: #fff8e9;
   --brand-coral: #f04438;
   --brand-charcoal: #18332f;
+
+  --background: var(--brand-ivory);
   --surface: #ffffff;
   --surface-muted: #f4efe2;
-  --muted-foreground: oklch(0.556 0 0);
-  --border: oklch(0.922 0 0);
-  --primary: oklch(0.205 0 0);
+  --foreground: var(--brand-charcoal);
+  --muted-foreground: #4f6662;
+  --border: #e4dccb;
+  --primary: var(--brand-emerald);
   --primary-hover: var(--brand-forest);
-  --primary-foreground: oklch(0.985 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --primary-foreground: #ffffff;
+  --accent: #dff5ef;
+  --accent-foreground: var(--brand-forest);
   --danger: #c4281d;
   --danger-surface: #fdecea;
-  --ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --input: oklch(0.922 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --ring: var(--brand-mint);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --background: #0d1f1c;
     --surface: #142b27;
     --surface-muted: #1b3631;
+    --foreground: #eef6f3;
     --muted-foreground: #a7bdb8;
     --border: #2a4741;
     --primary: var(--brand-mint);
@@ -97,85 +71,23 @@
   --color-danger-surface: var(--danger-surface);
   --color-ring: var(--ring);
 
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
   --font-hanzi:
     var(--font-noto-sc), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
     sans-serif;
 
   --radius-card: 1.25rem;
-
-  --font-heading: var(--font-sans);
-
-  --color-sidebar-ring: var(--sidebar-ring);
-
-  --color-sidebar-border: var(--sidebar-border);
-
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-
-  --color-sidebar-accent: var(--sidebar-accent);
-
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-
-  --color-sidebar-primary: var(--sidebar-primary);
-
-  --color-sidebar-foreground: var(--sidebar-foreground);
-
-  --color-sidebar: var(--sidebar);
-
-  --color-chart-5: var(--chart-5);
-
-  --color-chart-4: var(--chart-4);
-
-  --color-chart-3: var(--chart-3);
-
-  --color-chart-2: var(--chart-2);
-
-  --color-chart-1: var(--chart-1);
-
-  --color-input: var(--input);
-
-  --color-destructive: var(--destructive);
-
-  --color-muted: var(--muted);
-
-  --color-secondary-foreground: var(--secondary-foreground);
-
-  --color-secondary: var(--secondary);
-
-  --color-popover-foreground: var(--popover-foreground);
-
-  --color-popover: var(--popover);
-
-  --color-card-foreground: var(--card-foreground);
-
-  --color-card: var(--card);
-
-  --radius-sm: calc(var(--radius) * 0.6);
-
-  --radius-md: calc(var(--radius) * 0.8);
-
-  --radius-lg: var(--radius);
-
-  --radius-xl: calc(var(--radius) * 1.4);
-
-  --radius-2xl: calc(var(--radius) * 1.8);
-
-  --radius-3xl: calc(var(--radius) * 2.2);
-
-  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    @apply font-sans;
   }
   body {
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
     font-feature-settings: "kern";
-    @apply bg-background text-foreground;
   }
   :focus-visible {
     outline: 3px solid var(--ring);
@@ -185,9 +97,6 @@
   :lang(zh),
   .hanzi {
     font-family: var(--font-hanzi);
-  }
-  * {
-    @apply border-border outline-ring/50;
   }
 }
 
@@ -247,40 +156,4 @@
   padding: 0.4rem 0.6rem;
   text-align: left;
   vertical-align: top;
-}
-/*
- ---break---
- */
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 }
