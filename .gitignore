@@ -23,3 +23,4 @@ next-env.d.ts
 
 # Database backups contain personal data
 backups/
+.vs/

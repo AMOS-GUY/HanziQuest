@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { HandwritingCanvas } from "@/components/handwriting/handwriting-canvas";
-import { GuidedStrokeQuiz } from "@/components/handwriting/guided-stroke-quiz";
+import { GuidedPractice } from "@/components/handwriting/guided-practice";
 import { BAND_COPY, BandBanner, WritingFeedback } from "@/components/feedback/writing-feedback";
 import { DisputeResult } from "@/components/feedback/dispute-result";
 import { evaluateWord } from "@/features/handwriting/evaluate";
@@ -575,7 +575,7 @@ export function PracticeRunner({
               </>
             ) : strokeData[activeHanzi] ? (
               <>
-                <GuidedStrokeQuiz
+                <GuidedPractice
                   key={quizKey}
                   hanzi={activeHanzi}
                   data={strokeData[activeHanzi]!}
