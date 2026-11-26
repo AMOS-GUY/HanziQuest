@@ -6,6 +6,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # eslint 10 is outside the peer range of the plugins eslint-config-next bundles
+      # (eslint-plugin-import, -jsx-a11y, -react: up to eslint 9), which breaks
+      # `npm ls --all` in local CI. Allow it again once those plugins support eslint 10.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
     groups:
       dev-dependencies:
         dependency-type: development
