@@ -47,12 +47,23 @@ test("learner completes the first lesson by writing every exercise; progress per
   await expect(page.getByRole("heading", { name: "Lesson complete!" })).toBeVisible({
     timeout: 15_000,
   });
+  // The completion screen points to where these characters come back.
+  await expect(page.getByText(/The characters you wrote now come back in/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Review", exact: true })).toHaveAttribute(
+    "href",
+    "/review",
+  );
   await page.getByRole("link", { name: "Next lesson" }).click();
   await expect(page.getByRole("heading", { name: "Thanks and goodbye" })).toBeVisible();
 
   // M15-d: home says when to come back for the first review.
   await page.goto("/home");
   await expect(page.getByText(/Your next review is (today|tomorrow) at \d\d:\d\d\./)).toBeVisible();
+  // Home shows what was learned, from the learning engine's mastery counts (not computed here).
+  const learning = page.getByRole("region", { name: "Your learning" });
+  await expect(learning.getByText(/familiar or mastered, of \d+ you've practised\./)).toBeVisible();
+  await expect(learning.getByRole("list", { name: "Characters by level" })).toBeVisible();
+  await expect(learning.getByRole("heading", { name: "Next achievement" })).toBeVisible();
 
   // Progress persists across reloads.
   await page.goto("/learn");

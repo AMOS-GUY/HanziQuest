@@ -130,6 +130,22 @@ export async function getProgressDetails(
 }
 
 /** Upcoming review load per day for the next week, in the learner's timezone. */
+/**
+ * The first active achievement the learner hasn't earned yet, in the order the Progress page
+ * lists them (smallest reward first), or null when every one is earned. Read-only: it shows what
+ * the existing achievement rules track and never decides whether one is earned.
+ */
+export async function getNextAchievement(
+  prisma: PrismaClient,
+  userId: string,
+): Promise<{ key: string; name: string; description: string } | null> {
+  return prisma.achievement.findFirst({
+    where: { active: true, users: { none: { userId } } },
+    orderBy: [{ xpReward: "asc" }, { key: "asc" }],
+    select: { key: true, name: true, description: true },
+  });
+}
+
 export async function getReviewForecast(
   prisma: PrismaClient,
   userId: string,
