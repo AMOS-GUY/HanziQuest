@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Flame, PartyPopper, RefreshCcw, Target } from "lucide-react";
+import { ArrowRight, Flame, PartyPopper, RefreshCcw, Sparkles, Target, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress-bar";
@@ -8,9 +8,12 @@ import { requireUser } from "@/lib/auth/session";
 import { getLearnerPath } from "@/features/curriculum/queries";
 import { prisma } from "@/lib/database/prisma";
 import { nextReviewText } from "@/features/progress/next-review";
-import { getProgressSummary } from "@/features/progress/queries";
+import { getNextAchievement, getProgressSummary } from "@/features/progress/queries";
 
 export const metadata: Metadata = { title: "Home" };
+
+/** The same names the Progress page uses for the learning engine's mastery levels. */
+const LEVEL_LABEL = { LEARNING: "Learning", FAMILIAR: "Familiar", MASTERED: "Mastered" } as const;
 
 function greeting(timezone: string) {
   let hour = new Date().getUTCHours();
@@ -32,10 +35,13 @@ function greeting(timezone: string) {
 
 export default async function HomePage() {
   const user = await requireUser();
-  const [{ next, completed, total }, summary] = await Promise.all([
+  const [{ next, completed, total }, summary, nextAchievement] = await Promise.all([
     getLearnerPath(user.id),
     getProgressSummary(prisma, user.id),
+    getNextAchievement(prisma, user.id),
   ]);
+  // Characters the learning engine has started tracking (any level past "new").
+  const practised = summary.mastery.LEARNING + summary.mastery.FAMILIAR + summary.mastery.MASTERED;
   const name = user.profile?.displayName ?? user.name ?? "learner";
 
   return (
@@ -124,6 +130,59 @@ export default async function HomePage() {
               <Link href="/review">Review now</Link>
             </Button>
           ) : null}
+        </Card>
+      </section>
+
+      <section aria-labelledby="your-learning" className="grid gap-3 sm:grid-cols-2">
+        <h2 id="your-learning" className="sr-only">
+          Your learning
+        </h2>
+        <Card className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="text-primary size-5" aria-hidden />
+            <CardTitle className="text-base">Characters</CardTitle>
+          </div>
+          {practised > 0 ? (
+            <>
+              <p className="text-sm">
+                <span className="text-2xl font-black">
+                  {summary.mastery.FAMILIAR + summary.mastery.MASTERED}
+                </span>{" "}
+                familiar or mastered, of {practised} you&apos;ve practised.
+              </p>
+              <ul className="flex flex-wrap gap-2 text-xs" aria-label="Characters by level">
+                {(["LEARNING", "FAMILIAR", "MASTERED"] as const).map((level) => (
+                  <li key={level} className="bg-surface-muted rounded-full px-2.5 py-0.5 font-bold">
+                    {LEVEL_LABEL[level]}: {summary.mastery[level]}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <CardDescription>
+              Characters you write in lessons appear here as you learn them.
+            </CardDescription>
+          )}
+          <Button asChild size="sm" variant="secondary" className="self-start">
+            <Link href="/progress#characters">See your characters</Link>
+          </Button>
+        </Card>
+        <Card className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Trophy className="text-primary size-5" aria-hidden />
+            <CardTitle className="text-base">Next achievement</CardTitle>
+          </div>
+          {nextAchievement ? (
+            <div>
+              <p className="font-bold">{nextAchievement.name}</p>
+              <CardDescription>{nextAchievement.description}</CardDescription>
+            </div>
+          ) : (
+            <CardDescription>You&apos;ve earned every achievement. Impressive!</CardDescription>
+          )}
+          <Button asChild size="sm" variant="secondary" className="self-start">
+            <Link href="/progress#achievements">All achievements</Link>
+          </Button>
         </Card>
       </section>
     </div>

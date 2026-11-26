@@ -382,6 +382,15 @@ export function PracticeRunner({
             ))}
           </ul>
         ) : null}
+        {lessonId && !completion?.queued ? (
+          <p className="text-muted-foreground text-sm">
+            The characters you wrote now come back in{" "}
+            <Link href="/review" className="text-primary font-bold underline">
+              Review
+            </Link>{" "}
+            when they&apos;re due, spaced further apart each time you remember them.
+          </p>
+        ) : null}
         {completion?.queued ? (
           <Alert>
             Your practice is saved on this device and will sync when you&apos;re back online.
