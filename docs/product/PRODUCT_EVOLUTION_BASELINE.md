@@ -4,6 +4,10 @@ Everything here was checked directly in the repository, through the GitHub API (
 read-only), and in a local development build with a synthetic test learner. Nothing was checked
 on staging or production.
 
+> **Status update (2026-11-27, later the same day):** `gh` was then logged in. PRs #45–#53 were
+> opened for the branches below, alongside #34; none is merged. The tables below record the state
+> **before** that. Live state: `gh pr list`.
+
 ## Repository
 
 | Item              | State                                                                                                |

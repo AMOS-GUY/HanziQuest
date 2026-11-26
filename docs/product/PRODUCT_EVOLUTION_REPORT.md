@@ -73,7 +73,10 @@ FEEDBACK → REVIEW → MASTER → PROGRESS loop.
 
 - **BLOCKED:** Docker (image build and container checks) and `age` (backup encryption).
 - **NOT RUN:** Firefox (advisory).
-- **GitHub Actions:** no PRs could be opened.
+- **GitHub Actions** (after the PRs were opened):
+  - **#45 (dependency fix):** fully green, including `age` encryption, Firefox e2e and `docker`.
+  - **The other PRs:** failed at the shared production audit (step 6), the issue #45 fixes, so
+    GitHub hasn't yet run their own changes. Re-run their checks once #45 is merged.
 
 **Manual browser checks** (local, synthetic learner):
 
