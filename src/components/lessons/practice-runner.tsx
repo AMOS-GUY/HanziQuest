@@ -34,6 +34,14 @@ export type PracticeMode =
   | { kind: "free" }
   /** Admin preview: graded locally, nothing is saved. */
   | { kind: "preview" };
+/** The page heading for screen readers (the practice screen has no visible title). */
+const PRACTICE_HEADING: Record<PracticeMode["kind"], string> = {
+  lesson: "Lesson practice",
+  review: "Review",
+  free: "Character practice",
+  preview: "Lesson preview",
+};
+
 type Outcome =
   | { kind: "writing"; band: EvaluationBand; evaluation: WordEvaluation; eventId: string }
   | { kind: "guided"; band: EvaluationBand; mistakes: number; eventId: string };
@@ -427,6 +435,7 @@ export function PracticeRunner({
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4 py-2">
+      <h1 className="sr-only">{PRACTICE_HEADING[mode.kind]}</h1>
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="icon" aria-label="Exit practice">
           <Link href={exitHref}>
