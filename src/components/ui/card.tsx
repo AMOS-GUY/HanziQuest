@@ -23,3 +23,15 @@ export function CardDescription({
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return <p className={cn("text-muted-foreground text-sm", className)} {...props} />;
 }
+
+/**
+ * Optional structure for cards with a header block and a body (title + description, then
+ * actions). `Card` already pads its content, so these only add spacing between sections.
+ */
+export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("flex flex-col gap-1", className)} {...props} />;
+}
+
+export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("pt-4", className)} {...props} />;
+}
