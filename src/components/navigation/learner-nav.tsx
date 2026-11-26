@@ -7,6 +7,7 @@ import {
   Home,
   Map,
   MessageSquare,
+  PenLine,
   RefreshCcw,
   ShieldCheck,
   UserRound,
@@ -24,6 +25,7 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/learn", label: "Learn", icon: Map },
+  { href: "/practice", label: "Practice", icon: PenLine },
   { href: "/review", label: "Review", icon: RefreshCcw },
   { href: "/progress", label: "Progress", icon: ChartNoAxesColumn },
   { href: "/profile", label: "Profile", icon: UserRound },
@@ -88,14 +90,14 @@ export function LearnerBottomNav() {
       aria-label="Main"
       className="border-border bg-surface fixed inset-x-0 bottom-0 z-40 border-t-2 pb-[env(safe-area-inset-bottom)] md:hidden"
     >
-      <ul className="mx-auto flex max-w-md justify-around">
+      <ul className="mx-auto flex max-w-md">
         {ITEMS.map(({ href, label, icon: Icon }) => (
-          <li key={href}>
+          <li key={href} className="min-w-0 flex-1">
             <Link
               href={href}
               aria-current={isActive(pathname, href) ? "page" : undefined}
               className={cn(
-                "text-muted-foreground flex min-w-14 flex-col items-center gap-0.5 px-1.5 py-2 text-xs font-bold",
+                "text-muted-foreground flex flex-col items-center gap-0.5 px-0.5 py-2 text-[11px] font-bold sm:text-xs",
                 isActive(pathname, href) && "text-primary",
               )}
             >

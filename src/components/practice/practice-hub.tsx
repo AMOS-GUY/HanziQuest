@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { MotionConfig, motion } from "framer-motion";
-import { ArrowLeft, BookOpen, PenTool, RotateCcw } from "lucide-react";
+import { BookOpen, PenTool, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
  * Practice hub: the three ways to practise, with real destinations. Design by Anesu (PR #35);
- * data and links wired to the learner's actual next lesson and reviews.
+ * data and links wired to the learner's actual next lesson and reviews. Rendered in the learner
+ * layout (navigation, sign-in, onboarding and terms checks), reached from the Practice tab.
  */
 export function PracticeHub({
   nextLesson,
@@ -26,20 +27,13 @@ export function PracticeHub({
   return (
     // "user": framer-motion drops the movement when the system asks for reduced motion.
     <MotionConfig reducedMotion="user">
-      <div className="flex min-h-[80vh] flex-col items-center justify-center px-4 py-12">
-        <div className="mb-6 w-full max-w-4xl">
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/home">
-              <ArrowLeft aria-hidden /> Home
-            </Link>
-          </Button>
-        </div>
-
+      {/* Inside the learner layout, which provides the navigation and page padding. */}
+      <div className="flex flex-col items-center">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-10 text-center"
+          className="mb-8 text-center"
         >
           <h1 className="text-primary mb-2 text-4xl font-black tracking-tight">
             Ready to Practice?
