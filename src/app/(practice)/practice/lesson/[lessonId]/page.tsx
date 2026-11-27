@@ -1,4 +1,5 @@
 "use client"
+import { PageTransition } from "@/components/PageTransition"; 
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { usePracticeStore } from "@/stores/usePracticeStore";
@@ -37,6 +38,7 @@ export default function LessonPracticePage() {
   
    
     return (
+        <PageTransition>
         <div className="flex flex-col items-center pt-12 min-h-[80vh] gap-6 px-4 w-full">
 
             {/* Score Display */}
@@ -75,6 +77,7 @@ export default function LessonPracticePage() {
             {/* The Canvas */}
             <HanziCanvas character={currentCharacter.hanzi} mode={mode} onComplete={nextCharacter} />
 
-        </div>
+            </div>
+</PageTransition>
     );
 }

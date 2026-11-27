@@ -1,5 +1,8 @@
 "use client";
 
+import { Progress } from "@/components/ui/progress";
+import { usePracticeStore } from "@/stores/usePracticeStore";
+import { PageTransition } from "@/components/PageTransition";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -7,9 +10,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { BookOpen, RotateCcw, PenTool } from "lucide-react";
 
 export default function PracticeHubPage() {
+    const { score, characters } = usePracticeStore();
+    const progressPercent = (score / characters.length) * 100;
     return (
+        <PageTransition>
         <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 py-12">
-
+                {/* Progress Section */}
+                <div className="w-full max-w-2xl mb-12 space-y-2">
+                    <div className="flex justify-between text-sm font-medium text-muted-foreground">
+                        <span>Lesson Progress</span>
+                        <span>{score} / {characters.length} Characters</span>
+                    </div>
+                    <Progress value={progressPercent} className="h-3" />
+                </div>
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -87,6 +100,7 @@ export default function PracticeHubPage() {
                 </motion.div>
 
             </div>
-        </div>
+            </div>
+</PageTransition>
     );
 }
