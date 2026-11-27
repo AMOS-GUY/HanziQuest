@@ -102,15 +102,21 @@ export async function getVocabularyExplorer(
   });
   const order = new Map(lessons.map((l, i) => [l.id, i]));
 
-  const seen = new Set<string>();
+  // Each word once, under the first reached lesson teaching it; `lessonIds` keeps the others so
+  // the lesson filter still shows a lesson's full word list.
+  const byWord = new Map<string, ExplorerWord>();
   const words: ExplorerWord[] = [];
   for (const e of [...entries].sort(
     (a, b) => (order.get(a.lessonId) ?? 0) - (order.get(b.lessonId) ?? 0),
   )) {
-    if (!order.has(e.lessonId) || seen.has(e.vocabulary.id)) continue;
-    seen.add(e.vocabulary.id);
+    if (!order.has(e.lessonId)) continue;
+    const existing = byWord.get(e.vocabulary.id);
+    if (existing) {
+      if (!existing.lessonIds.includes(e.lessonId)) existing.lessonIds.push(e.lessonId);
+      continue;
+    }
     const v = e.vocabulary;
-    words.push({
+    const word: ExplorerWord = {
       id: v.id,
       simplified: v.simplified,
       pinyin: v.pinyin,
@@ -121,7 +127,10 @@ export async function getVocabularyExplorer(
       provisional: v.verification !== "VERIFIED",
       characters: v.characters.map((c) => c.character.hanzi),
       lessonId: e.lessonId,
-    });
+      lessonIds: [e.lessonId],
+    };
+    byWord.set(v.id, word);
+    words.push(word);
   }
 
   return {

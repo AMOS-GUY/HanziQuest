@@ -180,15 +180,18 @@ describe("getVocabularyExplorer", () => {
       [lesson1, "COMPLETED"],
       [lesson2, "AVAILABLE"],
     ]);
-    // 猫 is linked to both lessons: listed once, under the first (so the lesson 2 filter shows
-    // only the word lesson 2 introduces).
+    // 猫 is linked to both lessons: listed once, under the first.
     expect(e.words.map((w) => [w.simplified, w.lessonId])).toEqual([
       ["猫", lesson1],
       ["狗", lesson2],
     ]);
     expect((await mine(userId, { q: "gou" })).words.map((w) => w.simplified)).toEqual(["狗"]);
-    expect((await mine(userId, { lessonId: lesson2 })).words.map((w) => w.simplified)).toEqual([
-      "狗",
+    expect(e.words[0]!.lessonIds).toEqual([lesson1, lesson2]);
+    // The lesson 2 filter shows everything lesson 2 teaches, the shared word included, under it.
+    const l2 = await mine(userId, { lessonId: lesson2 });
+    expect(l2.words.map((w) => [w.simplified, w.lessonId])).toEqual([
+      ["猫", lesson2],
+      ["狗", lesson2],
     ]);
   });
 

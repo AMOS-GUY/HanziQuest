@@ -14,8 +14,10 @@ export interface ExplorerWord {
   hsk20Level: number | null;
   provisional: boolean;
   characters: string[];
-  /** The first reached lesson (curriculum order) that teaches the word. */
+  /** The lesson the word is listed under: the first reached lesson (curriculum order) teaching it. */
   lessonId: string;
+  /** Every reached lesson that teaches the word, in curriculum order (starts with `lessonId`). */
+  lessonIds: string[];
 }
 
 export interface ExplorerFilter {
@@ -45,7 +47,8 @@ export function parseExplorerFilter(raw: { q?: unknown; lesson?: unknown }): Exp
 /**
  * Matches a word when the query appears in its Hanzi, its pinyin (with or without tones or
  * spaces: "ni hao", "nihao", "ni3hao3" and "nǐ hǎo" all match 你好) or its meaning. The lesson
- * filter only narrows: an id that isn't among the words' lessons simply matches nothing.
+ * filter keeps every word that lesson teaches, listed under it, including words an earlier lesson
+ * also teaches. It only narrows: an id that isn't among the words' lessons matches nothing.
  */
 export function filterExplorerWords(
   words: readonly ExplorerWord[],
@@ -54,13 +57,16 @@ export function filterExplorerWords(
   const q = filter.q?.trim();
   const folded = q ? foldPinyin(q) : "";
   const lower = q?.toLowerCase() ?? "";
-  return words.filter((w) => {
-    if (filter.lessonId && w.lessonId !== filter.lessonId) return false;
-    if (!q) return true;
-    return (
-      w.simplified.includes(q) ||
-      (folded.length > 0 && foldPinyin(w.pinyin).includes(folded)) ||
-      w.meaning.toLowerCase().includes(lower)
-    );
-  });
+  const { lessonId } = filter;
+  return words
+    .filter((w) => {
+      if (lessonId && !w.lessonIds.includes(lessonId)) return false;
+      if (!q) return true;
+      return (
+        w.simplified.includes(q) ||
+        (folded.length > 0 && foldPinyin(w.pinyin).includes(folded)) ||
+        w.meaning.toLowerCase().includes(lower)
+      );
+    })
+    .map((w) => (lessonId && w.lessonId !== lessonId ? { ...w, lessonId } : w));
 }

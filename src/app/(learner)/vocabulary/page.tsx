@@ -142,7 +142,7 @@ export default async function VocabularyExplorerPage({
                 <li key={w.id}>
                   <Link
                     href={`/vocabulary/${w.id}`}
-                    className="border-border bg-surface hover:bg-surface-muted focus-visible:border-primary flex min-h-16 items-center gap-4 rounded-[var(--radius-card)] border-2 p-4 focus-visible:outline-none"
+                    className="border-border bg-surface hover:bg-surface-muted flex min-h-16 items-center gap-4 rounded-[var(--radius-card)] border-2 p-4"
                   >
                     <span lang="zh" className="hanzi shrink-0 text-3xl">
                       {w.simplified}

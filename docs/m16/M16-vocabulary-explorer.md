@@ -37,17 +37,49 @@ writes.
 
 ### Pre-existing exposure (not changed, owner decision)
 
-Two existing pages are less strict than the explorer:
+Found on 2026-11-27 by reading the code. The practice finding was confirmed with a temporary
+probe against the integration database (not committed). None of it was changed.
 
-- The lesson overview `/learn/[id]` shows a **locked** lesson's words and characters. Locks block
-  only practice.
-- The word page `/vocabulary/[id]` checks published visibility, not lock state. Anyone signed in
-  who has an id can open any published word.
+| Route                                         | Shows a locked lesson's content?                                 | Lock-gated?                            |
+| --------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------- |
+| `/learn/[id]` (lesson overview)               | Yes: its words and characters, with "Finish the previous lesson" | Practice button only                   |
+| `/vocabulary/[id]` (word page)                | Yes, by id                                                       | No: published content only             |
+| `/characters/[hanzi]` (stroke order)          | Yes                                                              | No: published content only             |
+| `/practice/character/[hanzi]` (free practice) | Yes, and it **grades**                                           | **No**                                 |
+| `/practice/lesson/[id]` (lesson practice)     | —                                                                | **Yes** (`startLessonSession` refuses) |
+| `/vocabulary` (this explorer)                 | No                                                               | Yes (reached lessons only)             |
 
-Both are established behaviour. Neither exposes unpublished content, and both predate M16. The
-explorer doesn't link to locked words, but it doesn't close these paths either. Tightening them
-would change existing routes, including a file open PR #49 touches. It needs an owner decision:
-is a locked word a secret, or just not yet practised?
+The probe ran on a brand-new learner. It submitted a freehand attempt on an exercise from a
+lesson in state `LOCKED`, with no session, which is what free character practice does. The
+attempt was accepted, and it returned `EXCELLENT` and **10 XP**. It also created a
+`CharacterMastery` row (`LEARNING`) and a `ReviewSchedule` row. A learner can reach this from the
+UI: locked lesson overview → character → Practise. `submitAttempt` checks that the exercise is
+published and in a learner-visible lesson, but not the lesson's state. No decision entry records
+whether this is intended.
+
+#### Recommendation: previews are open, practice that counts follows the path
+
+1. **Keep previews open.** Showing a locked lesson's words, characters and stroke order is
+   useful. It shows learners what's coming, it supports placement and "tested out" learners, and
+   none of it is unpublished. The data isn't secret, and hiding it would make
+   `/vocabulary/[id]` and `/characters/[hanzi]` 404 for links learners already have. Label
+   previews as previews: show a "Preview: unlocks after <lesson>" note on the word and character
+   pages when every lesson teaching them is locked.
+2. **Decide explicitly whether practice on locked characters counts.** Today free practice on
+   a locked character earns XP and starts mastery and a review schedule, while lesson practice is
+   blocked. There are two coherent options:
+   - **(a) Free practice is open but doesn't count until reached.** Grade it, show feedback,
+     and record the attempt. Award no XP, and create no mastery or schedule rows until a lesson
+     teaching the character is reached. This makes the path the one place progress comes from.
+   - **(b) Free practice of anything published counts, as today.** Write a decision entry, so
+     it's deliberate rather than accidental.
+
+   We recommend **(a)**. Both options touch XP, mastery and scheduling, which are protected
+   policy, so this needs an owner decision and its own PR with tests and a decision entry. It
+   doesn't belong in M16.1.
+
+3. **The explorer stays strict either way.** It's a "your words" list, not a catalogue. A
+   future "all words" catalogue could list previews with the same label.
 
 ## Search
 
@@ -99,7 +131,8 @@ pagination with the same entitled list.
 ## Behaviour worth knowing
 
 - **One word, one card.** A word that more than one reached lesson teaches is listed once, under
-  the first of those lessons. The lesson filter then shows it only under that lesson.
+  the first of those lessons. Filtering by any of those lessons still shows it, under the lesson
+  chosen, so a lesson's filter always lists every word that lesson teaches.
 - **Other curricula.** Words from every published curriculum the learner has reached are listed.
   Today there is one.
 - **Unpublishing.** Unpublishing a reached lesson removes it, and nothing is attributed to it any

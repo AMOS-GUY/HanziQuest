@@ -16,8 +16,9 @@ function word(partial: Partial<ExplorerWord> & Pick<ExplorerWord, "id" | "simpli
     hsk20Level: null,
     provisional: true,
     characters: [...partial.simplified],
-    lessonId: "l1",
     ...partial,
+    lessonId: partial.lessonId ?? "l1",
+    lessonIds: partial.lessonIds ?? [partial.lessonId ?? "l1"],
   } satisfies ExplorerWord;
 }
 
@@ -78,6 +79,14 @@ describe("filterExplorerWords", () => {
   it("narrows by lesson and combines with the query", () => {
     expect(ids(filterExplorerWords(WORDS, { lessonId: "l2" }))).toEqual(["3", "4"]);
     expect(ids(filterExplorerWords(WORDS, { lessonId: "l2", q: "hao" }))).toEqual([]);
+  });
+  it("keeps a word the filtered lesson shares with an earlier one, listed under that lesson", () => {
+    const shared = word({ id: "5", simplified: "猫", lessonId: "l1", lessonIds: ["l1", "l2"] });
+    const result = filterExplorerWords([...WORDS, shared], { lessonId: "l2" });
+    expect(ids(result)).toEqual(["3", "4", "5"]);
+    expect(result.every((w) => w.lessonId === "l2")).toBe(true);
+    // Unfiltered, it stays under its first lesson.
+    expect(filterExplorerWords([shared], {})[0]!.lessonId).toBe("l1");
   });
   it("matches nothing for an unknown lesson id", () => {
     expect(filterExplorerWords(WORDS, { lessonId: "not-a-lesson" })).toEqual([]);
