@@ -55,6 +55,11 @@ npm run content:validate
 - Progress effects (XP, mastery, streaks) run inside the attempt transaction under a per-learner
   advisory lock (`features/progress/record.ts`). Mastery/SRS are replayed from
   `AttemptCharacterResult`; never update `CharacterMastery` or `ReviewSchedule` directly.
+- Attempt context is decided in `features/exercises/attempt-context.ts` (D-085): preview practice
+  of unreached content (`countsForProgress = false`, never call `applyAttemptProgress` for it),
+  server time for online attempts (`clientOccurredAt` is diagnostic only), offline time bounded
+  by the session start or `firstDownloadedAt`, and attempts must fit their session. Tests that
+  need past days pass `submitAttempt(..., { now })`, never a backdated client `occurredAt`.
 - Rate limiters are async (`await limiter.consume(key)`); production uses the PostgreSQL store.
 - Route handlers must read bodies with `readJson(request, maxBytes)` and be wrapped in
   `handleApi` (origin check, error mapping).

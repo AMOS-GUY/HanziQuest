@@ -260,8 +260,16 @@ Target public beta: **2026-12-08**.
 - [x] Audit of every progression write path: attempts, progress, completion, placement, sync, admin (`docs/m17/`)
 - [x] Fixed (Class 1): completion re-checks visibility (F-03); placement is graded once under concurrency (F-04)
 - [x] Matrix: `tests/integration/progression-integrity.test.ts` (expected cases, plus characterization of open decisions)
-- [ ] **Owner:** locked-lesson practice (F-01, Option B recommended, `docs/m17/M17-locked-practice-policy.md`); attempt-time trust for offline (F-02); attempt/session binding (F-06)
-- [ ] **After #48 merges:** add D-085 (text in `docs/m17/M17-remediation.md`)
+- [x] **Owner:** decided D-085 on 2026-11-28 (F-01 Option B, F-02, F-06); implemented in M18
+
+### M18 progression integrity enforcement (2026-11-28, `feature/m18-enforcement`): PR pending, not merged
+
+- [x] D-085 enforced in `features/exercises/attempt-context.ts`: preview practice (F-01), server and validated offline time (F-02), attempt/session context (F-06)
+- [x] Additive migration: `ExerciseAttempt.countsForProgress`, `clientOccurredAt`; `DownloadedContentVersion.firstDownloadedAt` (backfilled)
+- [x] Completion and offline re-attachment count only the lesson's counted attempts; M15 overview excludes previews; runner shows a preview notice
+- [x] Matrix rewritten for D-085 (`tests/integration/progression-integrity.test.ts`, `docs/m18/M18-test-matrix.md`)
+- [ ] **Residual (documented):** device time inside a legitimate offline window; legacy pre-M18 progress not rewritten; time-zone changes (M17 F-10)
+- [ ] **#48** still open (empty lessons, D-084); both PRs add an entry at the top of `DECISIONS.md`
 
 ## Session log
 
