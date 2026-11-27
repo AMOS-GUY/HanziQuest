@@ -88,8 +88,16 @@ async function apply(
     if (!s || s.userId !== userId || s.lessonId !== lessonId) sessionId = null;
   }
   sessionId ??= (await startLessonSession(prisma, userId, lessonId)).id;
+  // Only this lesson's own counted attempts join the session (D-085): previews and attempts at
+  // other lessons' exercises can't help complete it.
   await prisma.exerciseAttempt.updateMany({
-    where: { userId, clientEventId: { in: attemptIds }, sessionId: null },
+    where: {
+      userId,
+      clientEventId: { in: attemptIds },
+      sessionId: null,
+      countsForProgress: true,
+      exercise: { lessons: { some: { lessonId } } },
+    },
     data: { sessionId },
   });
   const done = await completeLessonSession(prisma, userId, sessionId);

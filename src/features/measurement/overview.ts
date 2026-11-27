@@ -38,7 +38,9 @@ export async function overviewActivity(
   const k = options.k ?? DEFAULT_MIN_GROUP;
   const since = new Date((options.now ?? new Date()).getTime() - 7 * DAY_MS);
   const db = readOnlyClient(prisma);
-  const measured = { occurredAt: { gte: since }, user: MEASURED_LEARNER };
+  // Preview practice isn't an official attempt (D-085), as in the replay engine, which reads
+  // per-character results that previews never have.
+  const measured = { occurredAt: { gte: since }, countsForProgress: true, user: MEASURED_LEARNER };
   const [active, writers, completions, newLearners] = await Promise.all([
     db.exerciseAttempt.groupBy({ by: ["userId"], where: measured, _count: { _all: true } }),
     db.exerciseAttempt.groupBy({

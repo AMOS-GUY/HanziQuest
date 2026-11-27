@@ -256,8 +256,9 @@ describe("mastery, reviews and streaks", () => {
   it("makes characters due for review and records review XP", async () => {
     const user = await newUser();
     const ex = await exercise(lesson1, "char:你:freehand");
-    const twoDaysAgo = new Date(Date.now() - 2 * DAY).toISOString();
-    await submitAttempt(prisma, user, write(ex.id, ["你"], { occurredAt: twoDaysAgo }));
+    // Two days ago on the server's clock (online time is the server's, D-085).
+    const twoDaysAgo = new Date(Date.now() - 2 * DAY);
+    await submitAttempt(prisma, user, write(ex.id, ["你"]), { now: twoDaysAgo });
     const due = await getDueReviews(prisma, user);
     expect(due.map((d) => d.hanzi)).toEqual(["你"]);
     const { session } = await startReviewSession(prisma, user);
@@ -275,12 +276,11 @@ describe("mastery, reviews and streaks", () => {
   it("counts a streak across days in the learner's timezone and awards the streak achievement", async () => {
     const user = await newUser("Asia/Shanghai");
     const ex = await exercise(lesson1, "char:好:freehand");
+    // Three days on the server's clock (online time is the server's, D-085).
     for (const daysAgo of [2, 1, 0]) {
-      await submitAttempt(
-        prisma,
-        user,
-        write(ex.id, ["好"], { occurredAt: new Date(Date.now() - daysAgo * DAY).toISOString() }),
-      );
+      await submitAttempt(prisma, user, write(ex.id, ["好"]), {
+        now: new Date(Date.now() - daysAgo * DAY),
+      });
     }
     const summary = await getProgressSummary(prisma, user);
     expect(summary.streak.current).toBe(3);

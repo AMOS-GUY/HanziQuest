@@ -38,6 +38,8 @@ export interface AttemptResponse {
   evaluation: unknown;
   xpAwarded: number;
   progress: ProgressDelta | null;
+  /** False for preview practice of content not reached yet: graded, earns nothing (D-085). */
+  counted: boolean;
 }
 
 export interface ProgressDelta {
