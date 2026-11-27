@@ -255,6 +255,14 @@ Target public beta: **2026-12-08**.
 - [ ] **Engineering follow-up (LOW):** batch the importer's per-item upserts before curricula reach ~6,000 items (the exclusive review lock is held for the whole import)
 - [ ] **Kept as is (pre-existing, LOW, rechecked in D-073):** inside /admin, staff without a page's permission get the not-found page with status 200 (the loading boundary streams first). Content is withheld; non-staff and suspended accounts get a real 404 from the proxy
 
+### M17 progression integrity (2026-11-28, `feature/m17-progression-integrity`): PR pending, not merged
+
+- [x] Audit of every progression write path: attempts, progress, completion, placement, sync, admin (`docs/m17/`)
+- [x] Fixed (Class 1): completion re-checks visibility (F-03); placement is graded once under concurrency (F-04)
+- [x] Matrix: `tests/integration/progression-integrity.test.ts` (expected cases, plus characterization of open decisions)
+- [ ] **Owner:** locked-lesson practice (F-01, Option B recommended, `docs/m17/M17-locked-practice-policy.md`); attempt-time trust for offline (F-02); attempt/session binding (F-06)
+- [ ] **After #48 merges:** add D-085 (text in `docs/m17/M17-remediation.md`)
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
