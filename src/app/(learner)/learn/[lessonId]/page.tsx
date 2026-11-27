@@ -70,9 +70,19 @@ export default async function LessonPage({ params }: { params: Promise<{ lessonI
       )}
 
       <section aria-labelledby="words">
-        <h2 id="words" className="mb-3 text-xl font-extrabold">
-          Words
-        </h2>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3">
+          <h2 id="words" className="text-xl font-extrabold">
+            Words
+          </h2>
+          {locked ? null : (
+            <Link
+              href="/vocabulary"
+              className="text-primary text-sm font-bold underline-offset-2 hover:underline"
+            >
+              All your words
+            </Link>
+          )}
+        </div>
         <ul className="grid gap-2 sm:grid-cols-2">
           {lesson.vocabulary.map(({ vocabulary: v }) => (
             <li key={v.id}>
