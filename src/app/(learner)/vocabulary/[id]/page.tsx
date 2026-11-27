@@ -26,9 +26,9 @@ export default async function VocabularyPage({ params }: { params: Promise<{ id:
       </Link>
 
       <Card className="flex flex-col items-center gap-1 py-8 text-center">
-        <p lang="zh" className="hanzi text-7xl">
+        <h1 lang="zh" className="hanzi text-7xl font-normal">
           {word.simplified}
-        </p>
+        </h1>
         <p className="text-2xl font-black">{word.pinyin}</p>
         <p className="text-muted-foreground text-lg">{word.meaning}</p>
         <div className="mt-2 flex flex-wrap justify-center gap-1">

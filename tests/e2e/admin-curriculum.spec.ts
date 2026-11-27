@@ -62,6 +62,8 @@ test("a curriculum editor builds, previews and publishes a lesson, imports conte
   // Preview a draft exactly as a learner would see it; nothing is saved.
   await page.getByRole("link", { name: "Preview as learner" }).click();
   await expect(page.getByText("Preview of a draft lesson")).toBeVisible();
+  // The preview page's own title is its only level-one heading (the runner adds none here).
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByText("Provisional content")).toBeVisible();
   await expect(page.locator("text=/^1\\/\\d+$/")).toBeVisible();
   await page.getByRole("link", { name: "Back to editor" }).click();
