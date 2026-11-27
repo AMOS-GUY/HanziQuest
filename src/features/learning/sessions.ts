@@ -64,6 +64,14 @@ export async function completeLessonSession(
   }
   if (!session.lessonId) throw new DomainError("not_found", "Session not found.");
   const lessonId = session.lessonId;
+  // Completion follows the same visibility rule as starting and attempts (M17): a lesson
+  // unpublished, or whose curriculum was archived, since the session started can't be completed.
+  const visible = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    select: VISIBILITY_SELECT,
+  });
+  if (!visible || !isLearnerVisible(visible))
+    throw new DomainError("not_found", "Lesson not found.");
 
   const [exercises, attempts] = await Promise.all([
     // Only published exercises are shown to learners, so only they are required.
