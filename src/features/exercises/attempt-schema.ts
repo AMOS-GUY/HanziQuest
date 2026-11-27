@@ -16,6 +16,8 @@ const base = {
   clientEventId: z.uuid(),
   exerciseId: z.string().min(1).max(64),
   sessionId: z.string().min(1).max(64).optional(),
+  /** Optional: when sent, it must match the session's lesson and contain the exercise (D-085). */
+  lessonId: z.string().min(1).max(64).optional(),
   occurredAt: z.iso.datetime({ offset: true }),
   durationMs: z.number().int().min(0).max(3_600_000).optional(),
   hintsUsed: z.number().int().min(0).max(20).default(0),

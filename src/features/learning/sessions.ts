@@ -80,7 +80,8 @@ export async function completeLessonSession(
       select: { exerciseId: true },
     }),
     prisma.exerciseAttempt.findMany({
-      where: { sessionId, userId },
+      // Preview practice never counts towards completion (D-085).
+      where: { sessionId, userId, countsForProgress: true },
       select: { exerciseId: true, result: true },
     }),
   ]);

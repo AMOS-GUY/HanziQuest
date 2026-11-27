@@ -139,6 +139,8 @@ export function PracticeRunner({
     queued: boolean;
   }>();
   const [xpByEvent, setXpByEvent] = useState<Record<string, number>>({});
+  /** Attempts the server stored as preview practice (not reached yet, D-085). */
+  const [previewEvents, setPreviewEvents] = useState<Record<string, true>>({});
   const [celebrations, setCelebrations] = useState<string[]>([]);
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState<string>();
@@ -199,6 +201,7 @@ export function PracticeRunner({
         const response = await withRetry(() => learningApi.submitAttempt(body), 2);
         setSaves((s) => ({ ...s, [eventId]: "saved" }));
         setXpByEvent((x) => ({ ...x, [eventId]: response.xpAwarded }));
+        if (response.counted === false) setPreviewEvents((p) => ({ ...p, [eventId]: true }));
         celebrate(response.progress);
         savedExercises.current.add(exerciseId);
         // The server re-evaluates handwriting; its result is authoritative.
@@ -634,9 +637,11 @@ export function PracticeRunner({
                 : currentSave === "saving"
                   ? "Saving…"
                   : currentSave === "saved"
-                    ? outcome && xpByEvent[outcome.eventId]
-                      ? `Saved · +${xpByEvent[outcome.eventId]} XP`
-                      : "Saved"
+                    ? outcome && previewEvents[outcome.eventId]
+                      ? "Preview: practise freely. This counts once you reach its lesson."
+                      : outcome && xpByEvent[outcome.eventId]
+                        ? `Saved · +${xpByEvent[outcome.eventId]} XP`
+                        : "Saved"
                     : currentSave === "queued"
                       ? "Saved on this device. It will sync when you're online."
                       : currentSave === "failed"

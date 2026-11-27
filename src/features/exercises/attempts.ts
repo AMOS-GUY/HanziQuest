@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { Prisma as PrismaNS } from "@/generated/prisma/client";
-import type { AttemptResult, LearningSessionType, PracticeMode } from "@/generated/prisma/enums";
+import type { AttemptResult, PracticeMode } from "@/generated/prisma/enums";
 import { DomainError } from "@/features/administration/services";
 import { LEARNER_VISIBLE_LESSON } from "@/features/curriculum/visibility";
 import { evaluateWord } from "@/features/handwriting/evaluate";
@@ -11,6 +11,7 @@ import { techniqueVerdict } from "@/features/handwriting/technique";
 import { evaluationConfigSchema } from "./evaluation-config";
 import { attemptInputSchema } from "./attempt-schema";
 import { applyAttemptProgress, lockLearner, type ProgressDelta } from "@/features/progress/record";
+import { resolveAttemptContext } from "./attempt-context";
 
 export interface AttemptOutcome {
   attemptId: string;
@@ -20,8 +21,13 @@ export interface AttemptOutcome {
   mode: PracticeMode;
   evaluation: unknown;
   xpAwarded: number;
-  /** Progress effects of this submission; null when it was a duplicate. */
+  /** Progress effects of this submission; null when it was a duplicate or a preview. */
   progress: ProgressDelta | null;
+  /**
+   * False for preview practice (D-085): the learner hasn't reached this content, so the attempt
+   * was graded and stored but earned nothing and changed no progress.
+   */
+  counted: boolean;
 }
 
 export interface SubmitOptions {
@@ -29,9 +35,6 @@ export interface SubmitOptions {
   /** Server-side device id when the attempt arrived through offline sync. */
   deviceId?: string;
 }
-
-const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
-const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function guidedResult(mistakes: number, strokeCount: number): AttemptResult {
   if (mistakes === 0) return "EXCELLENT";
@@ -48,6 +51,7 @@ function toStored(
     mode: PracticeMode;
     evaluation: Prisma.JsonValue;
     xpAwarded: number;
+    countsForProgress: boolean;
   },
   duplicate: boolean,
   progress: ProgressDelta | null = null,
@@ -61,12 +65,15 @@ function toStored(
     evaluation: outcome.evaluation,
     xpAwarded: progress ? progress.xpAwarded : outcome.xpAwarded,
     progress,
+    counted: outcome.countsForProgress,
   };
 }
 
 /**
  * Records an exercise attempt. The server re-evaluates handwriting itself — client-side scores
  * are never trusted. Idempotent on `clientEventId`: resubmitting returns the stored attempt.
+ * The session, the eligibility to earn progress and the event time are decided on the server
+ * (`attempt-context.ts`, D-085): content the learner hasn't reached is preview practice.
  */
 export async function submitAttempt(
   prisma: PrismaClient,
@@ -86,20 +93,12 @@ export async function submitAttempt(
     return toStored(existing, true);
   }
 
-  const occurredAt = new Date(input.occurredAt);
-  if (
-    occurredAt.getTime() > now.getTime() + MAX_CLOCK_SKEW_MS ||
-    occurredAt.getTime() < now.getTime() - MAX_AGE_MS
-  ) {
-    throw new DomainError("conflict", "The attempt time is outside the accepted range.");
-  }
-
   const exercise = await prisma.exercise.findUnique({
     where: { id: input.exerciseId },
     include: {
       lessons: {
         where: { lesson: LEARNER_VISIBLE_LESSON },
-        select: { lesson: { select: { unit: { select: { levelId: true } } } } },
+        select: { lessonId: true, lesson: { select: { unit: { select: { levelId: true } } } } },
       },
       character: { select: { strokeCount: true } },
     },
@@ -108,15 +107,24 @@ export async function submitAttempt(
     throw new DomainError("not_found", "Exercise not found.");
   }
 
-  let sessionType: LearningSessionType | null = null;
-  if (input.sessionId) {
-    const session = await prisma.learningSession.findUnique({ where: { id: input.sessionId } });
-    if (!session || session.userId !== userId)
-      throw new DomainError("not_found", "Session not found.");
-    sessionType = session.type;
-  }
-
   const config = evaluationConfigSchema.parse(exercise.evaluationConfig);
+  const context = await resolveAttemptContext(
+    prisma,
+    userId,
+    {
+      id: exercise.id,
+      type: exercise.type,
+      characterId: exercise.characterId,
+      characters: config.characters,
+      lessons: exercise.lessons.map((l) => ({
+        lessonId: l.lessonId,
+        levelId: l.lesson.unit.levelId,
+      })),
+    },
+    input,
+    { now, deviceId: options.deviceId },
+  );
+  const { occurredAt, sessionType } = context;
   const characterRows = await prisma.character.findMany({
     where: { hanzi: { in: config.characters } },
     select: { id: true, hanzi: true },
@@ -214,8 +222,16 @@ export async function submitAttempt(
           hintsUsed: input.hintsUsed,
           durationMs: input.durationMs ?? null,
           occurredAt,
+          clientOccurredAt: Number.isNaN(context.clientOccurredAt.getTime())
+            ? null
+            : context.clientOccurredAt,
+          countsForProgress: context.countsForProgress,
         },
       });
+      // Preview practice: graded and stored, nothing else. No character results (so mastery,
+      // schedules and achievements never see it, now or in a later replay), no daily activity,
+      // XP, goal or streak.
+      if (!context.countsForProgress) return toStored(created, false);
       const progress = await applyAttemptProgress(
         tx,
         {

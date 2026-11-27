@@ -1,7 +1,9 @@
 # M18 architecture: pathways, enforcement map, design and test plan
 
-Traced from the code on `main` `857a430`. **Nothing here is implemented yet.** See
-`M18-baseline.md` for why.
+Traced from the code on `main` `857a430`, then implemented on `feature/m18-enforcement`.
+**Status:** the design below is implemented as described (`M18-remediation.md`). One detail
+changed: a valid session implies eligibility, so the lesson-state lookup runs only for
+session-less attempts.
 
 ## Pathways that can create progression
 
@@ -38,7 +40,7 @@ Admin: publish, unpublish, archive (curriculum:publish) changes eligibility only
 - The only other writer is `progress:rebuild` (CLI), which replays mastery.
 - Enforcement therefore belongs in `submitAttempt`, plus one check in `completeLessonSession`.
 
-## Enforcement map (today → M18)
+## Enforcement map (before → M18)
 
 | Check                                             | Today                                        | M18 (planned)                                                                           |
 | ------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -75,7 +77,7 @@ Admin: publish, unpublish, archive (curriculum:publish) changes eligibility only
 - **M15** `measurement/overview.ts` counts `ExerciseAttempt` rows directly, so it must exclude
   preview attempts. `engine.ts` replays `AttemptCharacterResult`, which previews won't have.
 
-## Design (ready to implement after #48 and #55 merge)
+## Design (implemented in M18)
 
 ### Migration (additive, expand only, reversible by dropping the columns)
 

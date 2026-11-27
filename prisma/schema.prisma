@@ -664,32 +664,38 @@ model LessonProgress {
 
 /// Immutable history of every exercise attempt. Derived state (mastery, reviews, XP) is recomputed from it.
 model ExerciseAttempt {
-  id            String        @id @default(cuid())
+  id                String        @id @default(cuid())
   /// Client-generated UUID; makes online submission and offline sync idempotent.
-  clientEventId String        @unique
-  userId        String
-  exerciseId    String
-  characterId   String?
-  sessionId     String?
-  deviceId      String?
-  curriculumId  String
-  mode          PracticeMode
-  result        AttemptResult
+  clientEventId     String        @unique
+  userId            String
+  exerciseId        String
+  characterId       String?
+  sessionId         String?
+  deviceId          String?
+  curriculumId      String
+  mode              PracticeMode
+  result            AttemptResult
   /// Overall score 0–100 where the engine supports it; null otherwise.
-  score         Float?
+  score             Float?
   /// Normalised strokes captured from the canvas.
-  strokeData    Json?
+  strokeData        Json?
   /// Per-dimension evaluation output from the handwriting engine.
-  evaluation    Json?
-  hintsUsed     Int           @default(0)
-  durationMs    Int?
-  /// When the learner made the attempt (client clock).
-  occurredAt    DateTime
+  evaluation        Json?
+  hintsUsed         Int           @default(0)
+  durationMs        Int?
+  /// Authoritative event time (D-085): server receipt for online attempts; for offline sync the
+  /// device's time, validated against the session start or the lesson's first download.
+  occurredAt        DateTime
+  /// The time the client claimed. Diagnostic only, never used for progression (D-085).
+  clientOccurredAt  DateTime?
+  /// False for preview practice of content the learner hasn't reached (D-085): graded and
+  /// stored, but no XP, mastery, schedule, streak, achievement or completion effect.
+  countsForProgress Boolean       @default(true)
   /// When the server stored it.
-  receivedAt    DateTime      @default(now())
+  receivedAt        DateTime      @default(now())
   /// Learner's local calendar day of `occurredAt` (their timezone at processing time).
-  localDate     DateTime?     @db.Date
-  xpAwarded     Int           @default(0)
+  localDate         DateTime?     @db.Date
+  xpAwarded         Int           @default(0)
 
   user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   exercise   Exercise         @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
@@ -943,12 +949,15 @@ model SyncEvent {
 }
 
 model DownloadedContentVersion {
-  id             String   @id @default(cuid())
-  userId         String
-  deviceId       String
-  lessonId       String
-  contentVersion Int
-  downloadedAt   DateTime @default(now())
+  id                String   @id @default(cuid())
+  userId            String
+  deviceId          String
+  lessonId          String
+  contentVersion    Int
+  downloadedAt      DateTime @default(now())
+  /// First download of the lesson on this device; never moved by re-downloads. Offline attempts
+  /// may not predate it (D-085).
+  firstDownloadedAt DateTime @default(now())
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
