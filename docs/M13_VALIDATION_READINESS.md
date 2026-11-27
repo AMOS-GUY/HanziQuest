@@ -76,21 +76,39 @@ Legend: ☐ not done · ◐ partly done · ☑ done (with where it's done).
     Don't use it as a test set.
 - ◐ **Analysis the protocol requires, but the lab doesn't do yet.**
   - The lab reports pooled rates only, with no intervals.
-  - Pure, tested functions for the items below are proposed on the branch
-    `feature/m13-analysis-toolkit` (not merged). None of them is wired into the lab yet.
+  - Pure, tested functions for the items below are in
+    `src/features/handwriting/validation-stats.ts` and `src/lib/statistics/binomial.ts`. None
+    of them is wired into the lab or the report.
 
-  | Requirement (protocol section)                 | Status                                |
-  | ---------------------------------------------- | ------------------------------------- |
-  | Cap of 2 per writer and condition (§4)         | Function on the toolkit branch        |
-  | First attempt per prompt; retries apart (§4)   | Not built: needs a prompt identifier  |
-  | Leave-one-writer-out stability (§4)            | Function on the toolkit branch        |
-  | Writer-level cluster bootstrap (§3)            | Function on the toolkit branch        |
-  | ρ estimate and effective n (§3, §8)            | Function on the toolkit branch        |
-  | Exact one-sided bounds per look (§8, §9)       | Function on the toolkit branch        |
-  | Pass / expand / fail decision per measure (§9) | Function on the toolkit branch        |
-  | Naive Wilson, labelled "assumes independence"  | Function on the toolkit branch        |
-  | Per-pair wrong-character findings (§6)         | Not built                             |
-  | Report by device, size and recruitment source  | Device and size exist; source doesn't |
+  | Requirement (protocol section)                   | Status                                         |
+  | ------------------------------------------------ | ---------------------------------------------- |
+  | Cap of 2 per (writer, character, condition) (§4) | `capPerWriter`                                 |
+  | First attempt per prompt; retries apart (§4)     | Not built: needs a prompt identifier           |
+  | Leave-one-writer-out stability (§4)              | `leaveOneWriterOut`                            |
+  | Writer-level cluster bootstrap (§3)              | `clusterBootstrapInterval` (≥ 10 writers)      |
+  | ρ estimate and effective n (§3, §8)              | `intraWriterCorrelation`, `decisionBound`      |
+  | Exact one-sided bounds per look (§8, §9)         | `exactUpperBound`, `lookAlpha`, `lookSchedule` |
+  | Pass / expand / fail decision per measure (§9)   | `decide` (at-most and at-least targets)        |
+  | Naive Wilson, labelled "assumes independence"    | In `decisionBound` (reference only)            |
+  | Per-pair counts and the §6 finding rule          | `pairSummaries`                                |
+  | Report by device, size and recruitment source    | Device and size exist; source doesn't          |
+
+- ☐ **owner: commission an independent statistical review of the decision intervals** before
+  any confirmatory use (docs/M13_STATISTICAL_REVIEW_PROPOSAL.md).
+  - **The problem:** §3's bootstrap rule is optimistic with sparse events, which contradicts §8
+    and D-083.
+    - **Example** (synthetic): 3 accepted wrong characters among 40 writers × 20 samples.
+      - Bootstrap upper bound: about 0.75 %. Under §3, this **passes** ≤ 1 %.
+      - Naive Wilson bound: about 1.1 %.
+      - Exact bound on the effective n: about 2.3 %.
+    - **In a simulation sketch,** §3's nominal 95 % bound covered 80–88 %. When the true rate
+      equalled the target, it falsely passed 15–24 % of studies.
+  - **What the toolkit does:** by default it takes the worse bound of the two. That's a
+    conservative **heuristic, not a validated procedure**. §3's literal rule remains available.
+  - **§3 is unchanged.** Any amendment follows the review, as a decision entry, before the first
+    look (pre-registration).
+- ☐ **Until then, toolkit results are exploratory only:** planning, synthetic dry runs and
+  descriptive reporting with caveats. They support no pass or fail claim about the engine.
 
 - ☐ **Wiring:** a writer-level section in `npm run handwriting:report`. It needs the decisions
   above, and it must not change grading.
