@@ -37,6 +37,9 @@ export async function nextRevision(
 /**
  * Publishes or unpublishes a lesson. Snapshots the previous state as a ContentRevision and
  * writes an audit entry in the same transaction. Authorization is enforced by the caller.
+ * Publishing needs at least one published exercise: the quality check reports a published lesson
+ * without one as an error, and such a lesson can't be completed (as publishing a curriculum needs
+ * a published lesson). Unpublishing is always allowed.
  */
 export async function setLessonStatus(
   prisma: PrismaClient,
@@ -48,6 +51,16 @@ export async function setLessonStatus(
     const lesson = await tx.lesson.findUnique({ where: { id: lessonId } });
     if (!lesson) throw new DomainError("not_found", "Lesson not found");
     if (lesson.status === status) return lesson;
+    if (status === "PUBLISHED") {
+      const exercises = await tx.lessonExercise.count({
+        where: { lessonId, exercise: { status: "PUBLISHED" } },
+      });
+      if (exercises === 0)
+        throw new DomainError(
+          "conflict",
+          "Add at least one published exercise before publishing the lesson.",
+        );
+    }
 
     await tx.contentRevision.create({
       data: {
