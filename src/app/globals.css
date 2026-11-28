@@ -25,6 +25,7 @@
   --accent: #dff5ef;
   --accent-foreground: var(--brand-forest);
   --danger: #c4281d;
+  --danger-foreground: #ffffff;
   --danger-surface: #fdecea;
   --ring: var(--brand-mint);
 }
@@ -43,6 +44,8 @@
     --accent: #1d3d36;
     --accent-foreground: #b8eee2;
     --danger: #ff8a80;
+    /* Dark text on the light coral: white was 2.3:1 (M19 F-06). */
+    --danger-foreground: #0d1f1c;
     --danger-surface: #3a1a18;
     --ring: var(--brand-mint);
   }
@@ -68,6 +71,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
   --color-danger-surface: var(--danger-surface);
   --color-ring: var(--ring);
 

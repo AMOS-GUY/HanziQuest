@@ -14,7 +14,8 @@ export function FormField({
   hint?: string;
   children: React.ReactElement<React.InputHTMLAttributes<HTMLInputElement>>;
 }) {
-  const describedBy = [error ? `${id}-error` : null, hint ? `${id}-hint` : null]
+  // The hint is replaced by the error, so only reference what is rendered (M19 F-02).
+  const describedBy = [error ? `${id}-error` : null, hint && !error ? `${id}-hint` : null]
     .filter(Boolean)
     .join(" ");
   const child = React.cloneElement(children, {

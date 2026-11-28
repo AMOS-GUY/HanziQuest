@@ -200,6 +200,25 @@ export async function grantRole(email: string, role: string) {
   }
 }
 
+/** The id of the newest handwriting dispute an account submitted (test lookup only). */
+export async function latestDisputeId(email: string): Promise<string> {
+  const { Client } = await import("pg");
+  await import("dotenv/config");
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    const { rows } = await client.query<{ id: string }>(
+      `SELECT d.id FROM "HandwritingDispute" d JOIN "User" u ON u.id = d."userId"
+       WHERE u.email = $1 ORDER BY d."createdAt" DESC LIMIT 1`,
+      [email],
+    );
+    if (!rows[0]) throw new Error(`No dispute for ${email}`);
+    return rows[0].id;
+  } finally {
+    await client.end();
+  }
+}
+
 /** Draws a character's reference strokes on the first writing canvas. */
 export async function writeOnCanvas(page: Page, hanzi: string) {
   const medians = strokeMediansFor(hanzi);

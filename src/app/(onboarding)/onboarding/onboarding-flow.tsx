@@ -9,6 +9,7 @@ import { Choice } from "@/components/ui/choice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { useFocusOnChange } from "@/components/ui/use-focus-on-change";
 import { completeOnboardingAction } from "@/features/onboarding/actions";
 import {
   DAILY_GOAL_OPTIONS,
@@ -47,6 +48,7 @@ export function OnboardingFlow({ name }: { name: string }) {
   }, []);
 
   const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
+  const titleRef = useFocusOnChange<HTMLHeadingElement>(step);
   const canContinue = step !== 0 || Boolean(draft.experienceLevel);
 
   const finish = (takePlacement: boolean) => {
@@ -90,7 +92,12 @@ export function OnboardingFlow({ name }: { name: string }) {
           aria-labelledby="onboarding-title"
           className="flex flex-col gap-4"
         >
-          <h1 id="onboarding-title" className="text-2xl font-black">
+          <h1
+            id="onboarding-title"
+            ref={titleRef}
+            tabIndex={-1}
+            className="text-2xl font-black focus-visible:outline-none"
+          >
             {titles[step]}
           </h1>
 

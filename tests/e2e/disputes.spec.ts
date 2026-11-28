@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   completeOnboarding,
   grantRole,
+  latestDisputeId,
   register,
   throwawayPassword,
   uniqueEmail,
@@ -15,7 +16,8 @@ test("a learner disputes a handwriting result and a reviewer records a finding (
   browser,
 }, testInfo) => {
   test.skip(!!testInfo.project.use.isMobile, "Runs once");
-  await register(page, "Disputer", uniqueEmail("disputer"), throwawayPassword());
+  const disputerEmail = uniqueEmail("disputer");
+  await register(page, "Disputer", disputerEmail, throwawayPassword());
   await completeOnboarding(page);
 
   // Character practice: guided, then free writing (the result that can be disputed).
@@ -60,14 +62,22 @@ test("a learner disputes a handwriting result and a reviewer records a finding (
   await expect(
     reviewer.getByRole("heading", { level: 1, name: "Handwriting disputes" }),
   ).toBeVisible();
-  const card = reviewer
-    .getByRole("article")
-    .filter({ hasText: "My strokes weren't captured properly" })
-    .first();
+  // This run's dispute, by the short id the queue shows. Matching on the reason text alone
+  // picked whichever matching card came first, which on a database with earlier runs'
+  // disputes could be someone else's (M19: the source of this test's flakiness).
+  const disputeId = await latestDisputeId(disputerEmail);
+  const card = reviewer.getByRole("article").filter({ hasText: `dispute ${disputeId.slice(-6)}` });
+  await expect(card).toHaveCount(1);
+  await expect(card).toContainText("My strokes weren't captured properly");
   await expect(card.getByRole("img", { name: /Learner's writing for 你/ })).toBeVisible();
   await card.getByRole("button", { name: "Review this" }).click();
   await expect(card.getByRole("button", { name: "The result was right" })).toBeVisible();
   await card.getByRole("button", { name: "The result was right" }).click();
+  // Wait for the decision to be saved before navigating away: navigating straight away could
+  // cancel the in-flight server action, which made this test flaky (M19, docs/m19).
+  await expect(card.getByRole("button", { name: "The result was right" })).toHaveCount(0, {
+    timeout: 15_000,
+  });
   await reviewer.goto("/admin/disputes?status=RESOLVED");
   await expect(reviewer.getByText("The result was right").first()).toBeVisible();
   await reviewerContext.close();

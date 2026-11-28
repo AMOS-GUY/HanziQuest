@@ -271,6 +271,13 @@ Target public beta: **2026-12-08**.
 - [ ] **Residual (documented):** device time inside a legitimate offline window; legacy pre-M18 progress not rewritten; time-zone changes (M17 F-10)
 - [ ] **#48** still open (empty lessons, D-084); both PRs add an entry at the top of `DECISIONS.md`
 
+### M19 learner experience quality (2026-11-28, `feature/m19-learner-experience-quality`): PR pending, not merged
+
+- [x] Audit at 360–430 px, tablet and desktop, light and dark: onboarding, placement, Home, path, character practice, Review, Profile, offline and public pages (`docs/m19/`)
+- [x] Fixed: landing CTA on the first phone screen; ARIA radio pattern and focus per step in onboarding and placement; destructive account deletion styling and dark-mode danger contrast; dangling `aria-describedby`; small header and footer targets; duplicate logo alt
+- [x] Flaky `disputes.spec.ts` fixed (picked another run's dispute; navigated before the decision saved)
+- [ ] Practice pages' `<h1>` is in open PR #49; practice runner and Home not changed (open PR overlap); no real screen-reader pass yet
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)
