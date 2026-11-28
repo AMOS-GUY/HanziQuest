@@ -21,11 +21,17 @@ export default async function LearnerLayout({ children }: { children: React.Reac
             <Wordmark className="text-lg" />
           </Link>
           <div className="flex items-center gap-4">
-            <Link href="/feedback" className="text-primary text-sm font-bold">
+            <Link
+              href="/feedback"
+              className="text-primary inline-flex min-h-11 items-center px-1 text-sm font-bold"
+            >
               Feedback
             </Link>
             {showAdmin ? (
-              <Link href="/admin" className="text-primary text-sm font-bold">
+              <Link
+                href="/admin"
+                className="text-primary inline-flex min-h-11 items-center px-1 text-sm font-bold"
+              >
                 Admin
               </Link>
             ) : null}

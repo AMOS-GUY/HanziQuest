@@ -11,7 +11,10 @@ export function Logo({
   variant = "emerald",
   className,
   priority,
+  alt = "HanziQuest",
 }: {
+  /** Pass "" when the logo is decorative (the name is already given nearby). */
+  alt?: string;
   size?: number;
   variant?: "emerald" | "minimal-light" | "minimal-dark" | "night";
   className?: string;
@@ -20,7 +23,7 @@ export function Logo({
   return (
     <Image
       src={`/branding/hanziquest-${variant}.svg`}
-      alt="HanziQuest"
+      alt={alt}
       width={size}
       height={size}
       priority={priority}

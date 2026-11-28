@@ -10,6 +10,7 @@ import { Choice } from "@/components/ui/choice";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { submitPlacementAction } from "@/features/onboarding/actions";
 import type { PlacementSummary, PublicPlacementQuestion } from "@/features/assessment/placement";
+import { useFocusOnChange } from "@/components/ui/use-focus-on-change";
 
 export function PlacementQuiz({
   assessmentId,
@@ -25,6 +26,8 @@ export function PlacementQuiz({
   const [summary, setSummary] = useState<PlacementSummary>();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  // Focus the heading on each new question and on the result (M19 F-04).
+  const headingRef = useFocusOnChange<HTMLHeadingElement>(summary ? "summary" : index);
 
   if (questions.length === 0) {
     return (
@@ -40,7 +43,13 @@ export function PlacementQuiz({
   if (summary) {
     return (
       <div className="flex flex-col gap-4 pt-4">
-        <h1 className="text-3xl font-black">Placement complete</h1>
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-3xl font-black focus-visible:outline-none"
+        >
+          Placement complete
+        </h1>
         <Card>
           <p className="text-lg font-bold">
             You recognised {summary.correct} of {summary.total} characters.
@@ -83,10 +92,19 @@ export function PlacementQuiz({
   return (
     <div className="flex flex-col gap-5 pt-2">
       <ProgressBar value={index + 1} max={questions.length} label="Placement progress" />
-      <p className="text-muted-foreground text-sm font-bold">
+      {/* Read once, inside the heading (which takes focus on each question). */}
+      <p aria-hidden className="text-muted-foreground text-sm font-bold">
         Question {index + 1} of {questions.length}
       </p>
-      <h1 id="placement-q" className="text-2xl font-black">
+      <h1
+        id="placement-q"
+        ref={headingRef}
+        tabIndex={-1}
+        className="text-2xl font-black focus-visible:outline-none"
+      >
+        <span className="sr-only">
+          Question {index + 1} of {questions.length}.{" "}
+        </span>
         What does this character mean?
       </h1>
       <div

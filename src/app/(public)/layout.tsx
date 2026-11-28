@@ -11,7 +11,10 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           <Logo size={36} />
           <Wordmark />
         </Link>
-        <Link href="/register" className="text-primary text-sm font-bold">
+        <Link
+          href="/register"
+          className="text-primary inline-flex min-h-11 items-center px-1 text-sm font-bold"
+        >
           Join the beta
         </Link>
       </header>
