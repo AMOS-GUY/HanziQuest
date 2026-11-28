@@ -164,6 +164,8 @@ export default async function ProfilePage() {
           <AdminForm
             action={deleteAccountAction}
             submitLabel="Delete my account permanently"
+            submitVariant="danger"
+            pendingLabel="Deleting…"
             fields={[
               {
                 name: "password",

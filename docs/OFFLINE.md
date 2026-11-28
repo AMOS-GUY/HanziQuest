@@ -38,6 +38,13 @@ learning path and admin need a connection.
   completion come from the server.
 - **Order independence.** Mastery and review state are replayed from the full attempt history
   sorted by `occurredAt`, so late-arriving offline attempts land in the right place.
+- **Offline time is validated (D-085, M18).** A synced attempt keeps its device time only if it
+  isn't earlier than the session's start (when it names a session) or the device's first
+  download of the lesson (`DownloadedContentVersion.firstDownloadedAt`, which re-downloads
+  never move), minus 5 minutes. Earlier attempts are rejected, not retried. Future times are
+  clamped to now. With neither record, for example a network failure before the lesson session
+  started, the attempt is kept at the server's time. Offline attempts at content not yet
+  reached are previews and earn nothing.
 
 ## Account isolation on shared devices
 

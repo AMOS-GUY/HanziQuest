@@ -255,6 +255,29 @@ Target public beta: **2026-12-08**.
 - [ ] **Engineering follow-up (LOW):** batch the importer's per-item upserts before curricula reach ~6,000 items (the exclusive review lock is held for the whole import)
 - [ ] **Kept as is (pre-existing, LOW, rechecked in D-073):** inside /admin, staff without a page's permission get the not-found page with status 200 (the loading boundary streams first). Content is withheld; non-staff and suspended accounts get a real 404 from the proxy
 
+### M17 progression integrity (2026-11-28, `feature/m17-progression-integrity`): PR pending, not merged
+
+- [x] Audit of every progression write path: attempts, progress, completion, placement, sync, admin (`docs/m17/`)
+- [x] Fixed (Class 1): completion re-checks visibility (F-03); placement is graded once under concurrency (F-04)
+- [x] Matrix: `tests/integration/progression-integrity.test.ts` (expected cases, plus characterization of open decisions)
+- [x] **Owner:** decided D-085 on 2026-11-28 (F-01 Option B, F-02, F-06); implemented in M18
+
+### M18 progression integrity enforcement (2026-11-28, `feature/m18-enforcement`): PR pending, not merged
+
+- [x] D-085 enforced in `features/exercises/attempt-context.ts`: preview practice (F-01), server and validated offline time (F-02), attempt/session context (F-06)
+- [x] Additive migration: `ExerciseAttempt.countsForProgress`, `clientOccurredAt`; `DownloadedContentVersion.firstDownloadedAt` (backfilled)
+- [x] Completion and offline re-attachment count only the lesson's counted attempts; M15 overview excludes previews; runner shows a preview notice
+- [x] Matrix rewritten for D-085 (`tests/integration/progression-integrity.test.ts`, `docs/m18/M18-test-matrix.md`)
+- [ ] **Residual (documented):** device time inside a legitimate offline window; legacy pre-M18 progress not rewritten; time-zone changes (M17 F-10)
+- [ ] **#48** still open (empty lessons, D-084); both PRs add an entry at the top of `DECISIONS.md`
+
+### M19 learner experience quality (2026-11-28, `feature/m19-learner-experience-quality`): PR pending, not merged
+
+- [x] Audit at 360–430 px, tablet and desktop, light and dark: onboarding, placement, Home, path, character practice, Review, Profile, offline and public pages (`docs/m19/`)
+- [x] Fixed: landing CTA on the first phone screen; ARIA radio pattern and focus per step in onboarding and placement; destructive account deletion styling and dark-mode danger contrast; dangling `aria-describedby`; small header and footer targets; duplicate logo alt
+- [x] Flaky `disputes.spec.ts` fixed (picked another run's dispute; navigated before the decision saved)
+- [ ] Practice pages' `<h1>` is in open PR #49; practice runner and Home not changed (open PR overlap); no real screen-reader pass yet
+
 ## Session log
 
 ### 2026-11-10 — Session 1 (M0 + M1)

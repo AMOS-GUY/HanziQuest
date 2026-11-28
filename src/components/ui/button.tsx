@@ -12,7 +12,7 @@ const buttonVariants = cva(
           "bg-primary text-primary-foreground shadow-[0_3px_0_0_var(--brand-forest)] hover:bg-primary-hover active:translate-y-px active:shadow-none",
         secondary: "border-2 border-border bg-surface text-foreground hover:bg-surface-muted",
         ghost: "text-foreground hover:bg-surface-muted",
-        danger: "bg-danger text-white hover:opacity-90",
+        danger: "bg-danger text-danger-foreground hover:opacity-90",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

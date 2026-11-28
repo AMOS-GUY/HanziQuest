@@ -2,6 +2,44 @@
 
 Newest first. Each entry: decision, why, consequences.
 
+## 2026-11-28 — M18 progression integrity
+
+**D-085 · Progression comes only from reached content, at a trusted time, in a fitting session.**
+Approved by the owner on 2026-11-28, after the M17 audit (`docs/m17/`). Implemented in M18
+(`docs/m18/`), in `features/exercises/attempt-context.ts`, which every attempt passes through.
+
+- **F-01, preview practice (Option B).**
+  - Learners may look at, watch and practise characters from lessons they haven't reached. They
+    get full handwriting feedback.
+  - Such an attempt is stored with `countsForProgress = false` and has no other effect: no XP,
+    mastery, schedule, daily activity, goal, streak, achievement, completion or unlock. It
+    writes no character results, so it is never credited later.
+  - An attempt counts when a reached, visible lesson contains the exercise, or when every
+    character it asks for is taught in some reached, visible lesson. That makes shared
+    characters count wherever they are reached.
+  - The server decides. Client flags are ignored.
+- **F-02, time.**
+  - Online attempts take the server's time. The client's claim is kept in `clientOccurredAt`
+    for diagnostics, and a wrong browser clock is never a reason to refuse.
+  - Offline attempts keep the device's time only from the server-recorded start of offline
+    access: the session's start, or the device's first download of the lesson
+    (`firstDownloadedAt`, never moved by re-downloads), minus 5 minutes of skew. Earlier is
+    refused, the future is clamped to now, and the 30-day limit stays. With no record, the
+    server's time is used.
+  - Mastery replay, schedules, streaks, caps and goals use only this validated time.
+- **F-06, session context.**
+  - A named session must be the learner's and not finished.
+  - A lesson session must contain the exercise.
+  - A review session only takes free writing of characters the learner is reviewing (a
+    schedule or a placement check).
+  - An optional `lessonId` must match.
+  - Completion, including offline re-attachment, counts only the lesson's own counted attempts.
+- **Unchanged:** XP values and caps, mastery and SRS rules, completion requirements, unlocking,
+  streak rules and placement.
+- **Not rewritten:** progress earned before M18 through locked practice or backdating.
+- **Residual risk:** within a legitimate offline window, the device clock is still trusted (see
+  `docs/m18/M18-security-review.md`).
+
 ## 2026-11-21 — Learning integrity
 
 **D-084 · A lesson with no published exercises can't be completed or published.** Authorized

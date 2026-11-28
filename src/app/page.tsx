@@ -58,7 +58,7 @@ export default async function WelcomePage({
           Your account and learning data have been deleted.
         </p>
       ) : null}
-      <section className="grid flex-1 items-center gap-10 py-10 md:grid-cols-2 md:py-16">
+      <section className="grid flex-1 items-center gap-6 py-6 sm:gap-10 sm:py-10 md:grid-cols-2 md:py-16">
         <div className="order-2 md:order-1">
           <p className="bg-accent text-accent-foreground mb-3 inline-block rounded-full px-3 py-1 text-sm font-bold">
             Public beta
@@ -67,11 +67,11 @@ export default async function WelcomePage({
             Learn to write Chinese characters,{" "}
             <span className="text-primary">one stroke at a time.</span>
           </h1>
-          <p className="text-muted-foreground mt-4 max-w-md text-lg">
+          <p className="text-muted-foreground mt-3 max-w-md text-base sm:mt-4 sm:text-lg">
             HanziQuest helps you recognise, remember and correctly write Hanzi — with stroke-order
             practice, writing feedback and spaced review.
           </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row">
             <Button asChild size="lg">
               <Link href="/register">Join the quest</Link>
             </Button>
@@ -82,7 +82,13 @@ export default async function WelcomePage({
         </div>
         <div className="order-1 flex justify-center md:order-2">
           <div className="relative">
-            <Logo size={260} priority className="shadow-[0_12px_40px_-12px_rgba(7,91,77,0.45)]" />
+            {/* Smaller on phones so "Join the quest" is on the first screen (M19 F-01). */}
+            <Logo
+              size={260}
+              alt=""
+              priority
+              className="size-36 shadow-[0_12px_40px_-12px_rgba(7,91,77,0.45)] sm:size-[260px]"
+            />
             <span
               lang="zh"
               aria-hidden

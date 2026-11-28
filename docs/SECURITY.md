@@ -24,7 +24,17 @@
   results are ignored.
 - Attempt replay is idempotent (`clientEventId` is unique). Reusing another user's id returns 409.
 - Attempts are accepted only for published exercises in published lessons, with a bounded
-  payload and timestamp. Locked lessons can't be started.
+  payload. Locked lessons can't be started.
+- **Progression comes only from reached content (D-085, M18).** An attempt at content the
+  learner hasn't reached is preview practice. It is graded and stored, with no XP, mastery,
+  schedule, streak, achievement, completion or unlock. The server decides, and client flags are
+  ignored.
+- **The server decides attempt time (D-085).** Online attempts take the server's clock. Offline
+  attempts keep the device's time only after the server-recorded session start or first lesson
+  download on that device. The client's claim is kept for diagnostics only.
+- **Attempts must fit their session (D-085).** The session must be the learner's own and not
+  finished. Its lesson must contain the exercise, or, for a review, the character must be under
+  review.
 - Placement answers are graded on the server from a question plan derived from the assessment
   id. Correct answers are never sent to the browser.
 - Guided-practice mistake counts are client-reported and labelled as such. They never count

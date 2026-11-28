@@ -222,14 +222,22 @@ describe("attempts", () => {
         drawings: [ink("你")],
       }),
     ).rejects.toMatchObject({ code: "conflict" });
-    await expect(
-      submitAttempt(prisma, userId, {
-        clientEventId: randomUUID(),
-        exerciseId: word.id,
-        occurredAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        kind: "skip",
-      }),
-    ).rejects.toMatchObject({ code: "conflict" });
+    // Online, the server's clock is authoritative (D-085): a wrong browser clock is neither
+    // refused nor trusted. The claim is kept for diagnostics only.
+    const claimed = new Date(Date.now() + 60 * 60 * 1000);
+    const before = Date.now();
+    const future = await submitAttempt(prisma, userId, {
+      clientEventId: randomUUID(),
+      exerciseId: word.id,
+      occurredAt: claimed.toISOString(),
+      kind: "skip",
+    });
+    const stored = await prisma.exerciseAttempt.findUniqueOrThrow({
+      where: { id: future.attemptId },
+    });
+    expect(stored.occurredAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(stored.occurredAt.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(stored.clientOccurredAt?.toISOString()).toBe(claimed.toISOString());
     await expect(
       submitAttempt(prisma, userId, {
         ...base,

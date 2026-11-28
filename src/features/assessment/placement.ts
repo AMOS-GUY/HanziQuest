@@ -214,12 +214,16 @@ export async function submitPlacement(
   const estimatedLevel = correct / Math.max(questions.length, 1) >= PLACEMENT_PASS_RATIO ? 1 : 0;
   let lessonsTestedOut = 0;
   await prisma.$transaction(async (tx) => {
+    // Conditional transition first (M17): the status check above runs outside this transaction,
+    // so two concurrent submissions could both pass it and both be graded. The row lock makes
+    // the second wait, then match nothing.
+    const { count } = await tx.placementAssessment.updateMany({
+      where: { id: assessmentId, userId, status: "IN_PROGRESS" },
+      data: { status: "COMPLETED", completedAt: new Date(), estimatedLevel },
+    });
+    if (count === 0) throw new DomainError("conflict", "This placement check is already finished.");
     await tx.assessmentResult.createMany({
       data: graded.map((g) => ({ assessmentId, characterId: g.q.characterId, correct: g.correct })),
-    });
-    await tx.placementAssessment.update({
-      where: { id: assessmentId },
-      data: { status: "COMPLETED", completedAt: new Date(), estimatedLevel },
     });
     const lessons = await tx.lesson.findMany({
       where: { unitId: { in: passedUnits }, status: "PUBLISHED" },
