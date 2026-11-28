@@ -4,7 +4,7 @@ Newest first. Each entry: decision, why, consequences.
 
 ## 2026-11-28 — M18 progression integrity
 
-**D-085 · Progression comes only from reached content, at a trusted time, in a fitting session.**
+**D-085 · Progression comes only from reached content, at a validated time, in a fitting session.**
 Approved by the owner on 2026-11-28, after the M17 audit (`docs/m17/`). Implemented in M18
 (`docs/m18/`), in `features/exercises/attempt-context.ts`, which every attempt passes through.
 

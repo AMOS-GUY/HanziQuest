@@ -90,6 +90,56 @@ async function main() {
   >`SELECT count(*)::int AS n FROM "User" WHERE id = 'drill-user'`;
   check("existing data kept through the upgrade", kept[0]?.n === 1);
 
+  console.log("2b. M18 (D-085) backfill keeps existing learning records");
+  const m18 = shipped.findIndex((m) => m.endsWith("_m18_progression_integrity"));
+  check("the M18 migration is shipped", m18 >= 0);
+  const m18db = await createDb("m18");
+  check("migrate to just before M18", deploy(m18db, configWith(shipped.slice(0, m18))).ok);
+  const pm = createPrismaClient(m18db);
+  await pm.$executeRawUnsafe(`
+    INSERT INTO "User" (id, email, "updatedAt") VALUES ('m18-user', 'm18@example.test', now());
+    INSERT INTO "Curriculum" (id, slug, name, framework, version, source, "updatedAt")
+      VALUES ('m18-cur', 'm18', 'M18', 'CUSTOM', 'v1', 'drill', now());
+    INSERT INTO "HSKLevel" (id, "curriculumId", level, name, "updatedAt")
+      VALUES ('m18-level', 'm18-cur', 1, 'L1', now());
+    INSERT INTO "Unit" (id, "levelId", slug, title, position, "updatedAt")
+      VALUES ('m18-unit', 'm18-level', 'u', 'U', 1, now());
+    INSERT INTO "Lesson" (id, "unitId", slug, title, position, "updatedAt")
+      VALUES ('m18-lesson', 'm18-unit', 'l', 'L', 1, now());
+    INSERT INTO "Device" (id, "userId", "clientId") VALUES ('m18-device', 'm18-user', 'client');
+    INSERT INTO "DownloadedContentVersion" (id, "userId", "deviceId", "lessonId", "contentVersion", "downloadedAt")
+      VALUES ('m18-dl', 'm18-user', 'm18-device', 'm18-lesson', 1, '2026-01-02T03:04:05.000Z');
+    INSERT INTO "Exercise" (id, key, "curriculumId", type, prompt, "expectedAnswer", "evaluationConfig", "updatedAt")
+      VALUES ('m18-ex', 'k', 'm18-cur', 'FREEHAND_WRITING', '{}', '', '{}', now());
+    INSERT INTO "ExerciseAttempt" (id, "clientEventId", "userId", "exerciseId", "curriculumId", mode, result, "occurredAt", "xpAwarded")
+      VALUES ('m18-attempt', 'm18-event', 'm18-user', 'm18-ex', 'm18-cur', 'INDEPENDENT', 'GOOD', '2026-01-03T00:00:00.000Z', 8);
+  `);
+  check("apply the M18 migration", deploy(m18db, configWith(shipped.slice(0, m18 + 1))).ok);
+  const dl = await pm.$queryRaw<{ first: Date; latest: Date }[]>`
+    SELECT "firstDownloadedAt" AS first, "downloadedAt" AS latest FROM "DownloadedContentVersion" WHERE id = 'm18-dl'`;
+  check(
+    "firstDownloadedAt is backfilled from downloadedAt (not the migration time)",
+    dl[0]?.first.toISOString() === "2026-01-02T03:04:05.000Z" &&
+      dl[0]?.latest.toISOString() === "2026-01-02T03:04:05.000Z",
+    JSON.stringify(dl),
+  );
+  const at = await pm.$queryRaw<
+    { counts: boolean; claimed: Date | null; occurred: Date; xp: number }[]
+  >`SELECT "countsForProgress" AS counts, "clientOccurredAt" AS claimed, "occurredAt" AS occurred, "xpAwarded" AS xp
+    FROM "ExerciseAttempt" WHERE id = 'm18-attempt'`;
+  check(
+    "existing attempts still count, keep their time and XP; no client time is invented",
+    at[0]?.counts === true &&
+      at[0]?.claimed === null &&
+      at[0]?.occurred.toISOString() === "2026-01-03T00:00:00.000Z" &&
+      at[0]?.xp === 8,
+    JSON.stringify(at),
+  );
+  check(
+    "the rest of the shipped migrations apply on top",
+    deploy(m18db).ok && (await checkReadiness(pm, shipped)).ok,
+  );
+
   console.log("3. Failed migration and recovery");
   const failing = await createDb("failing");
   const bad = {
@@ -162,7 +212,7 @@ async function main() {
   );
   check("answers within the 10 s connect timeout", Date.now() - t0 < 11_000);
 
-  await Promise.all([pf, pp, pfail, dead].map((p) => p.$disconnect().catch(() => undefined)));
+  await Promise.all([pf, pp, pm, pfail, dead].map((p) => p.$disconnect().catch(() => undefined)));
 }
 
 main()

@@ -28,6 +28,7 @@ import {
   startLessonSession,
   startReviewSession,
 } from "@/features/learning/sessions";
+import { recordLessonDownload } from "@/features/offline/downloads";
 import { processSyncBatch } from "@/features/offline/sync-service";
 import { ACHIEVEMENTS } from "@/features/progress/achievements";
 import { localDay } from "@/features/progress/calendar";
@@ -770,6 +771,189 @@ describe("F-02 offline attempts keep their time only after server-recorded acces
     });
     expect(results[0]).toMatchObject({ status: "processed", result: { xpAwarded: 0 } });
     expect(await sideEffects(userId)).toEqual(NONE);
+  });
+});
+
+describe("D-085 review: offline authorization can't be stretched", () => {
+  async function latestAttempt(userId: string) {
+    return prisma.exerciseAttempt.findFirstOrThrow({
+      where: { userId },
+      orderBy: { receivedAt: "desc" },
+    });
+  }
+
+  it("re-downloads keep the first download time; each learner and device has its own", async () => {
+    const userId = await newUser();
+    const clientDeviceId = randomUUID();
+    const first = new Date(Date.now() - 10 * DAY);
+    await recordLessonDownload(
+      prisma,
+      { userId, clientDeviceId, lessonId: lessonA, contentVersion: 1 },
+      first,
+    );
+    const again = await recordLessonDownload(prisma, {
+      userId,
+      clientDeviceId,
+      lessonId: lessonA,
+      contentVersion: 2,
+    });
+    expect(again.firstDownloadedAt.toISOString()).toBe(first.toISOString());
+    expect(again.downloadedAt.getTime()).toBeGreaterThan(first.getTime());
+    expect(again.contentVersion).toBe(2);
+    // The service never moves the first time, whichever time a later call carries.
+    const earlier = await recordLessonDownload(
+      prisma,
+      { userId, clientDeviceId, lessonId: lessonA, contentVersion: 2 },
+      new Date(Date.now() - 20 * DAY),
+    );
+    expect(earlier.firstDownloadedAt.toISOString()).toBe(first.toISOString());
+    // Another learner with the same client device id gets a separate device and window.
+    const other = await newUser();
+    const theirs = await recordLessonDownload(prisma, {
+      userId: other,
+      clientDeviceId,
+      lessonId: lessonA,
+      contentVersion: 2,
+    });
+    expect(theirs.deviceId).not.toBe(again.deviceId);
+    expect(theirs.firstDownloadedAt.getTime()).toBeGreaterThan(first.getTime());
+  });
+
+  it("a download of one lesson doesn't authorize old times for a locked lesson's exercise", async () => {
+    const userId = await newUser();
+    const clientDeviceId = randomUUID();
+    await recordLessonDownload(
+      prisma,
+      { userId, clientDeviceId, lessonId: lessonA, contentVersion: 1 },
+      new Date(Date.now() - 10 * DAY),
+    );
+    const b = await freehandOf(lessonB);
+    const before = Date.now();
+    const { results } = await processSyncBatch(prisma, userId, {
+      deviceId: clientDeviceId,
+      events: [
+        syncAttempt(
+          writeAttempt(b.id, b.hanzi, { occurredAt: new Date(Date.now() - 5 * DAY).toISOString() }),
+        ),
+      ],
+    });
+    expect(results[0]).toMatchObject({ status: "processed", result: { xpAwarded: 0 } });
+    const stored = await latestAttempt(userId);
+    expect(stored.countsForProgress).toBe(false);
+    expect(stored.occurredAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(await sideEffects(userId)).toEqual(NONE);
+  });
+
+  it("nor for another curriculum's exercise of a shared character: it counts, at server time", async () => {
+    const userId = await newUser();
+    const clientDeviceId = randomUUID();
+    await recordLessonDownload(
+      prisma,
+      { userId, clientDeviceId, lessonId: lessonA, contentVersion: 1 },
+      new Date(Date.now() - 10 * DAY),
+    );
+    const y = await freehandOf(lessonY2); // 山, reached through lesson A
+    const before = Date.now();
+    await processSyncBatch(prisma, userId, {
+      deviceId: clientDeviceId,
+      events: [
+        syncAttempt(
+          writeAttempt(y.id, y.hanzi, { occurredAt: new Date(Date.now() - 5 * DAY).toISOString() }),
+        ),
+      ],
+    });
+    const stored = await latestAttempt(userId);
+    expect(stored.countsForProgress).toBe(true);
+    expect(stored.occurredAt.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it("another learner can't borrow a device's download window", async () => {
+    const owner = await newUser();
+    const clientDeviceId = randomUUID();
+    await recordLessonDownload(
+      prisma,
+      { userId: owner, clientDeviceId, lessonId: lessonA, contentVersion: 1 },
+      new Date(Date.now() - 10 * DAY),
+    );
+    const other = await newUser();
+    const a = await freehandOf(lessonA);
+    const before = Date.now();
+    await processSyncBatch(prisma, other, {
+      deviceId: clientDeviceId,
+      events: [
+        syncAttempt(
+          writeAttempt(a.id, a.hanzi, { occurredAt: new Date(Date.now() - 5 * DAY).toISOString() }),
+        ),
+      ],
+    });
+    expect((await latestAttempt(other)).occurredAt.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it("a download record never grants eligibility: even a forged one for a locked lesson stays a preview", async () => {
+    const userId = await newUser();
+    // The download route refuses locked lessons; insert the row directly to prove independence.
+    const dev = await deviceWithDownload(userId, lessonB, new Date(Date.now() - 10 * DAY));
+    const b = await freehandOf(lessonB);
+    const { results } = await processSyncBatch(prisma, userId, {
+      deviceId: dev.clientId,
+      events: [
+        syncAttempt(
+          writeAttempt(b.id, b.hanzi, { occurredAt: new Date(Date.now() - 5 * DAY).toISOString() }),
+        ),
+      ],
+    });
+    expect(results[0]).toMatchObject({ status: "processed", result: { xpAwarded: 0 } });
+    expect((await latestAttempt(userId)).countsForProgress).toBe(false);
+    expect(await sideEffects(userId)).toEqual(NONE);
+  });
+
+  it("session-less offline attempts can't claim another lesson or another learner's session", async () => {
+    const userId = await newUser();
+    const dev = await deviceWithDownload(userId, lessonA, new Date(Date.now() - 10 * DAY));
+    const b = await freehandOf(lessonB);
+    const owner = await newUser();
+    const foreign = await startLessonSession(prisma, owner, lessonA);
+    const a = await freehandOf(lessonA);
+    const { results } = await processSyncBatch(prisma, userId, {
+      deviceId: dev.clientId,
+      events: [
+        syncAttempt(writeAttempt(b.id, b.hanzi, { lessonId: lessonA })),
+        syncAttempt(writeAttempt(a.id, a.hanzi, { sessionId: foreign.id })),
+      ],
+    });
+    expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"]);
+    expect(await prisma.exerciseAttempt.count({ where: { userId } })).toBe(0);
+  });
+
+  it("RESIDUAL (documented): inside a real download window the device clock is trusted", async () => {
+    // D-085 keeps offline device time from the first download onwards. A learner who downloaded
+    // a lesson 12 days ago can still submit chosen, spaced times within those 12 days. This test
+    // pins that limit so a future fix changes it on purpose (docs/m18/M18-security-review.md).
+    const userId = await newUser();
+    const ex = await freehandOf(lessonA);
+    const downloaded = Date.now() - 12 * DAY;
+    const dev = await deviceWithDownload(userId, lessonA, new Date(downloaded));
+    let at = Date.now() - 11 * DAY;
+    for (let i = 0; i < 4 && at < Date.now(); i += 1) {
+      await processSyncBatch(prisma, userId, {
+        deviceId: dev.clientId,
+        events: [
+          syncAttempt(writeAttempt(ex.id, ex.hanzi, { occurredAt: new Date(at).toISOString() })),
+        ],
+      });
+      const schedule = await prisma.reviewSchedule.findUniqueOrThrow({
+        where: { userId_characterId: { userId, characterId: ex.characterId } },
+      });
+      at = schedule.dueAt.getTime() + MINUTE;
+    }
+    const days = await prisma.dailyActivity.count({ where: { userId } });
+    expect(days).toBeGreaterThan(1); // backdated days inside the window are accepted
+    // …but never earlier than the download, whatever the device claims.
+    const earliest = await prisma.exerciseAttempt.findFirstOrThrow({
+      where: { userId },
+      orderBy: { occurredAt: "asc" },
+    });
+    expect(earliest.occurredAt.getTime()).toBeGreaterThanOrEqual(downloaded - 5 * MINUTE);
   });
 });
 

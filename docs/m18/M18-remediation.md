@@ -67,7 +67,10 @@ A preview still gets a lot:
 - a stored `ExerciseAttempt` (`countsForProgress = false`, `xpAwarded = 0`), so it's auditable
   and disputable;
 - a response with `counted: false`;
-- a runner notice: "Preview: practise freely. This counts once you reach its lesson."
+- a runner notice, after the attempt and on the end screen: "Preview practice: this doesn't
+  count toward your progress." (`components/lessons/save-status.ts`). The first wording,
+  "This counts once you reach its lesson", implied later credit, which D-085 rules out. It
+  was corrected in the M18 review.
 
 It gets **none** of these:
 

@@ -44,7 +44,9 @@ learning path and admin need a connection.
   never move), minus 5 minutes. Earlier attempts are rejected, not retried. Future times are
   clamped to now. With neither record, for example a network failure before the lesson session
   started, the attempt is kept at the server's time. Offline attempts at content not yet
-  reached are previews and earn nothing.
+  reached are previews and earn nothing. Inside the window, the device clock is still
+  trusted: this bounds how far back an attempt can claim to be. It doesn't prove when it
+  happened.
 
 ## Account isolation on shared devices
 

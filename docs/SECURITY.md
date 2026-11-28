@@ -31,7 +31,9 @@
   ignored.
 - **The server decides attempt time (D-085).** Online attempts take the server's clock. Offline
   attempts keep the device's time only after the server-recorded session start or first lesson
-  download on that device. The client's claim is kept for diagnostics only.
+  download on that device. The client's claim is kept for diagnostics only. Within that
+  window, the device's clock is still trusted: a learner can choose times between the first
+  download and now. This is a documented residual risk (`docs/m18/M18-security-review.md`).
 - **Attempts must fit their session (D-085).** The session must be the learner's own and not
   finished. Its lesson must contain the exercise, or, for a review, the character must be under
   review.
