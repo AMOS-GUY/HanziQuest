@@ -9,33 +9,50 @@ const DAY = 86_400_000;
 
 async function activity() {
   const since = new Date(Date.now() - 7 * DAY);
-  const [active, attempts, independent, passed, completions, newAccounts, rejectedSync, samples] =
-    await Promise.all([
-      prisma.exerciseAttempt.groupBy({ by: ["userId"], where: { occurredAt: { gte: since } } }),
-      prisma.exerciseAttempt.count({ where: { occurredAt: { gte: since } } }),
-      prisma.exerciseAttempt.count({
-        where: { occurredAt: { gte: since }, mode: "INDEPENDENT", result: { not: "SKIPPED" } },
-      }),
-      prisma.exerciseAttempt.count({
-        where: {
-          occurredAt: { gte: since },
-          mode: "INDEPENDENT",
-          result: { in: ["EXCELLENT", "GOOD"] },
-        },
-      }),
-      prisma.lessonProgress.count({
-        where: { status: "COMPLETED", completedAt: { gte: since } },
-      }),
-      prisma.user.count({ where: { createdAt: { gte: since } } }),
-      prisma.syncEvent.count({ where: { status: "REJECTED", receivedAt: { gte: since } } }),
-      prisma.handwritingSample.count(),
-    ]);
+  // Raw practice (every attempt, previews included) is kept apart from counted learning
+  // activity: preview practice of unreached content never counts (D-085), so performance
+  // figures use counted attempts only.
+  const counted = { occurredAt: { gte: since }, countsForProgress: true };
+  const [
+    active,
+    attempts,
+    previews,
+    independent,
+    passed,
+    completions,
+    newAccounts,
+    rejectedSync,
+    samples,
+  ] = await Promise.all([
+    prisma.exerciseAttempt.groupBy({ by: ["userId"], where: { occurredAt: { gte: since } } }),
+    prisma.exerciseAttempt.count({ where: { occurredAt: { gte: since } } }),
+    prisma.exerciseAttempt.count({
+      where: { occurredAt: { gte: since }, countsForProgress: false },
+    }),
+    prisma.exerciseAttempt.count({
+      where: { ...counted, mode: "INDEPENDENT", result: { not: "SKIPPED" } },
+    }),
+    prisma.exerciseAttempt.count({
+      where: {
+        ...counted,
+        mode: "INDEPENDENT",
+        result: { in: ["EXCELLENT", "GOOD"] },
+      },
+    }),
+    prisma.lessonProgress.count({
+      where: { status: "COMPLETED", completedAt: { gte: since } },
+    }),
+    prisma.user.count({ where: { createdAt: { gte: since } } }),
+    prisma.syncEvent.count({ where: { status: "REJECTED", receivedAt: { gte: since } } }),
+    prisma.handwritingSample.count(),
+  ]);
   return [
     { label: "Active learners", value: active.length.toLocaleString("en") },
     { label: "New accounts", value: newAccounts.toLocaleString("en") },
-    { label: "Exercise attempts", value: attempts.toLocaleString("en") },
+    { label: "Practice attempts (all, previews included)", value: attempts.toLocaleString("en") },
+    { label: "Preview practice (not counted)", value: previews.toLocaleString("en") },
     {
-      label: "Independent writing passed",
+      label: "Independent writing passed (counted attempts)",
       value: independent ? `${Math.round((passed / independent) * 100)}%` : "—",
     },
     { label: "Lessons completed", value: completions.toLocaleString("en") },

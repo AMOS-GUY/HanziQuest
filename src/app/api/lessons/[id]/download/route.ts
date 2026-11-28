@@ -5,6 +5,7 @@ import { apiError, handleApi, readJson } from "@/lib/api/respond";
 import { rateLimitWrite, requireApiUser } from "@/lib/api/learner";
 import { getLessonPractice } from "@/features/learning/lesson-data";
 import { getLessonState } from "@/features/progression/lesson-states";
+import { recordLessonDownload } from "@/features/offline/downloads";
 
 const bodySchema = z.object({ deviceId: z.uuid() });
 
@@ -33,20 +34,11 @@ export const POST = handleApi(
     ]);
     if (!payload) return apiError(404, "not_found", "Lesson not found.");
 
-    const device = await prisma.device.upsert({
-      where: { userId_clientId: { userId: user.id, clientId: deviceId } },
-      create: { userId: user.id, clientId: deviceId },
-      update: { lastSeenAt: new Date() },
-    });
-    await prisma.downloadedContentVersion.upsert({
-      where: { deviceId_lessonId: { deviceId: device.id, lessonId: id } },
-      create: {
-        userId: user.id,
-        deviceId: device.id,
-        lessonId: id,
-        contentVersion: lesson.contentVersion,
-      },
-      update: { contentVersion: lesson.contentVersion, downloadedAt: new Date() },
+    await recordLessonDownload(prisma, {
+      userId: user.id,
+      clientDeviceId: deviceId,
+      lessonId: id,
+      contentVersion: lesson.contentVersion,
     });
 
     return NextResponse.json({

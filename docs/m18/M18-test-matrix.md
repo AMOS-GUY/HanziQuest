@@ -79,3 +79,19 @@ Results are in the PR description and `M18-handover.md`.
 - **The download route's "re-download never moves `firstDownloadedAt`".** Checked by code
   review: the update sets only `contentVersion` and `downloadedAt`. The e2e covers a single
   download.
+
+## Final review additions
+
+| Case                                                                              | Test                                                                                          |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| A download of lesson A doesn't authorize old times for a locked lesson's exercise | "a download of one lesson doesn't authorize old times…"                                       |
+| …nor for another curriculum's shared-character exercise                           | "nor for another curriculum's exercise of a shared character…"                                |
+| Another learner can't borrow a device's window                                    | "another learner can't borrow a device's download window"                                     |
+| A download never grants eligibility                                               | "a download record never grants eligibility…"                                                 |
+| Session-less offline can't claim another lesson or session                        | "session-less offline attempts can't claim…"                                                  |
+| First download preserved across re-downloads                                      | "re-downloads keep the first download time…" (calls `recordLessonDownload`, the route's code) |
+| Residual: device time inside the window                                           | "RESIDUAL (documented)…"                                                                      |
+| Preview wording                                                                   | `tests/unit/save-status.test.ts`                                                              |
+| Migration backfill                                                                | `npm run drill:migrations` step 2b                                                            |
+
+The "re-download never moves `firstDownloadedAt`" gap listed above is now covered.

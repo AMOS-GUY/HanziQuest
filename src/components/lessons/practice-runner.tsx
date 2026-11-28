@@ -25,8 +25,7 @@ import {
 } from "@/features/exercises/client-api";
 import { enqueue } from "@/features/offline/client/sync";
 import { cn } from "@/lib/utilities/cn";
-
-type SaveState = "saving" | "saved" | "queued" | "failed";
+import { PREVIEW_PRACTICE_NOTICE, saveStatusText, type SaveState } from "./save-status";
 
 export type PracticeMode =
   | { kind: "lesson"; lessonId: string }
@@ -373,6 +372,9 @@ export function PracticeRunner({
               : "Practice complete!"}
         </h1>
         {xpEarned > 0 ? <p className="text-primary text-xl font-black">+{xpEarned} XP</p> : null}
+        {Object.keys(previewEvents).length > 0 ? (
+          <p className="text-muted-foreground text-sm font-semibold">{PREVIEW_PRACTICE_NOTICE}</p>
+        ) : null}
         {celebrations.length ? (
           <ul className="flex flex-col gap-1" aria-label="Rewards">
             {celebrations.map((c) => (
@@ -632,21 +634,12 @@ export function PracticeRunner({
               className="text-muted-foreground text-center text-xs font-semibold"
               aria-live="polite"
             >
-              {mode.kind === "preview"
-                ? "Preview: nothing is saved."
-                : currentSave === "saving"
-                  ? "Saving…"
-                  : currentSave === "saved"
-                    ? outcome && previewEvents[outcome.eventId]
-                      ? "Preview: practise freely. This counts once you reach its lesson."
-                      : outcome && xpByEvent[outcome.eventId]
-                        ? `Saved · +${xpByEvent[outcome.eventId]} XP`
-                        : "Saved"
-                    : currentSave === "queued"
-                      ? "Saved on this device. It will sync when you're online."
-                      : currentSave === "failed"
-                        ? "Not saved yet."
-                        : ""}
+              {saveStatusText({
+                adminPreview: mode.kind === "preview",
+                save: currentSave,
+                previewAttempt: Boolean(outcome && previewEvents[outcome.eventId]),
+                xpAwarded: outcome ? xpByEvent[outcome.eventId] : undefined,
+              })}
               {currentSave === "failed" ? (
                 <button
                   type="button"
