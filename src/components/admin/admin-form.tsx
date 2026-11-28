@@ -24,11 +24,21 @@ export interface FieldSpec {
   wide?: boolean;
 }
 
-function Submit({ label, pending }: { label: string; pending: boolean }) {
+function Submit({
+  label,
+  pending,
+  pendingLabel,
+  variant,
+}: {
+  label: string;
+  pending: boolean;
+  pendingLabel: string;
+  variant: "primary" | "danger";
+}) {
   return (
-    <Button type="submit" disabled={pending}>
+    <Button type="submit" variant={variant} disabled={pending}>
       {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
-      {pending ? "Saving…" : label}
+      {pending ? pendingLabel : label}
     </Button>
   );
 }
@@ -41,12 +51,18 @@ export function AdminForm({
   action,
   fields,
   submitLabel = "Save",
+  pendingLabel = "Saving…",
+  submitVariant = "primary",
   resetOnSuccess = false,
   className,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   fields: FieldSpec[];
   submitLabel?: string;
+  /** Shown while the action runs. */
+  pendingLabel?: string;
+  /** `danger` for destructive, irreversible actions (M19 F-05). */
+  submitVariant?: "primary" | "danger";
   resetOnSuccess?: boolean;
   className?: string;
 }) {
@@ -157,7 +173,12 @@ export function AdminForm({
         })}
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Submit label={submitLabel} pending={pending} />
+        <Submit
+          label={submitLabel}
+          pending={pending}
+          pendingLabel={pendingLabel}
+          variant={submitVariant}
+        />
         {state.message ? (
           <p
             role={state.ok ? "status" : "alert"}

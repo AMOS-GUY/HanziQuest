@@ -6,13 +6,22 @@ export function SiteFooter() {
     <footer className="border-border text-muted-foreground mt-10 flex flex-wrap items-center gap-x-5 gap-y-2 border-t-2 pt-4 text-sm">
       <span>HanziQuest public beta</span>
       <nav aria-label="Legal and help" className="flex flex-wrap gap-x-5 gap-y-2">
-        <Link href="/beta-guide" className="hover:text-foreground font-bold">
+        <Link
+          href="/beta-guide"
+          className="hover:text-foreground inline-flex min-h-6 items-center py-1 font-bold"
+        >
           Beta guide
         </Link>
-        <Link href="/privacy" className="hover:text-foreground font-bold">
+        <Link
+          href="/privacy"
+          className="hover:text-foreground inline-flex min-h-6 items-center py-1 font-bold"
+        >
           Privacy
         </Link>
-        <Link href="/terms" className="hover:text-foreground font-bold">
+        <Link
+          href="/terms"
+          className="hover:text-foreground inline-flex min-h-6 items-center py-1 font-bold"
+        >
           Terms
         </Link>
       </nav>
