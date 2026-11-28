@@ -223,6 +223,22 @@ describe("registration mode and invite codes (D-041)", () => {
     expect(hashCode(code)).toBe(hashCode(code.slice(3)));
     expect(hashCode(code)).not.toContain(code.slice(3, 8));
   });
+
+  it("matches a code typed without its prefix even when the random part starts with HQ (I-1)", async () => {
+    const { hashCode, normaliseCode } = await import("@/features/invites/invites");
+    // Deterministic versions of the 1-in-1024 case the random test above could hit.
+    for (const code of ["HQ-HQ7K2-9ABCD", "HQ-HQHQ2-9ABCD", "HQ-H7K2Q-9ABCD"]) {
+      const body = code.slice(3);
+      expect(normaliseCode(code)).toBe(body.replace("-", ""));
+      expect(hashCode(body)).toBe(hashCode(code));
+      expect(hashCode(body.toLowerCase().replace("-", " "))).toBe(hashCode(code));
+    }
+    // A body alone is never shortened; a prefixed code always is.
+    expect(normaliseCode("HQ7K29ABCD")).toBe("HQ7K29ABCD");
+    expect(normaliseCode("hq-hq7k2-9abcd")).toBe("HQ7K29ABCD");
+    // Different codes still differ.
+    expect(hashCode("HQ-HQ7K2-9ABCD")).not.toBe(hashCode("HQ-7K29A-BCDXX"));
+  });
 });
 
 describe("migration safety check", () => {
