@@ -27,11 +27,17 @@ export function registrationMode(
 /** Crockford base32 without look-alikes (no I, L, O, U). */
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
+/** The random part of a code (HQ-XXXXX-XXXXX). */
+const BODY_LENGTH = 10;
+
+/**
+ * Upper case, separators dropped, and the "HQ" prefix removed, but only when it is a prefix:
+ * a code typed without "HQ-" whose random part itself starts with "HQ" (HQ-HQ7K2-9ABCD typed as
+ * HQ7K2-9ABCD) must keep those letters, or it would never match (I-1).
+ */
 export function normaliseCode(code: string) {
-  return code
-    .toUpperCase()
-    .replace(/[^0-9A-Z]/g, "")
-    .replace(/^HQ/, "");
+  const compact = code.toUpperCase().replace(/[^0-9A-Z]/g, "");
+  return compact.length > BODY_LENGTH && compact.startsWith("HQ") ? compact.slice(2) : compact;
 }
 
 export function hashCode(code: string) {
@@ -42,7 +48,7 @@ export function hashCode(code: string) {
 
 /** HQ-XXXXX-XXXXX: 50 bits of randomness from a cryptographic source. */
 export function generateCode() {
-  const chars = Array.from({ length: 10 }, () => ALPHABET[randomInt(ALPHABET.length)]);
+  const chars = Array.from({ length: BODY_LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]);
   return `HQ-${chars.slice(0, 5).join("")}-${chars.slice(5).join("")}`;
 }
 
